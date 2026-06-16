@@ -19,3 +19,9 @@ venv/
 
 # Reference screenshots / 参考画像 (デザイン検討用、公開不要)
 reference/
+
+# Generated images workspace (nano-banana 生成物の作業用、最終採用分のみ mockup/assets/img/ へ移動)
+generated-images/
+
+# Serena local cache
+.serena/
