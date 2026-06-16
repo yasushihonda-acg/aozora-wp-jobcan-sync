@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Node (Phase B 着手時用)
+node_modules/
+
+# Python (Phase B 着手時用)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Playwright MCP local cache
+.playwright-mcp/
+
+# Reference screenshots / 参考画像 (デザイン検討用、公開不要)
+reference/
