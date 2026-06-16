@@ -1,54 +1,81 @@
-# Handoff — 2026-06-16 (Phase A モック画像対応セッション)
+# Handoff — 2026-06-17 (Phase A モック イラスト本家トンマナ整合セッション)
 
 ## TL;DR
-決裁者フィードバック (画像被り解消 + 軽めのイラスト追加) に対応する 2 件の PR をマージ完了。次は **本田様 → 決裁者にモック URL を再共有 → 反応収集** のフェーズ。executor 領分の作業はゼロ。
+決裁者フィードバック (3 サイクル: イラスト追加 → 本家トンマナ化 → 肌色多様性) に対応する 5 件の PR をマージ完了 (#3-#8、PR #5 は前回 handoff)。次は **本田様 → 決裁者にモック URL 再共有 → 反応収集**。executor 領分の作業はゼロ。
 
-## 今セッションで完了した変更
+## 今セッションで完了した変更 (2026-06-17 分のみ)
 
 | PR | 内容 | コミット |
 |---|---|---|
-| #3 | 育休ブログサムネのスタッフ写真流用と人物不整合 (「山田さん」=田中写真) を解消。documentary 風 (顔出しなし) 写真 3 枚に差し替え | `fe169f4` |
-| #4 | philosophy / numbers / flow に水彩アクセントイラスト 3 枚を追加。`.section__illust` クラスを `tokens.css` に新設 | `82bed9e` |
+| #6 | イラスト 3 枚を本家トンマナ (フラットベクター + ティール限定パレット) に差し替え。水彩 → フラット | `3df3315` |
+| #7 | Playwright で本家 `business-img-tq.png` を実機視察、線画なし/薄グレー背景/微シェーディング/リアル顔の 5 差分を厳密反映 | `509b9e9` |
+| #8 | 肌色多様性 (international corporate stock illustration テイスト) を反映、philosophy/flow の 2 枚のみ再生成、numbers は維持 | `221a7ac` |
 
-両 PR とも `gh pr merge --squash --delete-branch` 完了、ローカル main は `git reset --hard origin/main` で同期済み。Pages build 反映済 (`pages-build-deployment` success, 1m15s @ 13:43Z)。
+5 PR の累積コミット (新しい順、`git log --oneline -8`):
+```
+221a7ac feat(mockup): イラスト 2 枚 (philosophy/flow) の肌色多様性を本家に合わせる (#8)
+509b9e9 feat(mockup): イラスト 3 枚を本家トンマナ厳密版に再差し替え (#7)
+3df3315 feat(mockup): イラスト 3 枚を本家コーポレートサイトのトンマナに差し替え (#6)
+19a961a chore(handoff): 2026-06-16 Phase A モック画像対応セッションの handoff 作成 (#5)
+82bed9e feat(mockup): philosophy / numbers / flow に水彩アクセントイラストを追加 (#4)
+fe169f4 fix(blog): 育休ブログサムネのスタッフ写真流用を解消 (#3)
+```
+
+Pages 反映済 (CI `pages-build-deployment` success @ 2026-06-16T21:47Z)。
 
 🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 
-## 採用画像 / 設計判断の核
+## トンマナ調整 3 サイクルの学習
 
-| 項目 | 値 | 根拠 |
+| サイクル | プロンプト変更 | 学び |
 |---|---|---|
-| ブログサムネ路線 | 顔出しなし documentary 風 (シフト表 / 父子後ろ姿 / 廊下メンター) | スタッフポートレートとのジャンル差別化、プライバシー配慮、AI 顔崩れ回避 |
-| イラストタッチ | 水彩 (3 候補 [水彩/線画/フラット] から選定) | ACG ブランド (青空 + 優しさ) との親和、AI 感最小 |
-| イラスト挿入位置 | section__head 直下、`<figure class="section__illust">` で 16:9 横長 | 既存マークアップ階層を崩さない、共通クラス 1 つで使い回し |
-| イラスト箇所 | philosophy / numbers / flow の 3 セクションのみ | 写真:イラスト = 10:3 = 23% に抑制、「程よく」の範囲 |
-| 既存写真 (10 枚) | 全て温存 | 決裁者「全画像変えるのは大変」発言を尊重、写真路線維持 |
+| PR #6 (フラット化) | 「水彩」→「フラットベクター + ティール限定パレット」 | 本家の基本テイストを反映 |
+| PR #7 (厳密化) | Playwright で本家画像を実機視察 → 5 差分 (線画/背景/シェーディング/顔/余計要素) を厳密指定 | **実機視察が決定的**、想像だけのプロンプトでは細部が外れる |
+| PR #8 (多様性) | 「Japanese」→「international corporate stock illustration」、肌色を fair/medium/warm tan で明示 | 「日本人」指定が均質化を招いていた、本家は international stock テイスト |
+
+**普遍的学び**: 本家サイトのトンマナ模倣は **想像でプロンプトを書かず、Playwright で実機視察してから差分を明示的に指定する** のが効率的。決裁者からの段階フィードバック (タッチ → 細部 → 肌色) は失敗ではなく必然的な絞り込みプロセス。
+
+## 採用画像の最終仕様
+
+| ファイル | 構成 | サイズ |
+|---|---|---|
+| `mockup/assets/img/illust-philosophy.jpg` | 看護師 (薄肌・ティールスクラブ) + 車椅子の利用者 (褐色肌・白髪) + 家族 (中間色) | 128K |
+| `mockup/assets/img/illust-numbers.jpg` | 町並み + 時計塔 (ティール屋根) + 風車 (ティールブレード) + 雲 + 鳥 (人物なし、本家右下デコ風) | 95K |
+| `mockup/assets/img/illust-flow.jpg` | 看護師 (薄肌・ティールスクラブ) + 応募者 (中間色) の面接シーン、テーブルにラップトップ + コーヒー | 129K |
+| `mockup/assets/img/blog-childcare-return.jpg` | 朝の食卓、シフト表とコーヒー (PR #3 で追加、変更なし) | 255K |
+| `mockup/assets/img/blog-papa-leave.jpg` | 父親が自宅で赤ちゃんを抱く後ろ姿 (PR #3 で追加、変更なし) | 281K |
+| `mockup/assets/img/blog-mentor-program.jpg` | 施設廊下のメンター指導 (PR #3 で追加、変更なし) | 228K |
+
+CSS: `.section__illust` クラス (PR #4 で追加、その後不変) — `max-width: 720px / aspect-ratio: 16 / 9 / border-radius: var(--radius-md)`。
 
 ## ローカル成果物 (gitignore 対象、コミットせず)
 
-`generated-images/` 配下に以下を保持。将来「全画像水彩化」「別タッチで再生成」等の指示が来た際の素材として利用可能。
+`generated-images/` 配下に各 PR の採用版 + 旧版を保持。将来の素材として利用可能:
 
 ```
-touch-watercolor.png / touch-lineart.png / touch-flat.png     # 3 タッチサンプル
-blog-1-ikukyu-return.png / blog-2-papa-ikukyu.png / blog-3-mentor.png  # ブログサムネ採用版 (PNG)
-illust-philosophy.png / illust-numbers.png / illust-flow.png  # イラスト採用版 (PNG)
+touch-watercolor.png / touch-lineart.png / touch-flat.png    # 初期 3 タッチサンプル
+blog-1-ikukyu-return.png / blog-2-papa-ikukyu.png / blog-3-mentor.png  # ブログサムネ採用版
+illust-philosophy.png / illust-numbers.png / illust-flow.png  # PR #4 水彩版
+flat-philosophy.png / flat-numbers.png / flat-flow.png        # PR #6 フラット版
+v2-philosophy.png / v2-numbers.png / v2-flow.png              # PR #7 本家厳密版
+v3-philosophy.png / v3-flow.png                                # PR #8 肌色多様性版 (最終採用)
 ```
 
 ## 構造的整合性チェック
 
 | 項目 | 状態 | 備考 |
 |---|---|---|
-| /impact-analysis | ⏭ スキップ | 型・共有ロジック・設定変更なし。CSS は新規クラス 1 つ追加のみで既存非破壊 |
+| /impact-analysis | ⏭ スキップ | バイナリ画像のみ変更、CSS は PR #4 で追加後不変、API/型/共有ロジック変更なし |
 | /new-resource | ⏭ スキップ | 新規テーブル/API なし (静的 HTML) |
 | /trace-dataflow | ⏭ スキップ | データフロー実装なし |
-| ADR 要否 | 不要 | デザイン選択 (水彩タッチ採用) は実装パターン記録に値しない選択範囲 |
-| ドキュメント整合 | ✅ | `docs/specs/` 群 / CLAUDE.md と矛盾なし (画像追加は実装詳細レベルで CLAUDE.md 更新対象外) |
+| ADR 要否 | 不要 | デザイン選択 (タッチ/トンマナ調整) は実装パターンではない |
+| ドキュメント整合 | ✅ | `docs/specs/` 群 / CLAUDE.md と矛盾なし |
 
 ## Issue Net 変化
 - Close 数: 0 件
 - 起票数: 0 件
 - Net: 0 件
-- 補足: 本セッションは Issue ベースの作業ではなく、決裁者フィードバックへの直接対応セッション。triage 基準 #5 (ユーザー明示指示) 該当のため Issue 化スキップ。Issue トラッキング外の進捗 (PR #3 + #4 マージ済) と分類
+- 補足: 決裁者フィードバック対応セッション、Issue ベース作業外 (triage 基準 #5 ユーザー明示指示)
 
 ## 次のアクション (3 分割)
 
@@ -61,7 +88,7 @@ executor 領分の作業はゼロ。`/catchup` 起動時もこの状態を踏襲
 
 | # | 項目 | A/B/C | trigger | 充足時のタスク |
 |---|---|---|---|---|
-| 1 | 決裁者からのモック評価フィードバック | C | 本田様が決裁者へ更新版 URL を共有後、決裁者から「OK」「ここを変えて」「Phase B へ」等の明示反応 | 反応内容に応じて個別対応 |
+| 1 | 決裁者からのモック評価フィードバック | C | 本田様が決裁者へ更新版 URL を共有 → 決裁者から「OK」「ここを変えて」「Phase B へ」等の明示反応 | 反応内容に応じて個別対応 (更なるイラスト調整、別箇所修正、ゲート 1 通過 等) |
 | 2 | ジョブカン公式照会 (`docs/specs/sync-strategy.md`) | C | 本田様 → 「ジョブカンへ照会送る」明示指示 | ドラフト文面最終化と送付サポート |
 | 3 | Phase A 承認後の Phase B 着手 | C | 決裁者の Phase A ゲート 1 通過 | ホスティング選定 / CPT / GCP 同期設計 |
 | 4 | Phase A 未確定事項 11 件 (CLAUDE.md「未確定事項」) | C | 個別事項への本田様判断 | 該当事項に応じた実装/設計 |
@@ -71,14 +98,14 @@ executor 領分の作業はゼロ。`/catchup` 起動時もこの状態を踏襲
 
 | # | 項目 | 検討経緯 | 着手しない理由 |
 |---|---|---|---|
-| 1 | イラストを更に増やす (FAQ / 育休ブログ / お知らせ section) | 今セッションで「程よく」を 3 セクションで達成 | 写真路線の統一感を崩すリスク、決裁者の発言ニュアンスを超える |
-| 2 | 既存写真 10 枚を水彩イラストに置換 | 全画像刷新案 (案 C) として最初に検討 | 決裁者「全画像変えるのは大変」発言で実質的に却下 |
-| 3 | スタッフ写真 (中村/佐々木/田中) のリジェネ | AI 感がやや残る箇所として確認 | 決裁者から明示指示なし、現状で破綻なし |
-| 4 | webp 変換 / 画像最適化 (現状 JPG 200-420KB) | パフォーマンス改善余地 | 現状 Pages 反映正常、決裁者指示なし。housekeeping (A) で起動禁止 |
-| 5 | ADR 遡及作成 (水彩タッチ採用判断) | 設計判断記録の候補 | 選択範囲 (タッチ 3 候補から 1 つ) で技術的判断ではない、ROI 低 |
+| 1 | numbers.jpg も v3 で再生成 | PR #8 で「人物なしのため変更不要」と判断 | 本家トンマナ完全反映済、修正不要 |
+| 2 | 既存写真 10 枚を本家フラットベクター風に置換 | 全画像刷新案 | 決裁者「全画像変えるのは大変」発言で実質的に却下、写真路線維持の合意 |
+| 3 | スタッフ写真 (中村/佐々木/田中) のリジェネ | AI 感がやや残る | 決裁者から明示指示なし、現状で破綻なし |
+| 4 | webp 変換 / 画像最適化 (現状 JPG 92-281KB) | パフォーマンス改善余地 | 現状 Pages 反映正常、決裁者指示なし。housekeeping (A) で起動禁止 |
+| 5 | ADR 遡及作成 (本家トンマナ整合 3 サイクルの設計判断) | 設計判断記録の候補 | プロンプト調整のみで実装パターン変更なし、ROI 低 |
 
 ## 残留プロセスチェック
-✅ 残留プロセスなし (preview-server は本セッション中に `kill` 済、cleanup 確認済)
+✅ 残留プロセスなし (Playwright ブラウザは `browser_close` 済、temp スクショ `aozora-*.png` は削除済)
 
 ## 再開可能性判定
 ✅ **再開可能** — Git clean / OPEN PR ゼロ / 即着手タスクゼロ / Pages CI success / 残留プロセスなし
