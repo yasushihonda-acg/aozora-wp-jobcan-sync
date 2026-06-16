@@ -204,6 +204,22 @@ ul, ol { margin: 0 0 var(--space-4); padding-left: var(--space-5); }
 }
 .section__head--left .section__lead { margin-inline: 0; }
 
+/* セクション head 直下に配置する水彩アクセントイラスト */
+.section__illust {
+  max-width: 720px;
+  margin: 0 auto var(--space-10);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  background: var(--color-bg-alt);
+}
+.section__illust img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px; height: 1px;
