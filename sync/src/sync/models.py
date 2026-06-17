@@ -87,3 +87,80 @@ class JobOffer(BaseModel):
         if not (v.startswith("http://") or v.startswith("https://")):
             raise ValueError(f"must be an http(s) URL, got: {v!r}")
         return v
+
+
+class JobListItem(BaseModel):
+    """One row of a Jobcan category listing page.
+
+    Phase 2A.1b: represents a single `.job-offer-box` extracted from
+    `/aozora/list?category_id=...`. The shape is deliberately leaner than
+    `JobOffer` — the listing page never contains salary or full body HTML,
+    only enough to render a card linking to the detail page.
+
+    `detail_url` currently resolves to the canonical Jobcan detail page
+    (`https://recruit.jobcan.jp/aozora/job_offers/<id>?hide_breadcrumb=true&hide_search=true`).
+    Phase 2A.2 (FastAPI proxy) will introduce an in-house `/jobs/{job_id}`
+    route; at that point `_canonical_detail_url` will be flipped to emit the
+    proxy path so card clicks stay inside the in-house design instead of
+    bouncing back to Jobcan. The shape of the field stays the same — only
+    the URL it produces changes.
+    """
+
+    job_id: str = Field(..., description="Jobcan job_offer ID (numeric string)")
+    title: str = Field(..., description="Job title displayed on the card")
+    address: str = Field(..., description="Facility / branch line under the title")
+    description: str = Field(..., description="Plain-text excerpt for the card")
+    detail_url: str = Field(..., description="Canonical detail-page URL (see class docstring)")
+    labels: list[str] = Field(
+        default_factory=list,
+        description="Job-type + employment-form chips (e.g. ['介護職', '正社員'])",
+    )
+    thumbnail_url: str | None = Field(
+        None, description="Card thumbnail URL (omitted when Jobcan provides none)"
+    )
+
+    model_config = {"frozen": True}
+
+    @field_validator("detail_url")
+    @classmethod
+    def _detail_url_must_be_http(cls, v: str) -> str:
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError(f"detail_url must be an http(s) URL, got: {v!r}")
+        return v
+
+    @field_validator("thumbnail_url")
+    @classmethod
+    def _thumbnail_url_must_be_http_when_set(cls, v: str | None) -> str | None:
+        # Symmetric with detail_url: if Jobcan ever ships a relative path
+        # (`./thumb.jpg`), a `data:` URI, or anything else `_normalise_jobcan_url`
+        # does not normalise, we want a hard fail at the model boundary rather
+        # than a broken `<img src>` shipped to the browser.
+        if v is None:
+            return v
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError(f"thumbnail_url must be an http(s) URL when set, got: {v!r}")
+        return v
+
+
+class JobListPage(BaseModel):
+    """A parsed Jobcan category listing page.
+
+    Bundles the items with the source URL so the renderer/CLI does not have
+    to thread `source_url` separately. Phase 2A.2 may extend this with
+    pagination metadata.
+    """
+
+    source_url: str = Field(..., description="The Jobcan list URL that produced these items")
+    category_id: str | None = Field(
+        None, description="The `category_id` query parameter parsed from source_url, if any"
+    )
+    items: list[JobListItem] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
+
+    @field_validator("source_url")
+    @classmethod
+    def _must_be_http_url(cls, v: str) -> str:
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError(f"must be an http(s) URL, got: {v!r}")
+        return v

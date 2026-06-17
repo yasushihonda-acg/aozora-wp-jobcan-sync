@@ -17,8 +17,8 @@ import typer
 
 from .jobcan_client import JobcanClient
 from .models import JobcanClientError, JobcanStructureChangeError, JobcanValidationError
-from .parser import parse_job_detail
-from .renderer import render_job_detail
+from .parser import parse_job_detail, parse_job_list
+from .renderer import render_job_detail, render_job_list
 
 app = typer.Typer(
     add_completion=False,
@@ -81,7 +81,63 @@ def render(
 
     if out is not None:
         out.write_text(rendered, encoding="utf-8")
-        typer.echo(f"wrote {out} ({len(rendered)} bytes)", err=True)
+        byte_len = len(rendered.encode("utf-8"))
+        typer.echo(f"wrote {out} ({byte_len} bytes)", err=True)
+    else:
+        sys.stdout.write(rendered)
+
+
+_CATEGORY_OPT = typer.Option(
+    ...,
+    "--category-id",
+    "-c",
+    help="Jobcan category_id (digits only, e.g. 18773 for 介護)",
+)
+
+
+@app.command("list")
+def list_(
+    category_id: str = _CATEGORY_OPT,
+    out: Path | None = _OUT_OPT,
+    fixture: Path | None = _FIXTURE_OPT,
+) -> None:
+    """Fetch and render a Jobcan category listing page."""
+    if not (category_id.isascii() and category_id.isdigit()):
+        typer.echo(f"category_id must be ASCII digits, got: {category_id!r}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        if fixture is not None:
+            html = fixture.read_text(encoding="utf-8")
+            source_url = (
+                f"https://recruit.jobcan.jp/aozora/list"
+                f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
+            )
+        else:
+            with JobcanClient() as client:
+                source_url, html = client.fetch_job_list(category_id)
+    except JobcanClientError as exc:
+        typer.echo(f"client error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    try:
+        page = parse_job_list(html, source_url)
+    except JobcanStructureChangeError as exc:
+        typer.echo(f"structure-change: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    try:
+        rendered = render_job_list(page)
+    except Exception as exc:
+        typer.echo(f"render error: {exc}", err=True)
+        raise typer.Exit(code=4) from exc
+
+    if out is not None:
+        out.write_text(rendered, encoding="utf-8")
+        # `len(rendered)` counts characters; UTF-8 Japanese is 3 bytes/char,
+        # so report the encoded byte length to match the on-disk file size.
+        byte_len = len(rendered.encode("utf-8"))
+        typer.echo(f"wrote {out} ({byte_len} bytes, {len(page.items)} jobs)", err=True)
     else:
         sys.stdout.write(rendered)
 

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block page_title %}求人一覧 | あおぞらケアグループ採用{% endblock %}
+{% block canonical_url %}{{ page.source_url }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="assets/css/sync-job-list.css">
+{% endblock %}
+{% block main_class %}job-list{% endblock %}
+
+{% block content %}
+<header class="job-list__header">
+  <h1 class="job-list__title">求人一覧</h1>
+  <p class="job-list__lede">{{ page.items | length }} 件の募集中ポジション</p>
+</header>
+
+<ul class="job-list__cards" role="list">
+  {% for item in page.items %}
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="{{ item.detail_url }}" rel="noopener">
+      {% if item.thumbnail_url %}
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="{{ item.thumbnail_url }}"
+             alt=""
+             loading="lazy">
+      </div>
+      {% endif %}
+      <div class="job-list-card__body">
+        {% if item.labels %}
+        <ul class="job-list-card__labels" role="list">
+          {% for label in item.labels %}
+          <li class="job-list-card__label">{{ label }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <h2 class="job-list-card__title">{{ item.title }}</h2>
+        <p class="job-list-card__address">{{ item.address }}</p>
+        <p class="job-list-card__description">{{ item.description }}</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+<footer class="job-list__footer">
+  <p class="job-list__source-note">
+    応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
+  </p>
+</footer>
+{% endblock %}
