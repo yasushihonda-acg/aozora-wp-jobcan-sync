@@ -1,0 +1,130 @@
+/* Job detail component CSS — local to the sync package.
+ *
+ * Codex review (Q4) — CSS share scope:
+ *   "design tokens は共有、コンポーネントCSSは分離"
+ * → Tokens (colour / font / spacing / radius) come from
+ *   ../../../../mockup/assets/css/tokens.css via base.html.
+ * → Selectors below depend ONLY on those CSS variables.
+ *   Phase A mockup CSS changes must not break this layout.
+ */
+
+.job-detail {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-5);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+.job-detail__header {
+  border-bottom: 2px solid var(--color-accent);
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.job-detail__label {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-dark);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-3);
+}
+
+.job-detail__title {
+  font-size: var(--text-3xl);
+  color: var(--color-heading);
+  margin: 0 0 var(--space-3);
+  line-height: var(--lh-tight);
+}
+
+.job-detail__address {
+  font-size: var(--text-base);
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.job-detail__summary {
+  background: var(--color-bg-alt);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-8);
+}
+
+.job-detail__summary-list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+}
+
+.job-detail__summary-item {
+  display: grid;
+  grid-template-columns: 8em 1fr;
+  gap: var(--space-4);
+  align-items: baseline;
+}
+
+.job-detail__summary-key {
+  font-weight: var(--weight-bold);
+  color: var(--color-heading);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.job-detail__summary-val {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--lh-loose);
+}
+
+.job-detail__body {
+  margin-bottom: var(--space-10);
+}
+
+.job-detail__section-title {
+  font-size: var(--text-xl);
+  color: var(--color-heading);
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.job-detail__body-content {
+  font-size: var(--text-base);
+  line-height: var(--lh-loose);
+}
+
+.job-detail__body-content p {
+  margin: 0 0 var(--space-4);
+}
+
+.job-detail__footer {
+  text-align: center;
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--color-border);
+}
+
+.job-detail__apply-btn {
+  display: inline-block;
+  padding: var(--space-4) var(--space-10);
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background 200ms ease;
+}
+
+.job-detail__apply-btn:hover {
+  background: var(--color-accent-dark);
+}
+
+.job-detail__source-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-faint);
+}
