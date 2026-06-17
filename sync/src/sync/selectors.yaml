@@ -1,0 +1,71 @@
+# Jobcan public-page selectors and parsing config.
+#
+# This file is the single source of truth for which CSS selectors the parser
+# uses, which header labels map to which normalised fields, and which HTML tags
+# survive bleach sanitisation. Update this file (and the matching pytest fixtures)
+# when Jobcan changes their public markup — no Python edits required.
+#
+# Codex review (Phase 2A) reflected:
+# - Pydantic schema validates this file at load time; bad config raises ConfigError
+#   (a separate class from JobcanStructureChangeError, so operators can tell
+#    "we shipped a broken config" from "Jobcan changed their HTML")
+# - synonyms are explicit lists, not fuzzy match — `給与例` MUST NOT map to `給与`
+# - load is once at startup; `--selectors` CLI flag overrides for tests/dev only
+
+version: 1
+
+detail:
+  selectors:
+    title: ".job-offer-detail-title"
+    body: ".job-offer-description-full"
+    address: ".job-offer-address"
+    label: ".job-offer-label"
+    apply_link: 'a[href^="/aozora/entry/new/"]'
+    table_lines: ".content-table-line"
+    table_header: ".content-table-head, .job-offer-table-left"
+    table_body: ".td-contentTable__breakWordWrap, .job-offer-table-right"
+  required_table_fields:
+    location:
+      canonical: "勤務地"
+      synonyms:
+        - "勤務地"
+        - "勤務地・交通"
+    salary:
+      canonical: "給与"
+      synonyms:
+        - "給与"
+        - "給与（月給）"
+        - "給与（時給）"
+        - "月給"
+        - "時給"
+
+list:
+  selectors:
+    job_card: ".job-offer-box"
+    job_url: 'a[href^="/aozora/job_offers/"]'
+    title: ".job-offer-title"
+    address: ".job-offer-address"
+    label: ".job-offer-label"
+    description: ".job-offer-description"
+
+sanitize:
+  allowed_tags:
+    - "p"
+    - "br"
+    - "ul"
+    - "ol"
+    - "li"
+    - "strong"
+    - "em"
+    - "b"
+    - "i"
+    - "h2"
+    - "h3"
+    - "h4"
+  drop_tags:
+    - "script"
+    - "style"
+    - "form"
+    - "iframe"
+    - "object"
+    - "embed"
