@@ -57,7 +57,9 @@ class JobcanClient:
         """Fetch a single job detail page.
 
         Returns:
-            (html, source_url) — both used by the parser to build a JobOffer.
+            (source_url, html) — both used by the parser to build a JobOffer.
+            `source_url` is the URL actually requested (before any redirect
+            following).
 
         Raises:
             JobcanClientError: on permanent failures (4xx other than 429,
@@ -67,12 +69,10 @@ class JobcanClient:
         return url, self._get_with_retry(url)
 
     def _get_with_retry(self, url: str) -> str:
-        last_exc: Exception | None = None
         for attempt in range(self.config.max_retries + 1):
             try:
                 resp = self._client.get(url)
             except httpx.HTTPError as exc:
-                last_exc = exc
                 if attempt < self.config.max_retries:
                     time.sleep(self.config.retry_base_delay * (2**attempt))
                     continue
@@ -85,19 +85,16 @@ class JobcanClient:
 
             # Retry on 429 (rate limit) and 5xx (transient server errors)
             if resp.status_code == 429 or resp.status_code >= 500:
-                last_exc = JobcanClientError(
-                    f"Transient HTTP {resp.status_code} from {url}"
-                )
                 if attempt < self.config.max_retries:
                     time.sleep(self.config.retry_base_delay * (2**attempt))
                     continue
-                raise last_exc
+                raise JobcanClientError(f"Transient HTTP {resp.status_code} from {url}")
 
             # 4xx (other than 429): permanent — do not retry
             raise JobcanClientError(f"HTTP {resp.status_code} from {url}")
 
-        # Defensive: loop should always raise or return
-        raise JobcanClientError(f"Unreachable: retries exhausted ({last_exc})")
+        # Every loop body path returns or raises; this satisfies the type checker.
+        raise AssertionError("unreachable: retry loop completed")  # pragma: no cover
 
     def close(self) -> None:
         if self._owns_client:

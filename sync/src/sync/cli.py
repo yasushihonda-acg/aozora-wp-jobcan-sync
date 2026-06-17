@@ -43,8 +43,11 @@ def render(
     fixture: Path | None = _FIXTURE_OPT,
 ) -> None:
     """Fetch and render a single job offer."""
-    if not job_id.isdigit():
-        typer.echo(f"job_id must be digits, got: {job_id!r}", err=True)
+    # Use ASCII-only digit check; `str.isdigit()` accepts full-width '１２３'
+    # and Arabic-Indic digits, which Jobcan rejects with 404 and obscures the
+    # encoding root cause from the operator.
+    if not (job_id.isascii() and job_id.isdigit()):
+        typer.echo(f"job_id must be ASCII digits, got: {job_id!r}", err=True)
         raise typer.Exit(code=1)
 
     try:

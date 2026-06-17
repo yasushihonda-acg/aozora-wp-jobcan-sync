@@ -58,13 +58,17 @@ class JobOffer(BaseModel):
     no <script>, <style>, <form>, or event attributes are preserved.
     """
 
+    # Required-field validation lives in `parser.parse_job_detail` rather than
+    # here (Field constraints removed to avoid two redundant validation layers).
+    # Constructing a JobOffer directly with empty fields is the caller's
+    # responsibility — production builds always go through the parser.
     job_id: str = Field(..., description="Jobcan job_offer ID (numeric string)")
-    title: str = Field(..., min_length=1, description="Job title")
-    body_html: str = Field(..., min_length=1, description="Sanitised job description HTML")
-    address: str = Field(..., min_length=1, description="Facility / branch name")
-    label: str = Field(..., min_length=1, description="Job type + employment-form label")
-    location: str = Field(..., min_length=1, description="Work location (commute info)")
-    salary: str = Field(..., min_length=1, description="Salary text (full original)")
+    title: str = Field(..., description="Job title")
+    body_html: str = Field(..., description="Sanitised job description HTML")
+    address: str = Field(..., description="Facility / branch name")
+    label: str = Field(..., description="Job type + employment-form label")
+    location: str = Field(..., description="Work location (commute info)")
+    salary: str = Field(..., description="Salary text (full original)")
     apply_url: str = Field(..., description="Jobcan apply URL — preserved as-is")
     source_url: str = Field(..., description="Original Jobcan detail page URL")
     page_title: str | None = Field(None, description="<title> contents for SEO")
