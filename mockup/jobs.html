@@ -1,437 +1,1003 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>募集職種一覧 | あおぞらケアグループ採用</title>
-  <meta name="description" content="あおぞらケアグループの募集中求人一覧。介護スタッフ・看護師・ケアマネジャー・事務・IT エンジニアなど、福岡県・鹿児島県で募集中。">
-  <meta name="theme-color" content="#0059ff">
-  <link rel="canonical" href="https://recruit.aozora-cg.com/jobs/">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@600&display=swap" rel="stylesheet">
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <title>求人一覧 | あおぞらケアグループ採用</title>
+  <link rel="canonical" href="https://recruit.jobcan.jp/aozora/list?hide_breadcrumb=true&amp;hide_search=true">
+  
   <link rel="stylesheet" href="assets/css/tokens.css">
-  <link rel="stylesheet" href="assets/css/components.css">
-  <link rel="stylesheet" href="assets/css/pages.css">
+  
+<link rel="stylesheet" href="assets/css/sync-job-list.css">
+
 </head>
-<body class="page-jobs">
+<body>
+  <main class="job-list">
+    
+<header class="job-list__header">
+  <h1 class="job-list__title">求人一覧</h1>
+  <p class="job-list__lede">34 件の募集中ポジション</p>
+</header>
 
-  <div class="top-bar">
-    <div class="container top-bar__inner">
-      <span>採用専用ダイヤル <a href="tel:092-000-0000">092-000-0000</a></span>
-      <span>平日 9:00 – 18:00</span>
-    </div>
-  </div>
-
-  <header class="site-header">
-    <div class="container site-header__inner">
-      <a href="index.html" class="site-header__brand" aria-label="A.C.G あおぞらケアグループ 採用情報トップ">
-        <img class="site-logo__image" src="assets/img/logo-acg-light.png" alt="A.C.G あおぞらケアグループ">
-        <span class="site-logo__role">採用</span>
-      </a>
-      <nav class="site-nav" aria-label="グローバルナビ">
-        <ul class="site-nav__list">
-          <li><a class="site-nav__link" href="index.html">採用トップ</a></li>
-          <li><a class="site-nav__link" href="jobs.html" aria-current="page">募集職種</a></li>
-          <li><a class="site-nav__link" href="index.html#staff">スタッフ紹介</a></li>
-          <li><a class="site-nav__link" href="index.html#flow">選考フロー</a></li>
-          <li><a class="site-nav__link" href="index.html#faq">よくある質問</a></li>
+<ul class="job-list__cards" role="list">
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/1777023?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
         </ul>
-      </nav>
-      <a class="site-header__cta" href="tel:092-000-0000">電話で相談</a>
-    </div>
-  </header>
-
-  <section class="page-jobs__header">
-    <div class="container">
-      <p class="breadcrumb">
-        <a href="index.html">採用トップ</a>
-        <span class="breadcrumb__sep">/</span>
-        <span>募集職種一覧</span>
-      </p>
-      <span class="eyebrow">Open Positions</span>
-      <h1 class="page-jobs__title">募集職種一覧</h1>
-      <p class="page-jobs__lead">福岡県・鹿児島県の介護・看護・在宅支援、本部スタッフまで。幅広い職種で募集しています。</p>
-    </div>
-  </section>
-
-  <main class="page-jobs__main">
-    <div class="container">
-
-      <!-- filter -->
-      <section class="job-list-filter" aria-label="求人を絞り込む">
-        <div class="job-list-filter__row">
-          <div class="job-list-filter__label">職種</div>
-          <div class="job-list-filter__options">
-            <button class="job-list-filter__chip" aria-pressed="true">すべて</button>
-            <button class="job-list-filter__chip">介護スタッフ</button>
-            <button class="job-list-filter__chip">訪問介護員</button>
-            <button class="job-list-filter__chip">看護師・准看護師</button>
-            <button class="job-list-filter__chip">ケアマネジャー</button>
-            <button class="job-list-filter__chip">事務</button>
-            <button class="job-list-filter__chip">機能訓練指導員</button>
-            <button class="job-list-filter__chip">送迎ドライバー</button>
-            <button class="job-list-filter__chip">IT エンジニア</button>
-          </div>
-        </div>
-        <div class="job-list-filter__row">
-          <div class="job-list-filter__label">勤務地</div>
-          <div class="job-list-filter__options">
-            <button class="job-list-filter__chip" aria-pressed="true">すべて</button>
-            <button class="job-list-filter__chip">福岡県</button>
-            <button class="job-list-filter__chip">鹿児島県</button>
-          </div>
-        </div>
-        <div class="job-list-filter__row">
-          <div class="job-list-filter__label">雇用形態</div>
-          <div class="job-list-filter__options">
-            <button class="job-list-filter__chip" aria-pressed="true">すべて</button>
-            <button class="job-list-filter__chip">正社員</button>
-            <button class="job-list-filter__chip">パート</button>
-            <button class="job-list-filter__chip">アルバイト</button>
-            <button class="job-list-filter__chip">契約社員</button>
-          </div>
-        </div>
-        <div class="job-list-filter__actions">
-          <button class="btn btn--quiet">条件をクリア</button>
-          <button class="btn btn--ghost btn--sm">絞り込む</button>
-        </div>
-      </section>
-
-      <p class="page-jobs__count">
-        <strong>377</strong> 件中 <strong>1 – 10</strong> 件を表示
-        <span class="page-jobs__count-aside">※ モックはサンプル 10 件</span>
-      </p>
-
-      <div class="job-list">
-
-        <!-- 1 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12345</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">介護スタッフ｜特別養護老人ホーム あおぞら福岡</a></h2>
-            </div>
-            <span class="job-card__badge">New</span>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">介護スタッフ</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">福岡県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>福岡市東区 (西鉄千早駅 徒歩 8 分)</dd></div>
-            <div><dt>給与</dt><dd>月給 22万 〜 28万円</dd></div>
-            <div><dt>勤務時間</dt><dd>シフト制 (夜勤あり)</dd></div>
-            <div><dt>必須資格</dt><dd>初任者研修以上</dd></div>
-          </dl>
-          <p class="job-card__summary">特養での身体介護・生活支援が中心。OJT 充実、未経験から正社員を目指せる環境です。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12345" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 2 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12346</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">訪問介護員 (ヘルパー)｜あおぞら訪問介護 博多ステーション</a></h2>
-            </div>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">訪問介護員</span>
-            <span class="job-card__tag">パート</span>
-            <span class="job-card__tag">福岡県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>福岡市博多区 (博多駅 徒歩 5 分)</dd></div>
-            <div><dt>給与</dt><dd>時給 1,400 円〜 (資格・経験考慮)</dd></div>
-            <div><dt>勤務時間</dt><dd>週 2 日〜、1 日 2 時間〜</dd></div>
-            <div><dt>必須資格</dt><dd>初任者研修以上</dd></div>
-          </dl>
-          <p class="job-card__summary">直行直帰可。ご家庭の事情に合わせて働けます。同行訪問 3 回まで実施し、安心してスタートできます。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12346" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 3 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12347</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">看護師 (訪問看護)｜あおぞら訪問看護ステーション</a></h2>
-            </div>
-            <span class="job-card__badge">New</span>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">看護師</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">福岡県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>福岡市中央区 (赤坂駅 徒歩 6 分)</dd></div>
-            <div><dt>給与</dt><dd>月給 30万 〜 38万円</dd></div>
-            <div><dt>勤務時間</dt><dd>平日 9:00 - 18:00 (オンコール手当別途)</dd></div>
-            <div><dt>必須資格</dt><dd>正看護師</dd></div>
-          </dl>
-          <p class="job-card__summary">在宅医療の経験不問。病院経験を活かしながら、ご利用者の生活に近い場所で看護できる仕事です。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12347" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 4 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12348</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">准看護師｜デイサービス あおぞら早良</a></h2>
-            </div>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">准看護師</span>
-            <span class="job-card__tag">パート</span>
-            <span class="job-card__tag">福岡県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>福岡市早良区 (西新駅 徒歩 10 分)</dd></div>
-            <div><dt>給与</dt><dd>時給 1,500 円〜</dd></div>
-            <div><dt>勤務時間</dt><dd>9:00 - 17:00 (日勤のみ、週 3 日〜)</dd></div>
-            <div><dt>必須資格</dt><dd>准看護師</dd></div>
-          </dl>
-          <p class="job-card__summary">日勤のみ・土日休み可。お子さまのいる方の復職実績多数。バイタル測定や処置を中心にお願いします。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12348" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 5 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12349</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">ケアマネジャー｜あおぞら居宅介護支援センター 鹿児島</a></h2>
-            </div>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">ケアマネジャー</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">鹿児島県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>鹿児島市中央町 (鹿児島中央駅 徒歩 7 分)</dd></div>
-            <div><dt>給与</dt><dd>月給 28万 〜 35万円</dd></div>
-            <div><dt>勤務時間</dt><dd>平日 9:00 - 18:00 (土日祝休み)</dd></div>
-            <div><dt>必須資格</dt><dd>介護支援専門員</dd></div>
-          </dl>
-          <p class="job-card__summary">担当件数の調整あり、ICT 化されたケアプラン作成環境。地域ケア会議で発言できる風土です。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12349" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 6 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12350</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">介護スタッフ (夜勤あり)｜グループホーム あおぞら桜島</a></h2>
-            </div>
-            <span class="job-card__badge">New</span>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">介護スタッフ</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">鹿児島県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>鹿児島市東桜島町</dd></div>
-            <div><dt>給与</dt><dd>月給 23万 〜 29万円 + 夜勤手当 8,000 円/回</dd></div>
-            <div><dt>勤務時間</dt><dd>シフト制 (夜勤 月 4-5 回)</dd></div>
-            <div><dt>必須資格</dt><dd>不問 (無資格 OK、研修費用補助あり)</dd></div>
-          </dl>
-          <p class="job-card__summary">9 名定員の少人数ユニット。「家庭らしさ」を大切に、ご利用者と一緒に料理や買い物もします。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12350" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 7 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12351</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">機能訓練指導員｜デイサービス あおぞら春日</a></h2>
-            </div>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">機能訓練指導員</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">福岡県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>春日市春日 (春日駅 徒歩 4 分)</dd></div>
-            <div><dt>給与</dt><dd>月給 26万 〜 32万円</dd></div>
-            <div><dt>勤務時間</dt><dd>8:30 - 17:30 (日勤のみ、土日祝交代休)</dd></div>
-            <div><dt>必須資格</dt><dd>PT / OT / 柔道整復師 等</dd></div>
-          </dl>
-          <p class="job-card__summary">個別機能訓練計画書の作成と運動指導が中心。新人 PT/OT の方も歓迎、研修体制充実。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12351" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 8 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12352</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">事務スタッフ (介護報酬請求)｜本部</a></h2>
-            </div>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">事務スタッフ</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">福岡県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>福岡市中央区天神 (天神駅 徒歩 3 分)</dd></div>
-            <div><dt>給与</dt><dd>月給 22万 〜 27万円</dd></div>
-            <div><dt>勤務時間</dt><dd>平日 9:00 - 18:00 (土日祝休み)</dd></div>
-            <div><dt>必須資格</dt><dd>不問 (Excel 中級以上)</dd></div>
-          </dl>
-          <p class="job-card__summary">介護報酬請求業務を中心に、各事業所の事務サポート。リモートワーク週 2 日まで可。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12352" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 9 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12353</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">送迎ドライバー｜デイサービス あおぞら指宿</a></h2>
-            </div>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">送迎ドライバー</span>
-            <span class="job-card__tag">パート</span>
-            <span class="job-card__tag">鹿児島県</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>指宿市湯の浜</dd></div>
-            <div><dt>給与</dt><dd>時給 1,100 円〜</dd></div>
-            <div><dt>勤務時間</dt><dd>8:00 - 10:00 / 15:30 - 17:30</dd></div>
-            <div><dt>必須資格</dt><dd>普通自動車免許 (AT 限定可)</dd></div>
-          </dl>
-          <p class="job-card__summary">送迎の合間にご利用者とおしゃべり。シニア世代の応募も歓迎、社用車使用。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12353" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
-        <!-- 10 -->
-        <article class="job-card">
-          <div class="job-card__header">
-            <div>
-              <span class="job-card__id">REQ — 12354</span>
-              <h2 class="job-card__title"><a href="jobs/sample-care-staff.html">IT エンジニア (社内システム)｜本部</a></h2>
-            </div>
-            <span class="job-card__badge">New</span>
-          </div>
-          <div class="job-card__tags">
-            <span class="job-card__tag">IT エンジニア</span>
-            <span class="job-card__tag">正社員</span>
-            <span class="job-card__tag">福岡県</span>
-            <span class="job-card__tag">リモート可</span>
-          </div>
-          <dl class="job-card__meta">
-            <div><dt>勤務地</dt><dd>福岡市中央区天神 (週 3 リモート可)</dd></div>
-            <div><dt>給与</dt><dd>月給 35万 〜 55万円 (スキルによる)</dd></div>
-            <div><dt>勤務時間</dt><dd>フレックス (コアタイム 11:00 - 15:00)</dd></div>
-            <div><dt>必須資格</dt><dd>不問 (Web 開発の業務経験 3 年以上歓迎)</dd></div>
-          </dl>
-          <p class="job-card__summary">介護現場の業務効率化システム開発。GCP / Python / Next.js / WordPress を扱います。介護業界未経験 OK。</p>
-          <div class="job-card__footer">
-            <a class="btn btn--primary btn--sm" href="https://recruit.jobcan.jp/aozora/entry/new/12354" target="_blank" rel="noopener">応募する</a>
-            <a class="job-card__detail-link" href="jobs/sample-care-staff.html">求人詳細</a>
-          </div>
-        </article>
-
+        
+        <h2 class="job-list-card__title">【社】介護職（博多／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ博多（デイ・有料）</p>
+        <p class="job-list-card__description">#ケア重視#無資格未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡福岡市博多区にある有料老人ホーム(定員31名)とデイサービス(定員27名)が一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】介護業務全般 ※無資格未経験者OK〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
       </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2264134?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年8月OPEN※福岡【社】介護職（四箇／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ四箇（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡◆2026年8月、福岡市早良区四箇に新規OPEN◆住宅型有料老人ホーム（50床）＋デイサービス併設施設です！鹿児島・福岡で事業拡大中のあおぞらケアグループでは、専門性の高いスタッフがケアにしっかり向き合える環境づくりを大切にしています。◆ACGの特徴◆＊AI・IT導入により業務効率化 → ケアに集中できる環境＊年齢・性別・国籍不問／実力・頑張りを正当に評価＊20代～70代まで活躍中／ブランクOK／定年なし＊副業OKで柔軟な働き方が可能＊資格取得支援制度で自身のキャリアステップも可能オープニングのため、人間関係はゼロからスタート♪新しい施設を一緒に創っていきませんか？※OPENまでは近隣施設で勤務相談可能です【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください♪</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2264135?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年8月OPEN※福岡【社・週休３日制】介護職（四箇／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ四箇（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡◆2026年8月、福岡市早良区四箇に新規OPEN◆住宅型有料老人ホーム（50床）＋デイサービス併設施設です！鹿児島・福岡で事業拡大中のあおぞらケアグループでは、専門性の高いスタッフがケアにしっかり向き合える環境づくりを大切にしています。◆ACGの特徴◆＊AI・IT導入により業務効率化 → ケアに集中できる環境＊年齢・性別・国籍不問／実力・頑張りを正当に評価＊20代～70代まで活躍中／ブランクOK／定年なし＊副業OKで柔軟な働き方が可能＊資格取得支援制度で自身のキャリアステップも可能オープニングのため、人間関係はゼロからスタート♪新しい施設を一緒に創っていきませんか？※OPENまでは近隣施設で勤務相談可能です【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2264205?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年8月OPEN※福岡【パート】日勤・介護スタッフ（四箇／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ四箇（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡◆2026年8月、福岡市早良区四箇に新規OPEN◆住宅型有料老人ホーム（50床）＋デイサービス併設施設です！鹿児島・福岡で事業拡大中のあおぞらケアグループでは、専門性の高いスタッフがケアにしっかり向き合える環境づくりを大切にしています。◆ACGの特徴◆＊AI・IT導入により業務効率化 → ケアに集中できる環境＊年齢・性別・国籍不問／実力・頑張りを正当に評価＊20代～70代まで活躍中／ブランクOK／定年なし＊副業OKで柔軟な働き方が可能＊資格取得支援制度で自身のキャリアステップも可能オープニングのため、人間関係はゼロからスタート♪新しい施設を一緒に創っていきませんか？※OPENまでは近隣施設で勤務相談可能です【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2199420?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年2月OPEN※【社】介護職（田村／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ田村（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年2月に新しくＯＰＥＮ！福岡市早良区田村にある有料老人ホーム(125戸)とデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。※オープンまでは近隣の他事業所にて勤務可能です。【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください♪</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2199421?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年2月OPEN※【社・週休３日制】介護職（田村／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ田村（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡※家事育児、介護や副業など両立しやすくご自身のペースで働いていただける雇用となります。2026年2月に新しくＯＰＥＮ！福岡市早良区田村にある有料老人ホーム(125戸)とデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。※オープンまでは近隣の他事業所にて勤務可能です。【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2199422?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年2月OPEN※【パート】日勤・介護スタッフ（田村／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ田村（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年2月に新しくＯＰＥＮ！福岡市早良区田村にある有料老人ホーム(125戸)とデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。※オープンまでは近隣の他事業所にて勤務可能です。【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2103102?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">(障)【パート】日勤・介護助手スタッフ（鹿児島）※トライアル雇用併用※</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ下荒田（デイ・有料・GH）</p>
+        <p class="job-list-card__description">#ケア重視#無資格未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡鹿児島にある各施設で地域や社会貢献ができる介護助手として一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。※原則3か月の試用期間またはトライアル雇用※雇用期間の定めあり（3か月）※原則契約更新あり※正社員雇用制度あり【仕事内容】介護サービスの補助 ※無資格未経験者OK面接で業務可能な範囲を聞かせていただき、業務内容や勤務時間日数を相談していただけます。〇食事の配膳や下膳業務〇リネンの交換などの環境整備〇見守り話し相手〇清掃・片付け業務※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2174386?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【パート】日勤・介護スタッフ（油山／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ油山（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2025年9月に新しくＯＰＥＮ！福岡県那珂川市西畑にある137床の有料老人ホームとデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2174595?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-care.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">介護職</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社・週休３日制】介護職（油山／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ油山（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡※家事育児、介護や副業など両立しやすくご自身のペースで働いていただける雇用となります。2025年9月に新しくＯＰＥＮ！福岡県那珂川市西畑にある137床の有料老人ホームとデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】介護業務全般〇食事、入浴、排泄介助など介護サービス〇日常生活補助〇介護記録の記入など※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2174628?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】生活相談員（油山／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ油山（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2025年9月に新しくＯＰＥＮ！福岡県那珂川市西畑にある137床の有料老人ホームとデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/90447?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】相談支援専門員（小松原）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ小松原（相談支援・就労・GH）</p>
+        <p class="job-list-card__description">#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡鹿児島市小松原にある就労継続支援、相談支援、共同生活援助(GH定員20名)が一体となったホームにて一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談支援業務全般相談支援事業所にて、障がい者の方々の支援計画を作成します。当職場では現在2名が従事しておりますので、経験が少なく不安があられる方でも周りのスタッフに相談しながら進めていくことができます。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2264252?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年8月OPEN※福岡【社】生活相談員（四箇／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ四箇（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡◆2026年8月、福岡市早良区四箇に新規OPEN◆住宅型有料老人ホーム（50床）＋デイサービス併設施設です！鹿児島・福岡で事業拡大中のあおぞらケアグループでは、専門性の高いスタッフがケアにしっかり向き合える環境づくりを大切にしています。◆ACGの特徴◆＊AI・IT導入により業務効率化 → ケアに集中できる環境＊年齢・性別・国籍不問／実力・頑張りを正当に評価＊20代～70代まで活躍中／ブランクOK／定年なし＊副業OKで柔軟な働き方が可能＊資格取得支援制度で自身のキャリアステップも可能オープニングのため、人間関係はゼロからスタート♪新しい施設を一緒に創っていきませんか？※OPENまでは近隣施設で勤務相談可能です【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2264253?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年8月OPEN※福岡【社・週休３日制】生活相談員（四箇／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ四箇（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡※家事育児、介護や副業など両立しやすくご自身のペースで働いていただける雇用となります。◆2026年8月、福岡市早良区四箇に新規OPEN◆住宅型有料老人ホーム（50床）＋デイサービス併設施設です！鹿児島・福岡で事業拡大中のあおぞらケアグループでは、専門性の高いスタッフがケアにしっかり向き合える環境づくりを大切にしています。◆ACGの特徴◆＊AI・IT導入により業務効率化 → ケアに集中できる環境＊年齢・性別・国籍不問／実力・頑張りを正当に評価＊20代～70代まで活躍中／ブランクOK／定年なし＊副業OKで柔軟な働き方が可能＊資格取得支援制度で自身のキャリアステップも可能オープニングのため、人間関係はゼロからスタート♪新しい施設を一緒に創っていきませんか？※OPENまでは近隣施設で勤務相談可能です【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2199434?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年2月OPEN※【社】生活相談員（田村／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ田村（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年2月に新しくＯＰＥＮ！福岡市早良区田村にある有料老人ホーム(125戸)とデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。※オープンまでは近隣の他事業所にて勤務可能です。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2199435?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年2月OPEN※【社・週休３日制】生活相談員（田村／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ田村（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡※家事育児、介護や副業など両立しやすくご自身のペースで働いていただける雇用となります。2026年2月に新しくＯＰＥＮ！福岡市早良区田村にある有料老人ホーム(125戸)とデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。※オープンまでは近隣の他事業所にて勤務可能です。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2091005?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社・週休３日制】生活相談員（南栄／デイ・有料・GH）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ南栄（デイ・有料・GH）</p>
+        <p class="job-list-card__description">#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡鹿児島市南栄にある有料老人ホーム(全49室)とデイサービス(定員25名)、共同生活援助(GH定員7名)が一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/1668696?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社・週休３日制】生活相談員（永吉／デイ・有料）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ永吉（デイ・有料）</p>
+        <p class="job-list-card__description">#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡鹿児島市永吉にある有料老人ホーム(全24室)とデイサービス(定員27名)が一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2174627?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">短時間正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社・週休３日制】生活相談員（油山／デイ・有料）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ油山（デイ・有料）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡※家事育児、介護や副業など両立しやすくご自身のペースで働いていただける雇用となります。2025年9月に新しくＯＰＥＮ！福岡県那珂川市西畑にある137床の有料老人ホームとデイサービスが一体となったホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/1891471?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-nurse.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">相談員</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】生活相談員（梅ヶ丘・特養）</h2>
+        <p class="job-list-card__address">【福岡】あおぞらケアグループ梅ヶ丘（特養）</p>
+        <p class="job-list-card__description">#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡自然豊かで穏やかな環境、太宰府市梅ヶ丘にある全29室の特別養護老人ホームで一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談業務全般 ※夜勤は希望者のみ〇利用者様や家族様の相談窓口〇入所退所手続〇介助サポートなど※初めての方は先輩が丁寧にサポートしますのでご安心ください♪</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/452341?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-it.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">ITエンジニア職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】開発エンジニア（鹿児島市／リモート可）</h2>
+        <p class="job-list-card__address">本社</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃キャリアアップ ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉・介護事業、施設紹介事業またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】裁量権大！医療福祉業界のWebアプリ・システム開発の中心メンバーとなり今までの経験を活かしてみませんか？IPO及び事業拡大に伴い、IT化を推進するメンバーを増員。■業務効率化のため、各システムの改善を立案・構築■ベンダーとの交渉・管理■開発プロジェクトの進行管理■システム保守・運用支援など※使用言語・サーバー環境：JavaScript／GCP／Node.js／AWS【プロジェクト事例】・業務効率改善サービスクラウド型システム「介ソル」を共同開発・福祉施設の記録システムを自社開発・自社サービスの請求書発行ツールの開発ペーパーレス化により残業時間の削減及び介護業界の働き方改革に貢献しています。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/1690435?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-it.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">ITエンジニア職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】社内SEアシスタント（福岡）</h2>
+        <p class="job-list-card__address">福岡支店</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉(介護)事業、施設紹介事業、またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】※未経験で挑戦したい方歓迎します！医療福祉業界を支えるアプリ開発に挑戦してみませんか？介護現場には、まだアナログな部分が多くあります。私たちの役割はそれらをITの力で効率化し、働く方々から直接感謝の声をいただける事がやりがいです。上流工程で要件定義や設計などにも対応しながら、日々のメンテナンスや機能改善、システム監視を中心に行っていただきます。■システム保守・運用支援■プロジェクトの管理・推進の支援■エンジニアのサポート業務など</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/1801181?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-it.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">ITエンジニア職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】開発エンジニア（福岡／リモート可）</h2>
+        <p class="job-list-card__address">福岡支店</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉(介護)事業、施設紹介事業、またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】裁量権大！医療福祉業界のWebアプリ・システム開発の中心メンバーとなり今までの経験を活かしてみませんか？IPO及び事業拡大に伴い、IT化を推進するメンバーを増員。※リモートと出勤のハイブリッド型で勤務可能■業務効率化のため、各システムの改善を立案・構築■ベンダーとの交渉・管理■開発プロジェクトの進行管理■マネジメント業務など【プロジェクト事例】・業務効率改善サービスクラウド型システム「介ソル」を共同開発・福祉施設の記録システムを自社開発・自社サービスの請求書発行ツールの開発ペーパーレス化により残業時間の削減及び介護業界の働き方改革に貢献しています。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2052169?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-it.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">ITエンジニア職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】社内SEアシスタント（鹿児島市）</h2>
+        <p class="job-list-card__address">本社</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃キャリアアップ ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉・介護事業、施設紹介事業またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】※未経験で挑戦したい方歓迎します！医療福祉業界を支えるアプリ開発に挑戦してみませんか？介護現場には、まだアナログな部分が多くあります。私たちの役割はそれらをITの力で効率化し、働く方々から直接感謝の声をいただける事がやりがいです。流工程で要件定義や設計などにも対応しながら、日々のメンテナンスや機能改善、システム監視を中心に行っていただきます。■システム保守・運用支援■プロジェクトの管理・推進の支援■エンジニアのサポート業務など</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2267339?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【パート】人事総務スタッフ（福岡市博多区）</h2>
+        <p class="job-list-card__address">福岡支店</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃キャリアアップ ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉・介護事業、施設紹介事業またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】人事総務業務全般（採用・総務メイン）１人一台ゆったりとした作業スペースでIPOに向けた準備を含め、人事・総務業務に携わって頂きます。気軽に質問をしていただける幅広い年齢層のメンバーがそろっています。個々によって働き方も違い、多様性を活かしキャリアアップが可能です。□採用に関わる事務（応募者管理や調整など）□文書作成や書類の分類・整理□備品管理や社内環境の整備□来客・電話応対など</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2267338?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】人事総務スタッフ（福岡市博多区）</h2>
+        <p class="job-list-card__address">福岡支店</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃キャリアアップ ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉・介護事業、施設紹介事業またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】人事総務業務全般（採用・総務メイン）１人一台ゆったりとした作業スペースでIPOに向けた準備を含め、人事・総務業務に携わって頂きます。気軽に質問をしていただける幅広い年齢層のメンバーがそろっています。個々によって働き方も違い、多様性を活かしキャリアアップが可能です。□採用に関わる事務（応募者管理や調整など）□文書作成や書類の分類・整理□備品管理や社内環境の整備□来客・電話応対など</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2267337?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【パート】人事総務スタッフ（鹿児島市）</h2>
+        <p class="job-list-card__address">本社</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃キャリアアップ ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉・介護事業、施設紹介事業またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】人事総務業務全般（採用・総務メイン）１人一台ゆったりとした作業スペースでIPOに向けた準備を含め、人事・総務業務に携わって頂きます。気軽に質問をしていただける幅広い年齢層のメンバーがそろっています。個々によって働き方も違い、多様性を活かしキャリアアップが可能です。□採用に関わる事務（応募者管理や調整など）□文書作成や書類の分類・整理□備品管理や社内環境の整備□来客・電話応対など</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2267327?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">【社】人事総務スタッフ（鹿児島市）</h2>
+        <p class="job-list-card__address">本社</p>
+        <p class="job-list-card__description">＃成長企業 ＃IPO準備 ＃社会貢献 ＃キャリアアップ ＃鹿児島 ＃福岡【IT×医療福祉で利用者様や働く人を支える『ACG』です。】あおぞらケアグループは鹿児島・福岡を中心に医療福祉・介護事業、施設紹介事業またシステムアプリ開発などIT事業を展開。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】人事総務業務全般（採用・総務メイン）１人一台ゆったりとした作業スペースでIPOに向けた準備を含め、人事・総務業務に携わって頂きます。気軽に質問をしていただける幅広い年齢層のメンバーがそろっています。個々によって働き方も違い、多様性を活かしキャリアアップが可能です。□採用に関わる事務（応募者管理や調整など）□文書作成や書類の分類・整理□備品管理や社内環境の整備□来客・電話応対など</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2215700?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年3月OPEN予定※【社】夜間／電話受付事務（鹿児島市小野）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ鹿児島北（訪問介護）</p>
+        <p class="job-list-card__description">#オープニングスタッフ #電話受付 #15：00～24：00 #無資格未経験OK #副業OK #年齢学歴不問2026年3月に新しくＯＰＥＮ！鹿児島市小野にある訪問介護事業所で安心して在宅療養をしていただけるように一緒にサポートをしませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】訪問介護事業所の電話受付訪問介護事業所における、電話受付業務をお願いします。お電話でご利用者様からの「明日の支援の時間を変更してほしい」等の問い合わせに対し、訪問介護スタッフへスケジュール変更を伝えスケジュール調整等を行います。※特に介護に関する知識は必要ありませんのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2215699?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年3月OPEN予定※【パート】事務職（鹿児島市小野／訪問介護）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ鹿児島北（訪問介護）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年3月に新しくＯＰＥＮ！鹿児島市小野にある訪問介護事業所で安心して在宅療養をしていただけるように一緒にサポートをしませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】事務業務全般訪問介護事業所にて、一般事務全般に携わって頂きます。□文書作成や書類の分類・整理□備品の管理・発注□電話・来客応対など※未経験者歓迎！介護保険請求など難しい作業はありません。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2215694?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年3月OPEN予定※【社】事務職（鹿児島市小野／訪問介護）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ鹿児島北（訪問介護）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年3月に新しくＯＰＥＮ！鹿児島市小野にある訪問介護事業所で安心して在宅療養をしていただけるように一緒にサポートをしませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】事務業務全般訪問介護事業所にて、一般事務全般に携わって頂きます。□文書作成や書類の分類・整理□備品の管理・発注□電話・来客応対など※未経験者歓迎！介護保険請求など難しい作業はありません。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2215705?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年3月OPEN予定※【社】事務職（鹿児島市山田町／訪問介護）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ鹿児島南（訪問介護）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年3月に新しくＯＰＥＮ！鹿児島市山田町にある訪問介護事業所で安心して在宅療養をしていただけるように一緒にサポートをしませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】事務業務全般訪問介護事業所にて、一般事務全般に携わって頂きます。□文書作成や書類の分類・整理□備品の管理・発注□電話・来客応対など※未経験者歓迎！介護保険請求など難しい作業はありません。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2215707?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">正社員</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年3月OPEN予定※【社】夜間／電話受付事務（鹿児島市山田町）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ鹿児島南（訪問介護）</p>
+        <p class="job-list-card__description">#オープニングスタッフ #電話受付 #15：00～24：00 #無資格未経験OK #副業OK #年齢学歴不問2026年3月に新しくＯＰＥＮ！鹿児島市山田町にある訪問介護事業所で安心して在宅療養をしていただけるように一緒にサポートをしませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】訪問介護事業所の電話受付訪問介護事業所における、電話受付業務をお願いします。お電話でご利用者様からの「明日の支援の時間を変更してほしい」等の問い合わせに対し、訪問介護スタッフへスケジュール変更を伝えスケジュール調整等を行います。※特に介護に関する知識は必要ありませんのでご安心ください★</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+  <li class="job-list-card">
+    <a class="job-list-card__link" href="https://recruit.jobcan.jp/aozora/job_offers/2215706?hide_breadcrumb=true&amp;hide_search=true" rel="noopener">
+      
+      <div class="job-list-card__thumb">
+        <img class="job-list-card__thumb-img"
+             src="assets/img/illust-job-office.png"
+             alt=""
+             loading="lazy">
+      </div>
+      
+      <div class="job-list-card__body">
+        
+        <ul class="job-list-card__labels" role="list">
+          
+          <li class="job-list-card__label">事務職</li>
+          
+          <li class="job-list-card__label">パート</li>
+          
+          <li class="job-list-card__label">アルバイト</li>
+          
+        </ul>
+        
+        <h2 class="job-list-card__title">※2026年3月OPEN予定※【パート】事務職（鹿児島市山田町／訪問介護）</h2>
+        <p class="job-list-card__address">【鹿児島】あおぞらケアグループ鹿児島南（訪問介護）</p>
+        <p class="job-list-card__description">#オープニングスタッフ#ケア重視#ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡2026年3月に新しくＯＰＥＮ！鹿児島市山田町にある訪問介護事業所で安心して在宅療養をしていただけるように一緒にサポートをしませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】事務業務全般訪問介護事業所にて、一般事務全般に携わって頂きます。□文書作成や書類の分類・整理□備品の管理・発注□電話・来客応対など※未経験者歓迎！介護保険請求など難しい作業はありません。</p>
+        <span class="job-list-card__cta">詳細を見る</span>
+      </div>
+    </a>
+  </li>
+  
+</ul>
 
-      <nav class="page-jobs__pagination" aria-label="ページ送り">
-        <span class="is-current">1</span>
-        <a href="#">2</a>
-        <a href="#">3</a>
-        <span>…</span>
-        <a href="#">38</a>
-        <a href="#" aria-label="次のページ">›</a>
-      </nav>
+<footer class="job-list__footer">
+  <p class="job-list__source-note">
+    応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
+  </p>
+</footer>
 
-      <p class="notice-bar" style="margin-top: var(--space-10);">
-        ※ 本モックの求人は <a href="https://recruit.jobcan.jp/aozora" target="_blank" rel="noopener">recruit.jobcan.jp/aozora</a> の実データを参考にサンプリングしたダミーです。本番では同期により実求人が表示されます。
-      </p>
-    </div>
   </main>
-
-  <footer class="site-footer">
-    <div class="container">
-      <div class="site-footer__grid">
-        <div>
-          <img class="site-footer__brand-image" src="assets/img/logo-acg-light.png" alt="A.C.G あおぞらケアグループ">
-          <address class="site-footer__address">
-            福岡県・鹿児島県で介護・看護・在宅支援を提供する事業者グループ。<br>
-            地域とともに、長く続けられる介護を。
-          </address>
-          <a href="https://aozora-cg.com/" target="_blank" rel="noopener">コーポレートサイト →</a>
-        </div>
-        <div>
-          <h4>採用情報</h4>
-          <ul class="site-footer__nav">
-            <li><a href="index.html">採用トップ</a></li>
-            <li><a href="jobs.html">募集職種一覧</a></li>
-            <li><a href="index.html#staff">スタッフ紹介</a></li>
-            <li><a href="index.html#flow">選考フロー</a></li>
-            <li><a href="index.html#faq">よくある質問</a></li>
-            <li><a href="index.html#blog">育休ブログ</a></li>
-            <li><a href="index.html#news">お知らせ・コラム</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Contact</h4>
-          <ul class="site-footer__nav">
-            <li><a href="tel:092-000-0000">092-000-0000</a></li>
-            <li><a href="mailto:recruit@aozora-cg.com">recruit@aozora-cg.com</a></li>
-            <li style="color: var(--color-faint); font-size: var(--text-xs); margin-top: var(--space-2);">平日 9:00 – 18:00</li>
-          </ul>
-        </div>
-      </div>
-      <p class="site-footer__copy">
-        <span>© 2026 Aozora Care Group</span>
-        <span>Phase A — Draft Mock</span>
-      </p>
-    </div>
-  </footer>
-
-  <div class="entry-cta-bar" role="region" aria-label="固定エントリーバー">
-    <a class="btn btn--primary" href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">条件を絞り込む</a>
-    <a class="btn btn--ghost" href="tel:092-000-0000">電話する</a>
-  </div>
-
 </body>
 </html>
