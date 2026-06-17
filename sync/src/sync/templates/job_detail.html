@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<article class="job-detail__article">
+  <header class="job-detail__header">
+    <p class="job-detail__label">{{ job.label }}</p>
+    <h1 class="job-detail__title">{{ job.title }}</h1>
+    <p class="job-detail__address">{{ job.address }}</p>
+  </header>
+
+  <section class="job-detail__summary">
+    <dl class="job-detail__summary-list">
+      <div class="job-detail__summary-item">
+        <dt class="job-detail__summary-key">勤務地</dt>
+        <dd class="job-detail__summary-val">{{ job.location }}</dd>
+      </div>
+      <div class="job-detail__summary-item">
+        <dt class="job-detail__summary-key">給与</dt>
+        <dd class="job-detail__summary-val">{{ job.salary }}</dd>
+      </div>
+      {% for header, value in job.extra_lines %}
+      <div class="job-detail__summary-item">
+        <dt class="job-detail__summary-key">{{ header }}</dt>
+        <dd class="job-detail__summary-val">{{ value }}</dd>
+      </div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section class="job-detail__body">
+    <h2 class="job-detail__section-title">仕事内容</h2>
+    <div class="job-detail__body-content">
+      {{ job.body_html | safe }}
+    </div>
+  </section>
+
+  <footer class="job-detail__footer">
+    <a class="job-detail__apply-btn" href="{{ job.apply_url }}" rel="noopener">
+      この求人に応募する
+    </a>
+    <p class="job-detail__source-note">
+      応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
+    </p>
+  </footer>
+</article>
+{% endblock %}
