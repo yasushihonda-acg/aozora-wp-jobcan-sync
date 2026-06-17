@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .models import JobcanError
 
@@ -79,8 +79,80 @@ class ListSelectors(BaseModel):
     thumbnail: str
 
 
+class ThumbnailCategoryEntry(BaseModel):
+    """One job-category -> override-image mapping (Phase 2A.1c).
+
+    `synonyms` lists every Jobcan job-type label that maps to this category.
+    Matching is exact-string (no fuzzy match — same rule as `RequiredTableField`):
+    "ITエンジニア職" matches, "ITエンジニア" does NOT.
+    """
+
+    synonyms: list[str] = Field(..., min_length=1)
+    image: str = Field(..., min_length=1, description="In-house override image path")
+
+
+class ThumbnailCategoriesConfig(BaseModel):
+    """Phase 2A.1c — listing-page thumbnail override config.
+
+    When `enabled` is False the parser leaves the Jobcan-supplied thumbnail
+    untouched (escape hatch for the period before Jobcan returns the official
+    inquiry verdict).
+
+    `default_image` is the fallback shown when none of the card's labels
+    matches any synonym — the parser also emits a structured warning when it
+    falls through, so the operator can spot Jobcan introducing a new job type
+    (e.g. "ケアマネージャー") that needs adding to `categories`.
+
+    The reverse lookup `synonym_to_image` is materialised once at validation
+    time so the parser does not rebuild it per card. A `@model_validator`
+    also rejects configurations where the same synonym is shared by two
+    categories (silent last-writer-wins is a footgun — code-review medium
+    #3 / Phase 2A.1c).
+    """
+
+    enabled: bool = True
+    categories: dict[str, ThumbnailCategoryEntry] = Field(..., min_length=1)
+    default_image: str = Field(..., min_length=1)
+    # Populated by `_build_synonym_to_image` below; never set from YAML.
+    # `exclude=True` keeps it out of `model_dump()` snapshots.
+    synonym_to_image: dict[str, str] = Field(default_factory=dict, exclude=True)
+
+    @model_validator(mode="after")
+    def _build_synonym_to_image(self) -> ThumbnailCategoriesConfig:
+        reverse: dict[str, str] = {}
+        owners: dict[str, str] = {}
+        for category_name, entry in self.categories.items():
+            seen_in_this_category: set[str] = set()
+            for syn in entry.synonyms:
+                if syn in seen_in_this_category:
+                    # Intra-category duplicate: harmless at runtime but signals
+                    # an operator typo (copy-paste while editing selectors.yaml).
+                    raise ValueError(
+                        f"synonym {syn!r} listed twice under category {category_name!r}; "
+                        "remove the duplicate entry."
+                    )
+                seen_in_this_category.add(syn)
+                if syn in owners and owners[syn] != category_name:
+                    raise ValueError(
+                        f"synonym {syn!r} appears under two categories: "
+                        f"{owners[syn]!r} and {category_name!r}. "
+                        "A label can map to at most one category."
+                    )
+                owners[syn] = category_name
+                reverse[syn] = entry.image
+        # `synonym_to_image` is a derived (non-input) field. Pydantic's
+        # `model_validator(mode='after')` runs after __init__, so a plain
+        # attribute assignment works on a non-frozen model (this class is
+        # not frozen; its parent `SelectorConfig.frozen=True` does not propagate
+        # to child models). We use `object.__setattr__` defensively in case the
+        # frozen policy is ever flipped on later — it would still write through.
+        object.__setattr__(self, "synonym_to_image", reverse)
+        return self
+
+
 class ListConfig(BaseModel):
     selectors: ListSelectors
+    thumbnail_categories: ThumbnailCategoriesConfig
 
 
 class SanitizeConfig(BaseModel):

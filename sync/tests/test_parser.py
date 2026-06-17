@@ -567,8 +567,14 @@ class TestParseJobListPartialCardData:
 
     def test_relative_thumbnail_src_is_dropped_not_raised(self) -> None:
         """A path-relative `<img src="./thumb.jpg">` would fail Pydantic's
-        thumbnail_url http(s) validator and abort the whole page. The parser
-        must downgrade this to thumbnail_url=None instead."""
+        source_thumbnail_url http(s) validator and abort the whole page. The
+        parser must downgrade the source to None instead so one weird card
+        does not break the whole listing.
+
+        Phase 2A.1c note: `thumbnail_url` (display) may still hold an in-house
+        override path; the guarantee here is about the AUDIT-TRAIL field
+        `source_thumbnail_url`, which is the one that the validator protects.
+        """
         html = """
         <html><body>
           <div class="job-offer-box">
@@ -583,7 +589,13 @@ class TestParseJobListPartialCardData:
         """
         page = parse_job_list(html, _list_source_url())
         assert len(page.items) == 1
-        assert page.items[0].thumbnail_url is None
+        item = page.items[0]
+        # source side: relative URL was dropped to None (validator-protected)
+        assert item.source_thumbnail_url is None
+        # display side: Phase 2A.1c override still fires on labels, independent
+        # of source presence. `介護職` → care image. Code-review #6 finding:
+        # this contract must be asserted, not implicit.
+        assert item.thumbnail_url == "assets/img/illust-job-care.png"
 
 
 class TestParseJobListCategoryEdgeCases:
@@ -600,3 +612,318 @@ class TestParseJobListCategoryEdgeCases:
         src = "https://recruit.jobcan.jp/aozora/list?category_id=18773&category_id=99999"
         page = parse_job_list(html, src)
         assert page.category_id == "18773"
+
+
+# ============================================================
+# Phase 2A.1c — thumbnail_categories override
+# ============================================================
+import logging  # noqa: E402
+
+from sync.config import (  # noqa: E402
+    ListConfig,
+    SelectorConfig,
+    ThumbnailCategoriesConfig,
+    ThumbnailCategoryEntry,
+    default_config,
+)
+
+
+def _make_thumb_cfg(
+    *,
+    enabled: bool = True,
+    categories: dict[str, ThumbnailCategoryEntry] | None = None,
+    default_image: str = "assets/img/illust-job-default.png",
+) -> ThumbnailCategoriesConfig:
+    """Test helper — build a thumbnail_categories config with minimal categories."""
+    if categories is None:
+        categories = {
+            "care": ThumbnailCategoryEntry(
+                synonyms=["介護職"], image="assets/img/illust-job-care.png"
+            ),
+            "nurse": ThumbnailCategoryEntry(
+                synonyms=["看護師", "相談員"], image="assets/img/illust-job-nurse.png"
+            ),
+        }
+    return ThumbnailCategoriesConfig(
+        enabled=enabled,
+        categories=categories,
+        default_image=default_image,
+    )
+
+
+def _with_thumb_cfg(thumb_cfg: ThumbnailCategoriesConfig) -> SelectorConfig:
+    """Clone the production SelectorConfig but swap in our test thumb_cfg."""
+    base = default_config()
+    return SelectorConfig(
+        version=base.version,
+        detail=base.detail,
+        list=ListConfig(
+            selectors=base.list.selectors,
+            thumbnail_categories=thumb_cfg,
+        ),
+        sanitize=base.sanitize,
+    )
+
+
+def _single_card_html(
+    *,
+    job_id: str = "111",
+    labels: list[str] | None = None,
+    thumbnail_src: str | None = None,
+) -> str:
+    if labels is None:
+        labels = ["介護職", "正社員"]
+    label_html = "".join(f"<li>{lbl}</li>" for lbl in labels)
+    thumb_html = (
+        f'<img class="job-offer-main-image-thumbnail" src="{thumbnail_src}" alt="x">'
+        if thumbnail_src is not None
+        else ""
+    )
+    return f"""
+    <html><body>
+      <div class="job-offer-box">
+        {thumb_html}
+        <h2 class="job-offer-title">タイトル</h2>
+        <ul class="job-offer-label">{label_html}</ul>
+        <p class="job-offer-address">拠点</p>
+        <div class="job-offer-description">説明</div>
+        <a href="/aozora/job_offers/{job_id}?ref=promo">link</a>
+      </div>
+    </body></html>
+    """
+
+
+class TestThumbnailOverrideEnabledMatching:
+    """`thumbnail_url` is rewritten to the in-house image when labels match."""
+
+    def test_care_synonym_match(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=["介護職", "正社員"]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-care.png"
+
+    def test_nurse_first_synonym_match(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=["看護師", "正社員"]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-nurse.png"
+
+    def test_nurse_second_synonym_match(self) -> None:
+        """`相談員` and `看護師` both belong to the `nurse` category."""
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=["相談員", "正社員"]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-nurse.png"
+
+    def test_label_order_reversed_still_matches(self) -> None:
+        """Codex Q2: must not depend on `labels[0]`. The category label can
+        appear anywhere in the list."""
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            # employment-form first, job-type second — opposite of fixture order
+            _single_card_html(labels=["正社員", "介護職"]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-care.png"
+
+    def test_first_matching_label_wins(self) -> None:
+        """If a card carries TWO category labels (`介護職` and `看護師`), the
+        one that appears first in document order wins. Synonym dict iteration
+        is irrelevant — we walk labels."""
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=["看護師", "介護職"]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-nurse.png"
+
+
+class TestThumbnailOverrideDefaultFallback:
+    """Unknown / missing labels fall through to `default_image` with a warning."""
+
+    def test_unknown_label_falls_to_default(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=["ケアマネージャー", "正社員"]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-default.png"
+
+    def test_empty_labels_falls_to_default(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=[]),
+            _list_source_url(),
+            cfg,
+        )
+        assert page.items[0].thumbnail_url == "assets/img/illust-job-default.png"
+
+    def test_unknown_label_emits_structured_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Codex Q2: default-fallback must NOT be silent. The warning carries
+        job_id + labels + known_synonyms so the operator can add the missing
+        synonym to selectors.yaml."""
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        with caplog.at_level(logging.WARNING, logger="sync.parser"):
+            parse_job_list(
+                _single_card_html(job_id="999", labels=["ケアマネージャー"]),
+                _list_source_url(),
+                cfg,
+            )
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        record = warnings[0]
+        assert record.job_id == "999"  # type: ignore[attr-defined]
+        assert record.labels == ["ケアマネージャー"]  # type: ignore[attr-defined]
+        assert record.default_image == "assets/img/illust-job-default.png"  # type: ignore[attr-defined]
+        assert "介護職" in record.known_synonyms  # type: ignore[attr-defined]
+
+    def test_known_label_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        with caplog.at_level(logging.WARNING, logger="sync.parser"):
+            parse_job_list(
+                _single_card_html(labels=["介護職"]),
+                _list_source_url(),
+                cfg,
+            )
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings == []
+
+
+class TestThumbnailOverrideFeatureFlag:
+    """`enabled: false` — the override is bypassed and Jobcan URLs survive."""
+
+    def test_disabled_preserves_jobcan_source(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg(enabled=False))
+        jobcan_url = (
+            "https://storage.googleapis.com/ats-public-files.ats.jobcan.jp"
+            "/job_offer/main_image_file/111/_.jpg"
+        )
+        page = parse_job_list(
+            _single_card_html(labels=["介護職"], thumbnail_src=jobcan_url),
+            _list_source_url(),
+            cfg,
+        )
+        item = page.items[0]
+        assert item.thumbnail_url == jobcan_url
+        assert item.source_thumbnail_url == jobcan_url
+
+    def test_disabled_with_no_source_yields_none(self) -> None:
+        """When Jobcan provides no thumbnail and the override is disabled,
+        the field is None — the template renders the card without an image."""
+        cfg = _with_thumb_cfg(_make_thumb_cfg(enabled=False))
+        page = parse_job_list(
+            _single_card_html(labels=["介護職"], thumbnail_src=None),
+            _list_source_url(),
+            cfg,
+        )
+        item = page.items[0]
+        assert item.thumbnail_url is None
+        assert item.source_thumbnail_url is None
+
+
+class TestThumbnailCategoriesConfigValidation:
+    """Phase 2A.1c code-review #3: synonym collision is rejected at config-load."""
+
+    def test_synonym_shared_by_two_categories_raises(self) -> None:
+        """Two categories listing the same synonym (operator typo) must fail
+        Pydantic validation, NOT silently last-writer-wins at runtime."""
+        with pytest.raises(Exception) as exc_info:
+            ThumbnailCategoriesConfig(
+                enabled=True,
+                categories={
+                    "care": ThumbnailCategoryEntry(
+                        synonyms=["介護職", "相談員"], image="care.png"
+                    ),
+                    "nurse": ThumbnailCategoryEntry(
+                        synonyms=["相談員"], image="nurse.png"
+                    ),
+                },
+                default_image="default.png",
+            )
+        assert "相談員" in str(exc_info.value)
+        assert "care" in str(exc_info.value)
+        assert "nurse" in str(exc_info.value)
+
+    def test_duplicate_synonym_within_same_category_raises(self) -> None:
+        """evaluator finding: intra-category synonym duplication signals an
+        operator typo (copy-paste while editing selectors.yaml). Even though
+        it would be harmless at runtime (dict overwrite with the same image),
+        we reject it at load so the operator notices the dead line."""
+        with pytest.raises(Exception) as exc_info:
+            ThumbnailCategoriesConfig(
+                enabled=True,
+                categories={
+                    "care": ThumbnailCategoryEntry(
+                        synonyms=["介護職", "介護職"],  # duplicate
+                        image="care.png",
+                    ),
+                },
+                default_image="default.png",
+            )
+        assert "介護職" in str(exc_info.value)
+        assert "twice" in str(exc_info.value)
+
+    def test_synonym_to_image_built_at_load(self) -> None:
+        """Phase 2A.1c code-review #4: the reverse map is populated by the
+        model_validator, ready for the parser to use without rebuilding."""
+        cfg = ThumbnailCategoriesConfig(
+            enabled=True,
+            categories={
+                "care": ThumbnailCategoryEntry(synonyms=["介護職"], image="care.png"),
+                "nurse": ThumbnailCategoryEntry(
+                    synonyms=["看護師", "相談員"], image="nurse.png"
+                ),
+            },
+            default_image="default.png",
+        )
+        assert cfg.synonym_to_image == {
+            "介護職": "care.png",
+            "看護師": "nurse.png",
+            "相談員": "nurse.png",
+        }
+
+
+class TestSourceThumbnailPreservation:
+    """`source_thumbnail_url` is the audit trail of what Jobcan actually returned."""
+
+    def test_source_preserved_when_override_active(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        jobcan_url = (
+            "https://storage.googleapis.com/ats-public-files.ats.jobcan.jp"
+            "/job_offer/main_image_file/111/_.jpg"
+        )
+        page = parse_job_list(
+            _single_card_html(labels=["介護職"], thumbnail_src=jobcan_url),
+            _list_source_url(),
+            cfg,
+        )
+        item = page.items[0]
+        # display rewritten, source preserved
+        assert item.thumbnail_url == "assets/img/illust-job-care.png"
+        assert item.source_thumbnail_url == jobcan_url
+
+    def test_source_is_none_when_jobcan_omits_thumbnail(self) -> None:
+        cfg = _with_thumb_cfg(_make_thumb_cfg())
+        page = parse_job_list(
+            _single_card_html(labels=["介護職"], thumbnail_src=None),
+            _list_source_url(),
+            cfg,
+        )
+        item = page.items[0]
+        assert item.source_thumbnail_url is None
+        # Override still fires even without a source thumbnail
+        assert item.thumbnail_url == "assets/img/illust-job-care.png"

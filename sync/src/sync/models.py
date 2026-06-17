@@ -116,7 +116,23 @@ class JobListItem(BaseModel):
         description="Job-type + employment-form chips (e.g. ['介護職', '正社員'])",
     )
     thumbnail_url: str | None = Field(
-        None, description="Card thumbnail URL (omitted when Jobcan provides none)"
+        None,
+        description=(
+            "Card thumbnail displayed in the rendered HTML. "
+            "Phase 2A.1c: when `thumbnail_categories.enabled` is True, this is "
+            "the in-house category override image (relative path under `assets/`); "
+            "when disabled, this is the original Jobcan-supplied URL."
+        ),
+    )
+    source_thumbnail_url: str | None = Field(
+        None,
+        description=(
+            "The original Jobcan-supplied thumbnail URL, preserved unchanged. "
+            "Phase 2A.1c separates this from `thumbnail_url` so the proxy can "
+            "rewrite the displayed image while keeping a debug trail of what "
+            "Jobcan actually returned (useful when the operator needs to see "
+            "why a particular card was rewritten or fell through to default)."
+        ),
     )
 
     model_config = {"frozen": True}
@@ -128,17 +144,17 @@ class JobListItem(BaseModel):
             raise ValueError(f"detail_url must be an http(s) URL, got: {v!r}")
         return v
 
-    @field_validator("thumbnail_url")
+    @field_validator("source_thumbnail_url")
     @classmethod
-    def _thumbnail_url_must_be_http_when_set(cls, v: str | None) -> str | None:
-        # Symmetric with detail_url: if Jobcan ever ships a relative path
-        # (`./thumb.jpg`), a `data:` URI, or anything else `_normalise_jobcan_url`
-        # does not normalise, we want a hard fail at the model boundary rather
-        # than a broken `<img src>` shipped to the browser.
+    def _source_thumbnail_url_must_be_http_when_set(cls, v: str | None) -> str | None:
+        # source_thumbnail_url stores the ORIGINAL Jobcan URL, so it must be
+        # http(s). The display field `thumbnail_url` does not get this check
+        # because it can also hold a relative in-house override path
+        # (`assets/img/illust-job-care.png`).
         if v is None:
             return v
         if not (v.startswith("http://") or v.startswith("https://")):
-            raise ValueError(f"thumbnail_url must be an http(s) URL when set, got: {v!r}")
+            raise ValueError(f"source_thumbnail_url must be an http(s) URL when set, got: {v!r}")
         return v
 
 
