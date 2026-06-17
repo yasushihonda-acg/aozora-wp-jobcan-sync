@@ -153,6 +153,90 @@ class TestSynonymMapping:
         assert "salary" in exc_info.value.field_errors
 
 
+class TestDomOrderRobustness:
+    """AC-1 Phase 2A: Jobcan migration windows may ship rows with new class
+    names (`.job-offer-table-left` / `.job-offer-table-right`), old class
+    names (`.content-table-head` / `.td-contentTable__breakWordWrap`), or
+    both side-by-side. The parser must handle each layout without misordering
+    header/value pairs."""
+
+    @staticmethod
+    def _wrap(table_rows: str) -> str:
+        return f"""
+        <html><body>
+          <div class="job-offer-detail-title">タイトル</div>
+          <div class="job-offer-description-full">本文</div>
+          <div class="job-offer-address">拠点</div>
+          <div class="job-offer-label">介護職 正社員</div>
+          <a href="/aozora/entry/new/123">apply</a>
+          <div class="job-offer-table">
+            {table_rows}
+          </div>
+        </body></html>
+        """
+
+    def test_new_class_only_resolves(self) -> None:
+        """A row that uses only the new (`job-offer-table-left/right`) classes
+        must parse — the comma-selector in selectors.yaml covers both
+        old and new naming."""
+        rows = """
+            <div class="content-table-line">
+              <div class="job-offer-table-left">勤務地</div>
+              <div class="job-offer-table-right">福岡</div>
+            </div>
+            <div class="content-table-line">
+              <div class="job-offer-table-left">給与</div>
+              <div class="job-offer-table-right">¥250,000</div>
+            </div>
+        """
+        offer = parse_job_detail(self._wrap(rows), SAMPLE_SOURCE_URL, "123")
+        assert offer.location == "福岡"
+        assert offer.salary == "¥250,000"
+
+    def test_old_class_only_resolves(self) -> None:
+        """A row that uses only the old (`content-table-head` /
+        `td-contentTable__breakWordWrap`) classes must parse — same comma
+        selector covers it."""
+        rows = """
+            <div class="content-table-line">
+              <div class="content-table-head">勤務地</div>
+              <div class="td-contentTable__breakWordWrap">福岡</div>
+            </div>
+            <div class="content-table-line">
+              <div class="content-table-head">給与</div>
+              <div class="td-contentTable__breakWordWrap">¥250,000</div>
+            </div>
+        """
+        offer = parse_job_detail(self._wrap(rows), SAMPLE_SOURCE_URL, "123")
+        assert offer.location == "福岡"
+        assert offer.salary == "¥250,000"
+
+    def test_mixed_classes_document_order_wins(self) -> None:
+        """A migration-window row may carry both old and new header classes
+        in the same `.content-table-line`. The first one in document order is
+        the visible header on the live page, so the parser must pick it. The
+        test fixes the value as the second cell to confirm the pairing isn't
+        scrambled by class lookup order."""
+        # Old-class header first, new-class body second — selectors.yaml maps
+        # `.content-table-head, .job-offer-table-left` for header and
+        # `.td-contentTable__breakWordWrap, .job-offer-table-right` for body,
+        # so the parser must pair them across the two naming systems within
+        # one row.
+        rows = """
+            <div class="content-table-line">
+              <div class="content-table-head">勤務地</div>
+              <div class="job-offer-table-right">福岡</div>
+            </div>
+            <div class="content-table-line">
+              <div class="job-offer-table-left">給与</div>
+              <div class="td-contentTable__breakWordWrap">¥250,000</div>
+            </div>
+        """
+        offer = parse_job_detail(self._wrap(rows), SAMPLE_SOURCE_URL, "123")
+        assert offer.location == "福岡"
+        assert offer.salary == "¥250,000"
+
+
 class TestDuplicateCanonicalRow:
     """Phase 2A.1a code-review #1: a Jobcan posting that emits TWO rows with
     canonical (or synonym) `給与` headers — the second value must NOT leak into

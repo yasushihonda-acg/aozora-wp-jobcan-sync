@@ -45,7 +45,16 @@ class RequiredTableField(BaseModel):
     def _canonical_must_be_in_synonyms(cls, v: list[str], info: object) -> list[str]:
         # The canonical name must also appear in synonyms so the match step
         # doesn't need a special case for "exact canonical match".
-        # (Validator runs per-field; canonical is accessible via info.data.)
+        #
+        # NOTE: This validator runs per-field, and Pydantic v2 populates
+        # `info.data` in declaration order. Because `canonical` is declared
+        # before `synonyms` in `RequiredTableField`, `info.data["canonical"]`
+        # is reliably available here.
+        #
+        # WARNING: If the field declaration order is ever swapped (or this
+        # field's check is moved to a sibling model), the `except` branch
+        # below will silently skip validation. Phase 2A.2 may migrate to
+        # `model_validator(mode="after")` for stronger guarantees.
         try:
             canonical = info.data["canonical"]  # type: ignore[attr-defined]
         except (AttributeError, KeyError):
