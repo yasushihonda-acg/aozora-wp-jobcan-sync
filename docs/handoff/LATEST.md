@@ -1,123 +1,125 @@
-# Handoff — 2026-06-17 (Phase A モック イラスト本家トンマナ整合セッション)
+# Handoff — 2026-06-18 (Phase B 着手 + Phase 2A.1a 完了セッション)
 
 ## TL;DR
-決裁者フィードバック (3 サイクル: イラスト追加 → 本家トンマナ化 → 肌色多様性) に対応する 5 件の PR をマージ完了 (#3-#8、PR #5 は前回 handoff)。次は **本田様 → 決裁者にモック URL 再共有 → 反応収集**。executor 領分の作業はゼロ。
+フロント (Phase A) 決裁者反応待ちと並行してバック (Phase B) に着手。**Phase 0 (ローカル PoC) → 案 B 採用 (公式照会保留で進める) → ACG GCP プロジェクト確定 → `.envrc` セットアップ → Phase 2A.1a (parser 強化 + selectors.yaml + フィクスチャ拡充) まで 3 PR で完了**。次セッションは **Phase 2A.1b** (一覧ページ + CLI list) に直行可能。
 
-## 今セッションで完了した変更 (2026-06-17 分のみ)
+## 今セッションで完了した変更
 
 | PR | 内容 | コミット |
 |---|---|---|
-| #6 | イラスト 3 枚を本家トンマナ (フラットベクター + ティール限定パレット) に差し替え。水彩 → フラット | `3df3315` |
-| #7 | Playwright で本家 `business-img-tq.png` を実機視察、線画なし/薄グレー背景/微シェーディング/リアル顔の 5 差分を厳密反映 | `509b9e9` |
-| #8 | 肌色多様性 (international corporate stock illustration テイスト) を反映、philosophy/flow の 2 枚のみ再生成、numbers は維持 | `221a7ac` |
+| #10 | Phase B Phase 0 — ジョブカン公開ページ動的プロキシ PoC (Python + httpx + BS4 + Pydantic + Jinja2 + Typer、17 pytest) | `3b5e83b` |
+| #11 | ACG プロジェクト恒久設定 (`.envrc` + 新規 gcloud config `aozora-wp-jobcan-sync`) | `4b48644` |
+| #12 | Phase 2A.1a — parser 強化 + selectors.yaml + フィクスチャ拡充 (32 pytest、code-review 5 件全対応) | `fb09651` |
 
-5 PR の累積コミット (新しい順、`git log --oneline -8`):
+5 PR の累積コミット (新しい順):
 ```
+fb09651 feat(sync): Phase 2A.1a - parser 強化 + selectors.yaml + フィクスチャ拡充 (#12)
+4b48644 chore(envrc): ACG プロジェクト恒久設定 (.envrc 追加) (#11)
+3b5e83b feat(sync): Phase B Phase 0 - ジョブカン公開ページ動的プロキシ PoC (#10)
+ef5ed07 chore(handoff): 2026-06-17 イラスト本家トンマナ整合セッションの handoff 更新 (#9)
 221a7ac feat(mockup): イラスト 2 枚 (philosophy/flow) の肌色多様性を本家に合わせる (#8)
-509b9e9 feat(mockup): イラスト 3 枚を本家トンマナ厳密版に再差し替え (#7)
-3df3315 feat(mockup): イラスト 3 枚を本家コーポレートサイトのトンマナに差し替え (#6)
-19a961a chore(handoff): 2026-06-16 Phase A モック画像対応セッションの handoff 作成 (#5)
-82bed9e feat(mockup): philosophy / numbers / flow に水彩アクセントイラストを追加 (#4)
-fe169f4 fix(blog): 育休ブログサムネのスタッフ写真流用を解消 (#3)
 ```
 
-Pages 反映済 (CI `pages-build-deployment` success @ 2026-06-16T21:47Z)。
+🔗 公開モック (Phase A): https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 
-🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
+## 重要な設計判断 (確定済)
 
-## トンマナ調整 3 サイクルの学習
-
-| サイクル | プロンプト変更 | 学び |
+| 項目 | 確定値 | 根拠 / 経緯 |
 |---|---|---|
-| PR #6 (フラット化) | 「水彩」→「フラットベクター + ティール限定パレット」 | 本家の基本テイストを反映 |
-| PR #7 (厳密化) | Playwright で本家画像を実機視察 → 5 差分 (線画/背景/シェーディング/顔/余計要素) を厳密指定 | **実機視察が決定的**、想像だけのプロンプトでは細部が外れる |
-| PR #8 (多様性) | 「Japanese」→「international corporate stock illustration」、肌色を fair/medium/warm tan で明示 | 「日本人」指定が均質化を招いていた、本家は international stock テイスト |
+| **採用アーキテクチャ** | 案 D = 動的プロキシ + 自社テンプレ再表示 | ジョブカン公開ページを Cloud Run で取得 → BS4 パース → 自社 BEM で再表示。応募はジョブカン直リンク (`/aozora/entry/new/{id}`) |
+| **進め方** | 案 B = 公式照会送付保留、Phase 2A → 2B を進める | 「ドラフトのエリア = 本番ドメイン未切替」の位置づけで、規約リスク低 |
+| **段階分割** | 2A.1a / 2A.1b / 2A.2 の 3 PR | Codex 計画レビュー (3 回目) 推奨、品質ゲート回しやすい |
+| **GCP プロジェクト** | `aozora-wp-jobcan-sync` (project number 1084369586348) | yasushi.honda@aozora-cg.com 所有、ACG 専用、命名規則 = リポ名 |
+| **GitHub アカウント** | yasushihonda-acg | ACG アカウント、`.envrc` で自動切替 |
+| **本番化判断** | 別 Phase (Phase 2B 完了後) | DNS 切替 (`recruit.aozora-cg.com`) は決裁者承認 + 公式照会要否含めて再検討 |
 
-**普遍的学び**: 本家サイトのトンマナ模倣は **想像でプロンプトを書かず、Playwright で実機視察してから差分を明示的に指定する** のが効率的。決裁者からの段階フィードバック (タッチ → 細部 → 肌色) は失敗ではなく必然的な絞り込みプロセス。
+## Phase 2A.1a 実装サマリ
 
-## 採用画像の最終仕様
+| ファイル | 内容 |
+|---|---|
+| `sync/src/sync/selectors.yaml` | CSS セレクタ / synonym map / sanitize allowlist の宣言的設定 |
+| `sync/src/sync/config.py` | Pydantic `SelectorConfig` + `load_selector_config()` + `ConfigError` (StructureChange と分離) |
+| `sync/src/sync/parser.py` | ハードコード排除、`_normalise_jobcan_url` (protocol-relative 防御)、`_attr` (list 返却防御)、synonym map (fuzzy 禁止)、DOM order 堅牢化 |
+| `sync/tests/test_design_tokens.py` | grep ベースで sync 参照 var(--foo) が tokens.css に存在するか自動検証 (AC-5) |
+| `sync/tests/fixtures/jobcan_responses/job_{1668696,1690435,2199420,2215694}.html` | 相談員 / IT / 事務 / 介護 の 4 件追加 (計 5 fixtures) |
+| `sync/tests/fixtures/jobcan_responses/list_{care,nurse,it,office}.html` | 一覧ページ 4 件 (Phase 2A.1b で parse_job_list 用) |
 
-| ファイル | 構成 | サイズ |
-|---|---|---|
-| `mockup/assets/img/illust-philosophy.jpg` | 看護師 (薄肌・ティールスクラブ) + 車椅子の利用者 (褐色肌・白髪) + 家族 (中間色) | 128K |
-| `mockup/assets/img/illust-numbers.jpg` | 町並み + 時計塔 (ティール屋根) + 風車 (ティールブレード) + 雲 + 鳥 (人物なし、本家右下デコ風) | 95K |
-| `mockup/assets/img/illust-flow.jpg` | 看護師 (薄肌・ティールスクラブ) + 応募者 (中間色) の面接シーン、テーブルにラップトップ + コーヒー | 129K |
-| `mockup/assets/img/blog-childcare-return.jpg` | 朝の食卓、シフト表とコーヒー (PR #3 で追加、変更なし) | 255K |
-| `mockup/assets/img/blog-papa-leave.jpg` | 父親が自宅で赤ちゃんを抱く後ろ姿 (PR #3 で追加、変更なし) | 281K |
-| `mockup/assets/img/blog-mentor-program.jpg` | 施設廊下のメンター指導 (PR #3 で追加、変更なし) | 228K |
-
-CSS: `.section__illust` クラス (PR #4 で追加、その後不変) — `max-width: 720px / aspect-ratio: 16 / 9 / border-radius: var(--radius-md)`。
-
-## ローカル成果物 (gitignore 対象、コミットせず)
-
-`generated-images/` 配下に各 PR の採用版 + 旧版を保持。将来の素材として利用可能:
-
-```
-touch-watercolor.png / touch-lineart.png / touch-flat.png    # 初期 3 タッチサンプル
-blog-1-ikukyu-return.png / blog-2-papa-ikukyu.png / blog-3-mentor.png  # ブログサムネ採用版
-illust-philosophy.png / illust-numbers.png / illust-flow.png  # PR #4 水彩版
-flat-philosophy.png / flat-numbers.png / flat-flow.png        # PR #6 フラット版
-v2-philosophy.png / v2-numbers.png / v2-flow.png              # PR #7 本家厳密版
-v3-philosophy.png / v3-flow.png                                # PR #8 肌色多様性版 (最終採用)
-```
+検証: pytest **32 件全 PASS**、ruff/pyright clean、3 段品質ゲート (safe-refactor → code-review medium → evaluator) 全通過。
 
 ## 構造的整合性チェック
 
 | 項目 | 状態 | 備考 |
 |---|---|---|
-| /impact-analysis | ⏭ スキップ | バイナリ画像のみ変更、CSS は PR #4 で追加後不変、API/型/共有ロジック変更なし |
-| /new-resource | ⏭ スキップ | 新規テーブル/API なし (静的 HTML) |
-| /trace-dataflow | ⏭ スキップ | データフロー実装なし |
-| ADR 要否 | 不要 | デザイン選択 (タッチ/トンマナ調整) は実装パターンではない |
-| ドキュメント整合 | ✅ | `docs/specs/` 群 / CLAUDE.md と矛盾なし |
+| /impact-analysis | ⏭ スキップ | パッケージ内部の改修、API/型/共有ロジック影響なし |
+| /new-resource | ⏭ スキップ | 新規 API/テーブルなし |
+| /trace-dataflow | ⏭ スキップ | データフロー実装は Phase 2A.1b 以降 |
+| ADR 要否 | 不要 | 案 D 採用は sync-strategy.md に既反映、技術選定は impl-plan で網羅 |
+| ドキュメント整合 | ✅ | docs/specs/sync-strategy.md (案 D) / jobcan-html-structure.md (selectors 全反映) と一致 |
 
 ## Issue Net 変化
 - Close 数: 0 件
 - 起票数: 0 件
 - Net: 0 件
-- 補足: 決裁者フィードバック対応セッション、Issue ベース作業外 (triage 基準 #5 ユーザー明示指示)
+- 補足: 案 B + 段階分割で順次進行、triage 基準 #5 (ユーザー明示指示) で個別タスク化済み (全完了)
 
 ## 次のアクション (3 分割)
 
-### 即着手タスク
-**なし**
+### 即着手タスク (次セッション、番号単位認可で順次実行可能)
 
-executor 領分の作業はゼロ。`/catchup` 起動時もこの状態を踏襲すること。「優先順にすすめて」等の包括指示で動かない。
+| # | タスク | A/B/C | ROI | 工数 | DoD | 関連 |
+|---|---|---|---|---|---|---|
+| **1** | **Phase 2A.1b: JobListItem + parse_job_list + job_list.html + CLI list** | C (起点指示済) | バック実装の next step、Phase 2A.2 (FastAPI) の前提 | 1 セッション (T5/T6/T7) | T5: `JobListItem` Pydantic モデル + `parse_job_list()` (parser.py 拡張、selectors.yaml の `list` セクション使用) / T6: `templates/job_list.html` + `sync/src/sync/static/sync-job-list.css` (mockup 触らない、Codex Q1 反映) / T7: `python -m sync list --category-id 18773 --out ...` CLI / pytest +N 件で PASS | sync/tests/fixtures/jobcan_responses/list_{care,nurse,it,office}.html (4 件取得済)、docs/specs/jobcan-html-structure.md §8 (selectors 確定済) |
+| 2 | Phase 2A.2: FastAPI 4 分割 + cache + Dockerfile + 動作確認 | C (起点指示済) | Cloud Run デプロイの直前段階 | 1 セッション (T8a-d + T9 + T10 + T11) | T8a (client 例外構造化) → T8b (cachetools.TTLCache + 注入) → T8c (FastAPI endpoint + status mapping) → T8d (structured logging + fallback 302/500 一本化、Codex Q5 反映) → T9 (pytest +20 件) → T10 (Dockerfile slim + non-root + PORT env) → T11 (uvicorn + Docker + Playwright 視認) | 依存: タスク #1 完了 |
+
+CRITICAL プロセス併記 (次セッション AI への申し送り):
+- 3 ファイル+ → `/safe-refactor` + `/code-review medium`
+- 5 ファイル+ → evaluator 分離プロトコル
+- 大規模 PR (3+ ファイル / 200+ 行) → `/codex review` でセカンドオピニオン
+- 案 B (Phase 2A.1a) で確立した品質ゲート 3 段パターンを継承
 
 ### 条件待ち (明示 trigger 付き)
 
 | # | 項目 | A/B/C | trigger | 充足時のタスク |
 |---|---|---|---|---|
-| 1 | 決裁者からのモック評価フィードバック | C | 本田様が決裁者へ更新版 URL を共有 → 決裁者から「OK」「ここを変えて」「Phase B へ」等の明示反応 | 反応内容に応じて個別対応 (更なるイラスト調整、別箇所修正、ゲート 1 通過 等) |
-| 2 | ジョブカン公式照会 (`docs/specs/sync-strategy.md`) | C | 本田様 → 「ジョブカンへ照会送る」明示指示 | ドラフト文面最終化と送付サポート |
-| 3 | Phase A 承認後の Phase B 着手 | C | 決裁者の Phase A ゲート 1 通過 | ホスティング選定 / CPT / GCP 同期設計 |
-| 4 | Phase A 未確定事項 11 件 (CLAUDE.md「未確定事項」) | C | 個別事項への本田様判断 | 該当事項に応じた実装/設計 |
-| 5 | `.envrc` セットアップ (catchup M1.5 で「🔧 設定必要」判定) | B 修正 (write) | 本田様 → `/project-setup` 起動指示 | スキルが対話的に実施 |
+| 1 | フロント (Phase A) 決裁者反応収集 | C | 本田様 → 決裁者へモック URL 共有後、決裁者から「OK」「変更要望」「Phase B へ」等の明示反応 | 反応内容に応じて個別対応 (イラスト微調整 / Phase A ゲート通過判定 / その他) |
+| 2 | ジョブカン公式照会送付 (`docs/specs/sync-strategy.md` §2 文面) | C | 本田様 → 「照会送る」明示指示 | ドラフト文面の契約プラン名等の最終確認 + 送付サポート (送付自体は本田様) |
+| 3 | env-isolation.md 補強 (`.gitconfig.local` + `~/.claude/projects/aozora-wp-jobcan-sync.env`) | B 修正 (write) | 本田様 → 「env-isolation 補強やって」or `/project-setup` 再起動指示 | `.gitconfig.local` 作成 + プロジェクト定義ファイル設置、別 PR で対応 |
+| 4 | 本番 DNS 切替 (`recruit.aozora-cg.com`) | C | 決裁者の Phase A 承認 + Phase 2B 完了 + 公式照会回答 (or 「照会なしで本番化」明示判断) | DNS 切替 + 本番運用準備 |
 
 ### 却下候補 (記録のみ・包括指示では参照しない)
 
 | # | 項目 | 検討経緯 | 着手しない理由 |
 |---|---|---|---|
-| 1 | numbers.jpg も v3 で再生成 | PR #8 で「人物なしのため変更不要」と判断 | 本家トンマナ完全反映済、修正不要 |
-| 2 | 既存写真 10 枚を本家フラットベクター風に置換 | 全画像刷新案 | 決裁者「全画像変えるのは大変」発言で実質的に却下、写真路線維持の合意 |
-| 3 | スタッフ写真 (中村/佐々木/田中) のリジェネ | AI 感がやや残る | 決裁者から明示指示なし、現状で破綻なし |
-| 4 | webp 変換 / 画像最適化 (現状 JPG 92-281KB) | パフォーマンス改善余地 | 現状 Pages 反映正常、決裁者指示なし。housekeeping (A) で起動禁止 |
-| 5 | ADR 遡及作成 (本家トンマナ整合 3 サイクルの設計判断) | 設計判断記録の候補 | プロンプト調整のみで実装パターン変更なし、ROI 低 |
+| 1 | パート/アルバイト求人の fixture 取得 | Phase 2A.1a で介護職一覧から「【パ】」タグを推測 → 取得した 2199420 は実際は正社員だった | 真のパート/アルバイト求人 ID は category_id 横断検索が必要、Phase 2A.1b の一覧パース実装後に自動取得可能 |
+| 2 | category_id ↔ 職種名マッピングの完全表 | 17 件のうち 4 件確認済 (介護/相談員/IT/事務)、残り 13 件は名称不明 | Phase 2A.1b の一覧実装でブラウザベース検証時に判明、housekeeping (A) で起動禁止 |
+| 3 | parse_job_detail 関数長 (~95 行) の分割 | safe-refactor LOW、Phase 0 でも同じ指摘で defer 済 | Phase 2A.2 で FastAPI handler 経由参照になる前提で同時対応、現状は早すぎる |
+| 4 | RequiredTableField.canonical 削除 (17 行短縮) | code-review LOW、削除可能だが YAML ドキュメント性失う | trade-off ありで現状維持、Phase 2A.2 で再検討 |
+| 5 | config.py `@lru_cache` テスト isolation 改善 | code-review LOW | 現状テストでは未顕在化、Phase 2A.2 で FastAPI lifespan 整理時に同時対応 |
+| 6 | Phase 2A.1a 申し送り 9 件 (Phase 2A.1b/2A.2 で対応予定) | code-review / evaluator で defer 判断 | 各 Phase の本実装と一緒に対応する方が手戻り少 |
+
+## Phase 2A.1a 学習・知見 (次セッション活用)
+
+| 観点 | 学び |
+|---|---|
+| Codex 計画レビューの価値 | 計画段階で 3 回目の Codex 相談 (sync-strategy.md ベース) で「T6 mockup 制約違反」「T8 過大、4 分割必要」「fuzzy 禁止」を発見、実装前に修正でき手戻り削減 |
+| 3 段品質ゲートの定着 | safe-refactor → code-review medium → evaluator が Phase 0 + Phase 2A.1a で 2 回連続成功、Phase 2A.1b/2A.2 でも継承 |
+| selectors.yaml + Pydantic の効用 | 構造変化時のホットフィックスが Python コード変更なしで可能 (YAML 編集のみ)。Phase 2A.2 で Cloud Run デプロイ後の運用工数を大幅削減できる見込み |
+| direnv hook の subshell 制約 | Claude Code の Bash tool は subshell 毎に新規起動、direnv hook が効かない場合 `gh auth switch --user yasushihonda-acg` を明示実行 (PR push 直前の保険) |
 
 ## 残留プロセスチェック
-✅ 残留プロセスなし (Playwright ブラウザは `browser_close` 済、temp スクショ `aozora-*.png` は削除済)
+✅ 残留プロセスなし (Phase 2A.1a 完了時点で dev server / Playwright 全停止確認済)
 
 ## 再開可能性判定
-✅ **再開可能** — Git clean / OPEN PR ゼロ / 即着手タスクゼロ / Pages CI success / 残留プロセスなし
+✅ **再開可能** — Git clean / OPEN PR ゼロ / 即着手タスク 2 件 (Phase 2A.1b/2A.2) / Pages CI success / 残留プロセスなし
 
 ---
 
 ## 最終結論
 
-🛑 **executor 領分の作業ゼロ、即時セッション終了推奨**
+✅ **セッション終了可** — 次セッションは Phase 2A.1b 着手で直行可能
 
 - OPEN PR / OPEN Issue: 共に 0 件
-- Git clean / リモートと同期済 / Pages 反映済
-- 即着手 = 0 件、条件待ち = 5 件 (全て decision-maker 領分の起点指示 or 本田様の `.envrc` 認可待ち)
+- Git clean / リモートと同期済 / Pages CI success
+- 即着手 = 2 件 (Phase 2A.1b → 2A.2 の依存順)、条件待ち = 4 件 (decision-maker 領分中心)、却下候補 = 6 件 (Phase 内対応 or 申し送り)
 - 残留プロセスなし
-- 既知の blocker: 決裁者反応待ち (本田様 → 決裁者の共有経路、AI 領分外)
+- 既知の blocker: なし (案 B 採用で公式照会回答待ちは Phase 2B 完了まで非ブロッカー化済)
