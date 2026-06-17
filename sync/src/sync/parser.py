@@ -15,13 +15,24 @@ Phase 2A reflected (Codex review):
 from __future__ import annotations
 
 import re
+from urllib.parse import parse_qs, urlsplit
 
 import bleach
 from bs4 import BeautifulSoup, Tag
 
-from .config import RequiredTableField, SelectorConfig, default_config
+from .config import ListSelectors, RequiredTableField, SelectorConfig, default_config
 from .jobcan_client import JOBCAN_BASE_URL
-from .models import JobcanStructureChangeError, JobcanValidationError, JobOffer
+from .models import (
+    JobcanStructureChangeError,
+    JobcanValidationError,
+    JobListItem,
+    JobListPage,
+    JobOffer,
+)
+
+# Pattern that pulls the numeric job_id out of any Jobcan job-detail URL,
+# whether relative (`/aozora/job_offers/123?...`) or absolute.
+_JOB_ID_RE = re.compile(r"/aozora/job_offers/(\d+)")
 
 
 def parse_job_detail(
@@ -239,3 +250,148 @@ def _match_required_fields(
 
 # Re-exported so callers can identify the canonical apply-URL prefix.
 ENTRY_URL_PREFIX = f"{JOBCAN_BASE_URL}/entry/new/"
+
+
+def parse_job_list(
+    html: str,
+    source_url: str,
+    config: SelectorConfig | None = None,
+) -> JobListPage:
+    """Parse a Jobcan category listing page into a JobListPage.
+
+    Each `.job-offer-box` becomes one `JobListItem`. A card is **silently
+    dropped** (no exception) when any of these is true — Jobcan occasionally
+    renders promo cards inside the grid that lack the standard markup, and
+    aborting the whole page on a single odd card would block the proxy:
+
+    - title selector absent or empty text
+    - detail-URL selector absent or empty href
+    - href that does not contain `/aozora/job_offers/<digits>`
+
+    `address` / `description` / `labels` / `thumbnail_url` may be empty when
+    Jobcan omits them; the card still renders without the missing piece
+    (the template handles the empty case).
+
+    Raises:
+        JobcanStructureChangeError: zero job cards found, or **every** card
+            was dropped by the rules above. Either case means Jobcan changed
+            the listing markup and a human needs to look.
+    """
+    cfg = config or default_config()
+    selectors = cfg.list.selectors
+    soup = BeautifulSoup(html, "lxml")
+
+    boxes = soup.select(selectors.job_card)
+    if not boxes:
+        raise JobcanStructureChangeError(missing=[selectors.job_card], job_id=None)
+
+    items: list[JobListItem] = []
+    for box in boxes:
+        item = _parse_list_card(box, selectors)
+        if item is not None:
+            items.append(item)
+
+    if not items:
+        # Every card was malformed — treat as a structure change so the
+        # operator is alerted instead of silently shipping an empty page.
+        raise JobcanStructureChangeError(
+            missing=[selectors.title, selectors.address, selectors.job_url],
+            job_id=None,
+        )
+
+    category_id = _extract_category_id(source_url)
+    return JobListPage(source_url=source_url, category_id=category_id, items=items)
+
+
+def _parse_list_card(box: Tag, selectors: ListSelectors) -> JobListItem | None:
+    """Extract a single JobListItem from a `.job-offer-box`.
+
+    Returns None when the card lacks any of: title text, detail-page link,
+    or a numeric job_id parseable from the link. None means "skip this card";
+    the caller decides what to do (currently: drop silently).
+    """
+    title_tag = box.select_one(selectors.title)
+    url_tag = box.select_one(selectors.job_url)
+    if title_tag is None or url_tag is None:
+        return None
+
+    title = _text(title_tag)
+    href = _attr(url_tag, "href")
+    if not title or not href:
+        return None
+
+    job_id = _extract_job_id(href)
+    if job_id is None:
+        return None
+
+    address_tag = box.select_one(selectors.address)
+    description_tag = box.select_one(selectors.description)
+    address = _text(address_tag)
+    description = _text(description_tag)
+
+    label_tag = box.select_one(selectors.label)
+    labels: list[str] = []
+    if isinstance(label_tag, Tag):
+        labels = [_text(li) for li in label_tag.find_all("li") if _text(li)]
+
+    thumbnail_tag = box.select_one(selectors.thumbnail)
+    thumbnail_url: str | None = None
+    if isinstance(thumbnail_tag, Tag):
+        src = _attr(thumbnail_tag, "src")
+        if src:
+            candidate = _normalise_jobcan_url(src)
+            # `_normalise_jobcan_url` only rewrites `/` and `//` prefixes. A
+            # path-relative `./thumb.jpg` or a `data:` URI would pass through
+            # unchanged and then fail JobListItem's http(s) validator — which
+            # would abort the whole listing page over one weird card. Drop
+            # the thumbnail instead; cards render fine without it.
+            if candidate.startswith("http://") or candidate.startswith("https://"):
+                thumbnail_url = candidate
+
+    # The listing-page link points at `/aozora/job_offers/<id>?hide_breadcrumb=false`;
+    # rebuild it into the proxy's canonical detail-page shape so downstream
+    # code does not have to know that listing and detail use different query strings.
+    detail_url = _canonical_detail_url(job_id)
+
+    return JobListItem(
+        job_id=job_id,
+        title=title,
+        address=address,
+        description=description,
+        detail_url=detail_url,
+        labels=labels,
+        thumbnail_url=thumbnail_url,
+    )
+
+
+def _extract_job_id(href: str) -> str | None:
+    """Pull the numeric job_id from `/aozora/job_offers/<id>?...` URLs."""
+    match = _JOB_ID_RE.search(href)
+    return match.group(1) if match else None
+
+
+def _canonical_detail_url(job_id: str) -> str:
+    """Build the proxy's canonical detail-page URL for a given job_id."""
+    return (
+        f"{JOBCAN_BASE_URL}/job_offers/{job_id}"
+        "?hide_breadcrumb=true&hide_search=true"
+    )
+
+
+def _extract_category_id(source_url: str) -> str | None:
+    """Pull `category_id` from a Jobcan list URL's query string, if present.
+
+    Phase 2A.1b: today no caller reads this — it is set for future use by
+    Phase 2A.2 pagination / analytics. Once a consumer exists, revisit the
+    silent-None branch (a typo'd `?categoryId=18773` returns None and the
+    consumer silently degrades). Options at that point: log at parse time,
+    or treat 'list URL without category_id' as a structure-change error
+    (the CLI itself never builds such a URL, so any None comes from a hand-
+    crafted fixture or a Jobcan rename).
+    """
+    try:
+        query = urlsplit(source_url).query
+    except ValueError:
+        return None
+    values = parse_qs(query).get("category_id")
+    return values[0] if values else None

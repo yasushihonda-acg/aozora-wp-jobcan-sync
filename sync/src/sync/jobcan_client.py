@@ -68,6 +68,23 @@ class JobcanClient:
         url = f"{self.config.base_url}/job_offers/{job_id}?hide_breadcrumb=true&hide_search=true"
         return url, self._get_with_retry(url)
 
+    def fetch_job_list(self, category_id: str | int) -> tuple[str, str]:
+        """Fetch a Jobcan category listing page.
+
+        Returns:
+            (source_url, html) — `source_url` includes the `category_id`
+            query parameter and Jobcan's frame-hiding flags so the parser
+            can extract `category_id` from it.
+
+        Raises:
+            JobcanClientError: same conditions as `fetch_job_detail`.
+        """
+        url = (
+            f"{self.config.base_url}/list"
+            f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
+        )
+        return url, self._get_with_retry(url)
+
     def _get_with_retry(self, url: str) -> str:
         for attempt in range(self.config.max_retries + 1):
             try:

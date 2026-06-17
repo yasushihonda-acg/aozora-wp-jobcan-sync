@@ -47,6 +47,7 @@ list:
     address: ".job-offer-address"
     label: ".job-offer-label"
     description: ".job-offer-description"
+    thumbnail: ".job-offer-main-image-thumbnail"
 
 sanitize:
   allowed_tags:

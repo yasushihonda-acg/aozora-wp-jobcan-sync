@@ -3,18 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page_title or job.title }}</title>
-  {# canonical points to the original Jobcan page to avoid duplicate-content penalties
-     (Phase 0; canonical strategy will be re-confirmed after Jobcan official response). #}
-  <link rel="canonical" href="{{ job.source_url }}">
-  {# Shared design tokens from the Phase A mockup. Component CSS is local to this package.
-     CSS paths assume the rendered HTML is served from `mockup/` (Phase 0 preview).
+  {# Default `page_title` / `canonical_url` reference the `job` context var
+     because Phase 0 (job_detail) was the only consumer. New templates that
+     are not rendered with a `job` (e.g. job_list — context var `page`)
+     MUST override both blocks below; the listing template already does.
+     If you add a third template, override these or Jinja2 will raise
+     UndefinedError. #}
+  <title>{% block page_title %}{{ page_title or job.title }}{% endblock %}</title>
+  <link rel="canonical" href="{% block canonical_url %}{{ job.source_url }}{% endblock %}">
+  {# Shared design tokens from the Phase A mockup. Component CSS is local to
+     this package; the rendered HTML is served from `mockup/` (Phase 0 preview).
      Phase 2 (FastAPI) will inline these or use `/static` URL routing. #}
   <link rel="stylesheet" href="assets/css/tokens.css">
+  {% block extra_css %}
   <link rel="stylesheet" href="assets/css/sync-job-detail.css">
+  {% endblock %}
 </head>
 <body>
-  <main class="job-detail">
+  <main class="{% block main_class %}job-detail{% endblock %}">
     {% block content %}{% endblock %}
   </main>
 </body>

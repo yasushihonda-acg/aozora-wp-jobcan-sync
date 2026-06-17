@@ -76,6 +76,7 @@ class ListSelectors(BaseModel):
     address: str
     label: str
     description: str
+    thumbnail: str
 
 
 class ListConfig(BaseModel):

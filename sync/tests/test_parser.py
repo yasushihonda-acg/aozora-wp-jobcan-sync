@@ -400,3 +400,203 @@ class TestSanitization:
         assert "onclick" not in offer.body_html
         assert "hack" not in offer.body_html
         assert "クリック" in offer.body_html  # text preserved
+
+
+# ============================================================
+# Phase 2A.1b — parse_job_list (category listing page)
+# ============================================================
+from sync.parser import parse_job_list  # noqa: E402
+
+LIST_FIXTURES = [
+    ("list_care", 10, "介護"),
+    ("list_nurse", 10, "相談員"),
+    ("list_it", 4, "ITエンジニア"),
+    ("list_office", 10, "事務"),
+]
+
+
+def _list_fixture_html(name: str) -> str:
+    from pathlib import Path
+
+    fixture = Path(__file__).parent / "fixtures" / "jobcan_responses" / f"{name}.html"
+    return fixture.read_text(encoding="utf-8")
+
+
+def _list_source_url(category_id: str = "18773") -> str:
+    return (
+        f"https://recruit.jobcan.jp/aozora/list"
+        f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
+    )
+
+
+class TestParseJobListReal:
+    """AC-1 Phase 2A.1b: parse_job_list works across all 4 category fixtures."""
+
+    @pytest.mark.parametrize("name, expected_count, label_keyword", LIST_FIXTURES)
+    def test_item_count_and_labels(
+        self, name: str, expected_count: int, label_keyword: str
+    ) -> None:
+        page = parse_job_list(_list_fixture_html(name), _list_source_url())
+        assert len(page.items) == expected_count
+        # Every category fixture has at least one card whose labels contain the
+        # category keyword (Jobcan label layout: [職種, 雇用形態]).
+        all_labels = [lbl for item in page.items for lbl in item.labels]
+        assert any(label_keyword in lbl for lbl in all_labels), (
+            f"{name}: no card label contains {label_keyword!r}; got: {all_labels[:5]}"
+        )
+
+    def test_required_fields_populated(self) -> None:
+        page = parse_job_list(_list_fixture_html("list_care"), _list_source_url())
+        for item in page.items:
+            assert item.job_id.isdigit()
+            assert item.title
+            assert item.address
+            assert item.detail_url.startswith("https://recruit.jobcan.jp/aozora/job_offers/")
+
+    def test_detail_url_is_canonical(self) -> None:
+        """detail_url must drop Jobcan's listing query and force the proxy's
+        own `hide_breadcrumb=true&hide_search=true` shape."""
+        page = parse_job_list(_list_fixture_html("list_care"), _list_source_url())
+        item = page.items[0]
+        assert item.detail_url == (
+            f"https://recruit.jobcan.jp/aozora/job_offers/{item.job_id}"
+            "?hide_breadcrumb=true&hide_search=true"
+        )
+
+    def test_category_id_extracted_from_source_url(self) -> None:
+        page = parse_job_list(_list_fixture_html("list_care"), _list_source_url("18773"))
+        assert page.category_id == "18773"
+
+    def test_source_url_preserved(self) -> None:
+        src = _list_source_url("18773")
+        page = parse_job_list(_list_fixture_html("list_care"), src)
+        assert page.source_url == src
+
+    def test_thumbnail_present_for_real_fixtures(self) -> None:
+        """All 4 real fixtures contain at least one card with a thumbnail."""
+        for name, _, _ in LIST_FIXTURES:
+            page = parse_job_list(_list_fixture_html(name), _list_source_url())
+            with_thumbs = [i for i in page.items if i.thumbnail_url]
+            assert with_thumbs, f"{name}: zero cards with thumbnails"
+
+
+class TestParseJobListErrors:
+    """Boundary and error-case coverage."""
+
+    def test_empty_html_raises_structure_change(self) -> None:
+        """No `.job-offer-box` at all → StructureChangeError (alerts operator)."""
+        with pytest.raises(JobcanStructureChangeError) as exc_info:
+            parse_job_list("<html><body></body></html>", _list_source_url())
+        assert exc_info.value.missing == [".job-offer-box"]
+
+    def test_box_without_title_or_url_is_skipped_silently(self) -> None:
+        """One malformed card alongside valid cards → just drop the bad one.
+
+        Jobcan sometimes inserts promo cards that lack the standard markup;
+        aborting the whole page on the first odd card would block the proxy.
+        """
+        html = """
+        <html><body>
+          <div class="job-offer-box">
+            <h2 class="job-offer-title">タイトル</h2>
+            <p class="job-offer-address">拠点</p>
+            <ul class="job-offer-label"><li>介護職</li><li>正社員</li></ul>
+            <div class="job-offer-description">説明</div>
+            <a href="/aozora/job_offers/999?hide_breadcrumb=false">link</a>
+          </div>
+          <div class="job-offer-box">
+            <p>this card has no title and no link — should be silently dropped</p>
+          </div>
+        </body></html>
+        """
+        page = parse_job_list(html, _list_source_url())
+        assert len(page.items) == 1
+        assert page.items[0].job_id == "999"
+
+    def test_only_malformed_cards_raises_structure_change(self) -> None:
+        """If every card is malformed, treat as a structure change."""
+        html = """
+        <html><body>
+          <div class="job-offer-box"><p>no title, no link</p></div>
+          <div class="job-offer-box"><p>also broken</p></div>
+        </body></html>
+        """
+        with pytest.raises(JobcanStructureChangeError):
+            parse_job_list(html, _list_source_url())
+
+    def test_non_numeric_job_id_in_href_is_skipped(self) -> None:
+        """`/aozora/job_offers/abc` cannot yield a numeric job_id → drop card.
+
+        Defends against Jobcan ever introducing slug-style URLs without us
+        noticing — Pydantic JobListItem requires a digit string.
+        """
+        html = """
+        <html><body>
+          <div class="job-offer-box">
+            <h2 class="job-offer-title">タイトル</h2>
+            <a href="/aozora/job_offers/abc?ref=promo">link</a>
+            <p class="job-offer-address">拠点</p>
+            <div class="job-offer-description">説明</div>
+          </div>
+        </body></html>
+        """
+        with pytest.raises(JobcanStructureChangeError):
+            parse_job_list(html, _list_source_url())
+
+
+class TestParseJobListPartialCardData:
+    """Cards may legitimately lack address / description / labels / thumbnail
+    when Jobcan omits them. parse_job_list keeps the card (Phase 2A.1b: the
+    template renders fine without the missing piece)."""
+
+    def test_card_without_address_is_kept_with_empty_string(self) -> None:
+        html = """
+        <html><body>
+          <div class="job-offer-box">
+            <h2 class="job-offer-title">タイトル</h2>
+            <ul class="job-offer-label"><li>介護職</li></ul>
+            <div class="job-offer-description">説明</div>
+            <a href="/aozora/job_offers/777?ref=promo">link</a>
+          </div>
+        </body></html>
+        """
+        page = parse_job_list(html, _list_source_url())
+        assert len(page.items) == 1
+        assert page.items[0].address == ""
+        assert page.items[0].title == "タイトル"
+
+    def test_relative_thumbnail_src_is_dropped_not_raised(self) -> None:
+        """A path-relative `<img src="./thumb.jpg">` would fail Pydantic's
+        thumbnail_url http(s) validator and abort the whole page. The parser
+        must downgrade this to thumbnail_url=None instead."""
+        html = """
+        <html><body>
+          <div class="job-offer-box">
+            <img class="job-offer-main-image-thumbnail" src="./thumb.jpg" alt="x">
+            <h2 class="job-offer-title">タイトル</h2>
+            <ul class="job-offer-label"><li>介護職</li></ul>
+            <p class="job-offer-address">拠点</p>
+            <div class="job-offer-description">説明</div>
+            <a href="/aozora/job_offers/888?ref=promo">link</a>
+          </div>
+        </body></html>
+        """
+        page = parse_job_list(html, _list_source_url())
+        assert len(page.items) == 1
+        assert page.items[0].thumbnail_url is None
+
+
+class TestParseJobListCategoryEdgeCases:
+    """category_id extraction edge cases (URL without the param, etc.)."""
+
+    def test_source_url_without_category_id_yields_none(self) -> None:
+        html = _list_fixture_html("list_care")
+        page = parse_job_list(html, "https://recruit.jobcan.jp/aozora/list")
+        assert page.category_id is None
+
+    def test_multi_value_category_id_takes_first(self) -> None:
+        """URL with duplicated `category_id=` (unlikely but possible) — take the first."""
+        html = _list_fixture_html("list_care")
+        src = "https://recruit.jobcan.jp/aozora/list?category_id=18773&category_id=99999"
+        page = parse_job_list(html, src)
+        assert page.category_id == "18773"
