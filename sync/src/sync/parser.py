@@ -14,13 +14,20 @@ Phase 2A reflected (Codex review):
 
 from __future__ import annotations
 
+import logging
 import re
 from urllib.parse import parse_qs, urlsplit
 
 import bleach
 from bs4 import BeautifulSoup, Tag
 
-from .config import ListSelectors, RequiredTableField, SelectorConfig, default_config
+from .config import (
+    ListSelectors,
+    RequiredTableField,
+    SelectorConfig,
+    ThumbnailCategoriesConfig,
+    default_config,
+)
 from .jobcan_client import JOBCAN_BASE_URL
 from .models import (
     JobcanStructureChangeError,
@@ -29,6 +36,11 @@ from .models import (
     JobListPage,
     JobOffer,
 )
+
+# Phase 2A.1c: emits a structured warning when a card's labels do not match
+# any thumbnail-category synonym and the parser falls back to default_image.
+# Operators can spot a new Jobcan job-type (e.g. "ケアマネージャー") this way.
+_logger = logging.getLogger(__name__)
 
 # Pattern that pulls the numeric job_id out of any Jobcan job-detail URL,
 # whether relative (`/aozora/job_offers/123?...`) or absolute.
@@ -279,6 +291,7 @@ def parse_job_list(
     """
     cfg = config or default_config()
     selectors = cfg.list.selectors
+    thumb_cfg = cfg.list.thumbnail_categories
     soup = BeautifulSoup(html, "lxml")
 
     boxes = soup.select(selectors.job_card)
@@ -287,7 +300,7 @@ def parse_job_list(
 
     items: list[JobListItem] = []
     for box in boxes:
-        item = _parse_list_card(box, selectors)
+        item = _parse_list_card(box, selectors, thumb_cfg)
         if item is not None:
             items.append(item)
 
@@ -303,7 +316,11 @@ def parse_job_list(
     return JobListPage(source_url=source_url, category_id=category_id, items=items)
 
 
-def _parse_list_card(box: Tag, selectors: ListSelectors) -> JobListItem | None:
+def _parse_list_card(
+    box: Tag,
+    selectors: ListSelectors,
+    thumb_cfg: ThumbnailCategoriesConfig,
+) -> JobListItem | None:
     """Extract a single JobListItem from a `.job-offer-box`.
 
     Returns None when the card lacks any of: title text, detail-page link,
@@ -334,19 +351,26 @@ def _parse_list_card(box: Tag, selectors: ListSelectors) -> JobListItem | None:
     if isinstance(label_tag, Tag):
         labels = [_text(li) for li in label_tag.find_all("li") if _text(li)]
 
+    # Extract the Jobcan-supplied thumbnail. Path-relative / data: URIs are
+    # dropped to None here (they would fail the source_thumbnail_url validator).
     thumbnail_tag = box.select_one(selectors.thumbnail)
-    thumbnail_url: str | None = None
+    source_thumbnail_url: str | None = None
     if isinstance(thumbnail_tag, Tag):
         src = _attr(thumbnail_tag, "src")
         if src:
             candidate = _normalise_jobcan_url(src)
-            # `_normalise_jobcan_url` only rewrites `/` and `//` prefixes. A
-            # path-relative `./thumb.jpg` or a `data:` URI would pass through
-            # unchanged and then fail JobListItem's http(s) validator — which
-            # would abort the whole listing page over one weird card. Drop
-            # the thumbnail instead; cards render fine without it.
             if candidate.startswith("http://") or candidate.startswith("https://"):
-                thumbnail_url = candidate
+                source_thumbnail_url = candidate
+
+    # Phase 2A.1c: pick the display thumbnail.
+    # - enabled=False → keep Jobcan's source URL as-is.
+    # - enabled=True  → look up category by labels, fall back to default_image.
+    display_thumbnail_url = _resolve_display_thumbnail(
+        job_id=job_id,
+        labels=labels,
+        source_thumbnail_url=source_thumbnail_url,
+        thumb_cfg=thumb_cfg,
+    )
 
     # The listing-page link points at `/aozora/job_offers/<id>?hide_breadcrumb=false`;
     # rebuild it into the proxy's canonical detail-page shape so downstream
@@ -360,8 +384,56 @@ def _parse_list_card(box: Tag, selectors: ListSelectors) -> JobListItem | None:
         description=description,
         detail_url=detail_url,
         labels=labels,
-        thumbnail_url=thumbnail_url,
+        thumbnail_url=display_thumbnail_url,
+        source_thumbnail_url=source_thumbnail_url,
     )
+
+
+def _resolve_display_thumbnail(
+    *,
+    job_id: str,
+    labels: list[str],
+    source_thumbnail_url: str | None,
+    thumb_cfg: ThumbnailCategoriesConfig,
+) -> str | None:
+    """Phase 2A.1c — pick the display thumbnail for a JobListItem.
+
+    Order:
+      1. If `thumb_cfg.enabled` is False, return the Jobcan source URL as-is.
+      2. Walk `labels` in document order; the first label that exact-matches
+         a category synonym wins. Return that category's override image.
+      3. No label matched → return `default_image` and emit a structured
+         warning so operators can spot a new Jobcan job type that needs
+         adding to `categories`.
+
+    Codex Q2 (review): `labels[0]` was insufficient — Jobcan's label order
+    is observation, not contract. Iterating all labels is the defensive form.
+    """
+    if not thumb_cfg.enabled:
+        return source_thumbnail_url
+
+    # The reverse `synonym -> image` map is computed once at config-validation
+    # time on `ThumbnailCategoriesConfig` (which also rejects synonym collisions
+    # across categories). The parser just looks up here.
+    synonym_to_image = thumb_cfg.synonym_to_image
+    for label in labels:
+        image = synonym_to_image.get(label)
+        if image is not None:
+            return image
+
+    # No label matched any category — fall back to default + structured warning.
+    # The operator-actionable signal: job_id + the actual labels seen, so they
+    # can decide whether to add a new category or leave as default.
+    _logger.warning(
+        "thumbnail_categories: no synonym match, using default image",
+        extra={
+            "job_id": job_id,
+            "labels": labels,
+            "default_image": thumb_cfg.default_image,
+            "known_synonyms": sorted(synonym_to_image.keys()),
+        },
+    )
+    return thumb_cfg.default_image
 
 
 def _extract_job_id(href: str) -> str | None:

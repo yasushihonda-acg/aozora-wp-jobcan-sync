@@ -48,6 +48,40 @@ list:
     label: ".job-offer-label"
     description: ".job-offer-description"
     thumbnail: ".job-offer-main-image-thumbnail"
+  # Phase 2A.1c: replace Jobcan-supplied card thumbnails with in-house
+  # category illustrations that match the corporate-site (aozora-cg.com)
+  # tonal manner. The original Jobcan thumbnail is preserved in
+  # `JobListItem.source_thumbnail_url` for operator visibility; the override
+  # writes only `JobListItem.thumbnail_url` (display).
+  #
+  # When `enabled: false`, the override is bypassed and Jobcan's thumbnail
+  # is shown as-is — this is the documented escape hatch for the period
+  # before Jobcan returns the official inquiry verdict.
+  #
+  # NOTE on `image` paths (code-review medium #1 — Phase 2A.2 deferred):
+  # These are page-relative (`assets/img/...`) and only resolve correctly
+  # when the rendered HTML and the assets share a parent. That holds for
+  # the Phase A mockup (GH Pages /mockup/) and the CLI `--out` flow.
+  # Phase 2A.2 (FastAPI route `/jobs/`) MUST inject a `base_url` template
+  # variable so the renderer produces site-root paths (`/assets/img/...`)
+  # or proxy `/static/` prefixes — otherwise the production URL
+  # `recruit.aozora-cg.com/jobs/...` will 404 on these images.
+  thumbnail_categories:
+    enabled: true
+    categories:
+      care:
+        synonyms: ["介護職"]
+        image: "assets/img/illust-job-care.png"
+      nurse:
+        synonyms: ["看護師", "相談員"]
+        image: "assets/img/illust-job-nurse.png"
+      it:
+        synonyms: ["ITエンジニア職", "開発エンジニア"]
+        image: "assets/img/illust-job-it.png"
+      office:
+        synonyms: ["事務職"]
+        image: "assets/img/illust-job-office.png"
+    default_image: "assets/img/illust-job-default.png"
 
 sanitize:
   allowed_tags:
