@@ -223,10 +223,17 @@ def _match_required_fields(
     extras: list[tuple[str, str]] = []
     for header, value in pairs:
         field_key = synonym_to_field.get(header)
-        if field_key is not None and field_key not in field_values:
-            field_values[field_key] = value
-        else:
+        if field_key is None:
+            # Unknown header — preserved for display in `extra_lines`.
             extras.append((header, value))
+            continue
+        if field_key in field_values:
+            # Duplicate canonical row (e.g. two `給与` rows in a multi-position
+            # posting). First-wins: silently drop the duplicate so the renderer
+            # doesn't show a second labelled row alongside the canonical one.
+            # Phase 2A.2 will add structured logging here for operator visibility.
+            continue
+        field_values[field_key] = value
     return field_values, extras
 
 

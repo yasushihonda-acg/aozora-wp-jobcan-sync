@@ -30,13 +30,10 @@ class TestParseRealFixture:
         offer = parse_job_detail(sample_html, SAMPLE_SOURCE_URL, SAMPLE_JOB_ID)
         assert offer.apply_url == f"https://recruit.jobcan.jp/aozora/entry/new/{SAMPLE_JOB_ID}"
 
-    def test_required_fields_populated(self, sample_html: str) -> None:
-        offer = parse_job_detail(sample_html, SAMPLE_SOURCE_URL, SAMPLE_JOB_ID)
-        assert offer.label == "介護職正社員"
-        assert offer.address  # not empty
-        assert offer.location  # not empty
-        assert offer.salary  # not empty
-        assert offer.body_html  # not empty
+    # (Required-field population is covered by `test_parse_real_fixture_variations`
+    # below, which exercises the same fixture plus 4 others. Removed to avoid
+    # duplicated assertions — keep the fixture-specific title/apply_url exact-match
+    # tests above and the extras test below.)
 
     def test_extra_table_lines_extracted(self, sample_html: str) -> None:
         offer = parse_job_detail(sample_html, SAMPLE_SOURCE_URL, SAMPLE_JOB_ID)
@@ -103,32 +100,41 @@ class TestUrlNormalisation:
         assert _normalise_jobcan_url(href) == expected
 
 
+def _build_table_html(salary_header: str, salary_value: str = "¥250,000") -> str:
+    """Build a minimal job-detail HTML fragment with a configurable salary header.
+
+    Used by TestSynonymMapping and TestDuplicateCanonicalRow to vary just the
+    table rows under test, without restating the entire BeautifulSoup-parseable
+    scaffold each time.
+    """
+    return f"""
+    <html><body>
+      <div class="job-offer-detail-title">タイトル</div>
+      <div class="job-offer-description-full">本文</div>
+      <div class="job-offer-address">拠点</div>
+      <div class="job-offer-label">介護職 正社員</div>
+      <a href="/aozora/entry/new/123">apply</a>
+      <div class="job-offer-table">
+        <div class="content-table-line">
+          <div class="content-table-head">勤務地</div>
+          <div class="td-contentTable__breakWordWrap">福岡</div>
+        </div>
+        <div class="content-table-line">
+          <div class="content-table-head">{salary_header}</div>
+          <div class="td-contentTable__breakWordWrap">{salary_value}</div>
+        </div>
+      </div>
+    </body></html>
+    """
+
+
 class TestSynonymMapping:
     """AC-1 Phase 2A: header rename (e.g. `給与` → `給与（月給）`) is handled by
     the synonyms list in selectors.yaml, NOT by fuzzy match."""
 
     def test_givo_alias_maps_to_salary(self) -> None:
         """The synonym `給与（月給）` should map to salary, not raise ValidationError."""
-        html = """
-        <html><body>
-          <div class="job-offer-detail-title">タイトル</div>
-          <div class="job-offer-description-full">本文</div>
-          <div class="job-offer-address">拠点</div>
-          <div class="job-offer-label">介護職 正社員</div>
-          <a href="/aozora/entry/new/123">apply</a>
-          <div class="job-offer-table">
-            <div class="content-table-line">
-              <div class="content-table-head">勤務地</div>
-              <div class="td-contentTable__breakWordWrap">福岡</div>
-            </div>
-            <div class="content-table-line">
-              <div class="content-table-head">給与（月給）</div>
-              <div class="td-contentTable__breakWordWrap">¥250,000</div>
-            </div>
-          </div>
-        </body></html>
-        """
-        offer = parse_job_detail(html, SAMPLE_SOURCE_URL, "123")
+        offer = parse_job_detail(_build_table_html("給与（月給）"), SAMPLE_SOURCE_URL, "123")
         assert offer.salary == "¥250,000"
 
     def test_givo_rei_does_not_map_to_salary(self) -> None:
@@ -138,6 +144,22 @@ class TestSynonymMapping:
         With the canonical row label absent, the parser must raise
         ValidationError, not silently use `給与例` as the salary.
         """
+        with pytest.raises(JobcanValidationError) as exc_info:
+            parse_job_detail(
+                _build_table_html("給与例", "¥300,000 (sample)"),
+                SAMPLE_SOURCE_URL,
+                "123",
+            )
+        assert "salary" in exc_info.value.field_errors
+
+
+class TestDuplicateCanonicalRow:
+    """Phase 2A.1a code-review #1: a Jobcan posting that emits TWO rows with
+    canonical (or synonym) `給与` headers — the second value must NOT leak into
+    `extra_lines` where the renderer would show it as a separately-labelled
+    `給与` row alongside the canonical one. Documented first-wins policy."""
+
+    def test_duplicate_canonical_row_dropped_silently(self) -> None:
         html = """
         <html><body>
           <div class="job-offer-detail-title">タイトル</div>
@@ -151,15 +173,23 @@ class TestSynonymMapping:
               <div class="td-contentTable__breakWordWrap">福岡</div>
             </div>
             <div class="content-table-line">
-              <div class="content-table-head">給与例</div>
-              <div class="td-contentTable__breakWordWrap">¥300,000 (sample)</div>
+              <div class="content-table-head">給与</div>
+              <div class="td-contentTable__breakWordWrap">¥250,000</div>
+            </div>
+            <div class="content-table-line">
+              <div class="content-table-head">給与</div>
+              <div class="td-contentTable__breakWordWrap">¥350,000 (with bonus)</div>
             </div>
           </div>
         </body></html>
         """
-        with pytest.raises(JobcanValidationError) as exc_info:
-            parse_job_detail(html, SAMPLE_SOURCE_URL, "123")
-        assert "salary" in exc_info.value.field_errors
+        offer = parse_job_detail(html, SAMPLE_SOURCE_URL, "123")
+        # First-wins: first 給与 row populates the canonical field.
+        assert offer.salary == "¥250,000"
+        # Second 給与 row must NOT appear in extras (would label-duplicate the
+        # canonical row at render time).
+        extras_headers = [h for h, _ in offer.extra_lines]
+        assert "給与" not in extras_headers
 
 
 class TestStructureChangeDetection:
