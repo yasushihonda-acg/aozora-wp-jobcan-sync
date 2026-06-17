@@ -47,6 +47,121 @@ class TestParseRealFixture:
         assert "募集拠点" in headers or any("スキル" in h for h in headers)
 
 
+# AC-3 of Phase 2A: parser must succeed across job-category variations.
+# Each tuple is (job_id, label_keyword). label_keyword is checked as a
+# substring — fixtures are real Jobcan pages and may rename labels.
+MULTI_FIXTURE_JOBS = [
+    ("1777023", "介護職"),     # 介護職正社員 (full-time, Hakata day care)
+    ("1668696", "相談員"),     # 相談員短時間正社員 (short-time, Nagayoshi)
+    ("1690435", "ITエンジニア"),  # ITエンジニア職正社員 (in-house SE assistant)
+    ("2215694", "事務"),       # 事務職正社員 (Kagoshima new branch)
+    ("2199420", "介護職"),     # 介護職正社員 (Tamura new branch)
+]
+
+
+@pytest.mark.parametrize("job_id, label_keyword", MULTI_FIXTURE_JOBS)
+def test_parse_real_fixture_variations(job_id: str, label_keyword: str) -> None:
+    """AC-3 (Phase 2A): parser handles 5 real Jobcan fixtures spanning multiple
+    job categories without raising. All required fields populated.
+    """
+    from pathlib import Path
+
+    fixture = Path(__file__).parent / "fixtures" / "jobcan_responses" / f"job_{job_id}.html"
+    html = fixture.read_text(encoding="utf-8")
+    source_url = (
+        f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}"
+        "?hide_breadcrumb=true&hide_search=true"
+    )
+
+    offer = parse_job_detail(html, source_url, job_id)
+
+    assert offer.job_id == job_id
+    assert offer.title  # not empty
+    assert offer.label  # not empty
+    assert label_keyword in offer.label
+    assert offer.address  # not empty
+    assert offer.location  # not empty
+    assert offer.salary  # not empty
+    assert offer.body_html  # not empty
+    assert offer.apply_url == f"https://recruit.jobcan.jp/aozora/entry/new/{job_id}"
+
+
+class TestUrlNormalisation:
+    """AC-1 Phase 2A: protocol-relative / relative apply URLs are normalised."""
+
+    @pytest.mark.parametrize(
+        "href, expected",
+        [
+            ("/aozora/entry/new/123", "https://recruit.jobcan.jp/aozora/entry/new/123"),
+            ("//recruit.jobcan.jp/aozora/entry/new/456", "https://recruit.jobcan.jp/aozora/entry/new/456"),
+            ("https://recruit.jobcan.jp/aozora/entry/new/789", "https://recruit.jobcan.jp/aozora/entry/new/789"),
+        ],
+    )
+    def test_normalise(self, href: str, expected: str) -> None:
+        from sync.parser import _normalise_jobcan_url
+
+        assert _normalise_jobcan_url(href) == expected
+
+
+class TestSynonymMapping:
+    """AC-1 Phase 2A: header rename (e.g. `給与` → `給与（月給）`) is handled by
+    the synonyms list in selectors.yaml, NOT by fuzzy match."""
+
+    def test_givo_alias_maps_to_salary(self) -> None:
+        """The synonym `給与（月給）` should map to salary, not raise ValidationError."""
+        html = """
+        <html><body>
+          <div class="job-offer-detail-title">タイトル</div>
+          <div class="job-offer-description-full">本文</div>
+          <div class="job-offer-address">拠点</div>
+          <div class="job-offer-label">介護職 正社員</div>
+          <a href="/aozora/entry/new/123">apply</a>
+          <div class="job-offer-table">
+            <div class="content-table-line">
+              <div class="content-table-head">勤務地</div>
+              <div class="td-contentTable__breakWordWrap">福岡</div>
+            </div>
+            <div class="content-table-line">
+              <div class="content-table-head">給与（月給）</div>
+              <div class="td-contentTable__breakWordWrap">¥250,000</div>
+            </div>
+          </div>
+        </body></html>
+        """
+        offer = parse_job_detail(html, SAMPLE_SOURCE_URL, "123")
+        assert offer.salary == "¥250,000"
+
+    def test_givo_rei_does_not_map_to_salary(self) -> None:
+        """`給与例` (gross-pay example) is NOT a synonym of `給与`; fuzzy match
+        would be dangerous (legal-content mismatch).
+
+        With the canonical row label absent, the parser must raise
+        ValidationError, not silently use `給与例` as the salary.
+        """
+        html = """
+        <html><body>
+          <div class="job-offer-detail-title">タイトル</div>
+          <div class="job-offer-description-full">本文</div>
+          <div class="job-offer-address">拠点</div>
+          <div class="job-offer-label">介護職 正社員</div>
+          <a href="/aozora/entry/new/123">apply</a>
+          <div class="job-offer-table">
+            <div class="content-table-line">
+              <div class="content-table-head">勤務地</div>
+              <div class="td-contentTable__breakWordWrap">福岡</div>
+            </div>
+            <div class="content-table-line">
+              <div class="content-table-head">給与例</div>
+              <div class="td-contentTable__breakWordWrap">¥300,000 (sample)</div>
+            </div>
+          </div>
+        </body></html>
+        """
+        with pytest.raises(JobcanValidationError) as exc_info:
+            parse_job_detail(html, SAMPLE_SOURCE_URL, "123")
+        assert "salary" in exc_info.value.field_errors
+
+
 class TestStructureChangeDetection:
     """AC-3 — when required selectors are missing, raise StructureChangeError."""
 
