@@ -47,6 +47,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import ValidationError as PydanticValidationError
 from starlette.concurrency import run_in_threadpool
 
 from .cache import Cache, CacheConfig, InMemoryCache
@@ -365,6 +366,45 @@ async def _fetch_and_render_detail(
             ),
             status_code=500,
         )
+    except PydanticValidationError as exc:
+        # parse_job_detail's domain checks raise JobcanValidationError for empty
+        # fields, but the Pydantic validators on JobOffer (apply_url / source_url
+        # http(s) prefix) still fire for malformed values that slipped past the
+        # domain checks — e.g. a malicious Jobcan HTML returning `javascript:...`
+        # as the apply link. Without this catch the proxy returns FastAPI's
+        # default 500 and skips negative caching, amplifying load on Jobcan.
+        _logger.error(
+            "pydantic validation failed",
+            extra={"kind": "detail", "job_id": job_id, "errors": exc.errors()},
+        )
+        cache.set_negative("detail", job_id, 500)
+        return HTMLResponse(
+            content=_error_html(
+                title="ページを表示できません",
+                message="求人情報の検証に失敗しました。元のページをご覧ください。",
+                fallback_url=fallback_url,
+            ),
+            status_code=500,
+        )
+    except Exception:
+        # Last-resort catch for render-time failures (Jinja2 TemplateError,
+        # AttributeError on malformed JobOffer fields, etc.). The CLI path
+        # (cli.py L131) already does this; mirroring here keeps the proxy
+        # from leaking stack traces and ensures the negative cache absorbs
+        # the failure so connection floods do not amplify the incident.
+        _logger.exception(
+            "render or unexpected error",
+            extra={"kind": "detail", "job_id": job_id},
+        )
+        cache.set_negative("detail", job_id, 500)
+        return HTMLResponse(
+            content=_error_html(
+                title="ページを表示できません",
+                message="一時的な問題が発生しました。元のページをご覧ください。",
+                fallback_url=fallback_url,
+            ),
+            status_code=500,
+        )
 
     cache.set_detail(job_id, rendered)
     _logger.info("cache miss → fetched", extra={"kind": "detail", "job_id": job_id})
@@ -402,6 +442,60 @@ async def _fetch_and_render_list(
             content=_error_html(
                 title="ページを表示できません",
                 message="Jobcan のページ構造が変わった可能性があります。元のページをご覧ください。",
+                fallback_url=fallback_url,
+            ),
+            status_code=500,
+        )
+    except JobcanValidationError as exc:
+        # parse_job_list does not currently raise this, but the symmetry with
+        # the detail path matters: when Phase 2B adds list-level field validation
+        # (e.g. requiring non-empty `address` on each card), this handler must
+        # already exist. Asymmetry was a finding in Phase 2A.2 code review.
+        _logger.error(
+            "validation failed",
+            extra={
+                "kind": "list",
+                "category_id": category_id,
+                "field_errors": exc.field_errors,
+            },
+        )
+        cache.set_negative("list", category_id, 500)
+        return HTMLResponse(
+            content=_error_html(
+                title="ページを表示できません",
+                message="求人情報の取得に失敗しました。元のページをご覧ください。",
+                fallback_url=fallback_url,
+            ),
+            status_code=500,
+        )
+    except PydanticValidationError as exc:
+        _logger.error(
+            "pydantic validation failed",
+            extra={
+                "kind": "list",
+                "category_id": category_id,
+                "errors": exc.errors(),
+            },
+        )
+        cache.set_negative("list", category_id, 500)
+        return HTMLResponse(
+            content=_error_html(
+                title="ページを表示できません",
+                message="求人情報の検証に失敗しました。元のページをご覧ください。",
+                fallback_url=fallback_url,
+            ),
+            status_code=500,
+        )
+    except Exception:
+        _logger.exception(
+            "render or unexpected error",
+            extra={"kind": "list", "category_id": category_id},
+        )
+        cache.set_negative("list", category_id, 500)
+        return HTMLResponse(
+            content=_error_html(
+                title="ページを表示できません",
+                message="一時的な問題が発生しました。元のページをご覧ください。",
                 fallback_url=fallback_url,
             ),
             status_code=500,

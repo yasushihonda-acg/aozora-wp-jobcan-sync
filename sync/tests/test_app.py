@@ -487,6 +487,108 @@ def test_classify_client_error_unknown_returns_500() -> None:
 # ───────────────────────── structure change short-circuit ────────────────────
 
 
+def test_pydantic_validation_error_returns_500_and_caches_negative(
+    sample_detail_html: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase 2A.2 code-review #1: parse_job_detail can return a JobOffer whose
+    Pydantic validators raise (e.g. apply_url that the parser's domain check
+    accepted but `_must_be_http_url` rejects, like `javascript:...`).
+
+    Without an explicit `except PydanticValidationError`, the proxy returns
+    FastAPI's default 500 and skips negative caching → connection floods
+    re-fetch on every retry.
+    """
+    from sync import app as app_module
+
+    def _raise_pydantic(*_args: Any, **_kwargs: Any) -> None:
+        # Construct a real Pydantic ValidationError by instantiating a model
+        # with a value the validator rejects — simpler than building one by
+        # hand and exercises the exact failure shape app.py sees in prod.
+        from sync.models import JobOffer
+
+        JobOffer(
+            job_id="1777023",
+            title="t",
+            body_html="<p>x</p>",
+            address="a",
+            label="l",
+            location="loc",
+            salary="s",
+            apply_url="javascript:alert(1)",  # not http(s) → ValidationError
+            source_url="https://recruit.jobcan.jp/aozora/job_offers/1777023",
+        )
+
+    # app.py imports `parse_job_detail` at module load time, so patching the
+    # `sync.parser` module has no effect — the app holds its own bound name.
+    # Replace the binding in `sync.app` instead.
+    monkeypatch.setattr(app_module, "parse_job_detail", _raise_pydantic)
+
+    stub = _make_stub_client(detail_html=sample_detail_html)
+    cache = InMemoryCache(
+        CacheConfig(
+            detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time
+        )
+    )
+    app = create_app(
+        config=AppConfig(
+            fetch_enabled=True,
+            job_id_allowlist=frozenset(),
+            category_id_allowlist=frozenset(),
+        ),
+        cache=cache,
+        client_factory=stub,
+    )
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/jobs/1777023", follow_redirects=False)
+
+    assert response.status_code == 500
+    assert "求人情報の検証に失敗しました" in response.text
+    # Second request hits the negative cache; no re-fetch even though the
+    # stub returns valid HTML — the failure path must absorb retries.
+    client.get("/jobs/1777023", follow_redirects=False)
+    assert stub.fetch_count == 1
+
+
+def test_render_exception_returns_500_and_caches_negative(
+    sample_detail_html: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Phase 2A.2 code-review #2: cli.py wraps render in `except Exception`
+    so Jinja2 TemplateError / AttributeError on malformed offer fields surface
+    as a controlled exit. The proxy must do the same so a template bug does
+    not leak stack traces and force every retry to re-fetch Jobcan."""
+    from sync import app as app_module
+
+    def _raise_jinja(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
+
+    monkeypatch.setattr(app_module, "render_job_detail", _raise_jinja)
+
+    stub = _make_stub_client(detail_html=sample_detail_html)
+    cache = InMemoryCache(
+        CacheConfig(
+            detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time
+        )
+    )
+    app = create_app(
+        config=AppConfig(
+            fetch_enabled=True,
+            job_id_allowlist=frozenset(),
+            category_id_allowlist=frozenset(),
+        ),
+        cache=cache,
+        client_factory=stub,
+    )
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/jobs/1777023", follow_redirects=False)
+
+    assert response.status_code == 500
+    assert "一時的な問題が発生しました" in response.text
+    client.get("/jobs/1777023", follow_redirects=False)
+    assert stub.fetch_count == 1
+
+
 def test_structure_change_sets_negative_cache(broken_html: str) -> None:
     """After a JobcanStructureChangeError, the second request inside the
     negative-cache TTL should NOT re-attempt the fetch — operators should
