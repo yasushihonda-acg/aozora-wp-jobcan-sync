@@ -1,0 +1,24 @@
+{#
+  Phase 2A.3 cleanup (code-review #5): error page template extracted from
+  app.py's inline string. Jinja2 autoescape protects against title/message
+  arriving with HTML metacharacters (e.g. from a structured-change error
+  carrying a selector with `<>`). fallback_url is rendered into an `href`
+  attribute, so Jinja2's HTML autoescape handles attribute quoting.
+
+  The page intentionally stays minimal (no shared CSS) so a renderer
+  failure in this very template would have a narrow blast radius — the
+  proxy is meant to keep working even when job_detail / job_list rendering
+  is broken.
+#}<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <meta name="robots" content="noindex, nofollow">
+</head>
+<body>
+<h1>{{ title }}</h1>
+<p>{{ message }}</p>
+<p><a href="{{ fallback_url }}">Jobcan の元ページを開く</a></p>
+</body>
+</html>

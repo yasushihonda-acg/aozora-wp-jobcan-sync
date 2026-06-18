@@ -10,7 +10,21 @@ class JobcanError(Exception):
 
 
 class JobcanClientError(JobcanError):
-    """Raised when fetching a Jobcan page fails (network / HTTP error)."""
+    """Raised when fetching a Jobcan page fails (network / HTTP error).
+
+    `status_code` carries the upstream HTTP status when known (HTTP 4xx/5xx
+    responses), or `None` for network-level failures (timeout, DNS, TLS).
+    Callers should treat `None` the same as 5xx — neither is something the
+    user can fix by retrying the canonical Jobcan URL.
+
+    Phase 2A.3 cleanup (code-review #7): the FastAPI proxy used to reverse-
+    engineer the status code from the message string; storing it as a typed
+    attribute lets the route layer dispatch without parsing.
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class JobcanStructureChangeError(JobcanError):
