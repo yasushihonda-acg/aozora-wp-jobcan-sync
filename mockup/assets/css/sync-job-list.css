@@ -13,6 +13,36 @@
   font-family: var(--font-sans);
 }
 
+.job-list__breadcrumb {
+  margin-bottom: var(--space-5);
+}
+
+.job-list__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-bg-alt);
+  color: var(--color-accent-dark);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+  transition: background var(--transition), color var(--transition);
+}
+
+.job-list__back:hover,
+.job-list__back:focus-visible {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.job-list__back-arrow {
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
 .job-list__header {
   text-align: center;
   margin-bottom: var(--space-10);
