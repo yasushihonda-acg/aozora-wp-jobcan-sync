@@ -207,7 +207,8 @@ def test_get_job_detail_4xx_redirects_to_jobcan() -> None:
     the user can see the source-of-truth response."""
     stub = _make_stub_client(
         detail_raises=JobcanClientError(
-            "HTTP 404 from https://recruit.jobcan.jp/aozora/job_offers/9999999"
+            "HTTP 404 from https://recruit.jobcan.jp/aozora/job_offers/9999999",
+            status_code=404,
         )
     )
     client = _client_with(stub)
@@ -224,7 +225,8 @@ def test_get_job_detail_5xx_returns_503_html_with_fallback_link() -> None:
     the user knows to retry rather than think the page truly does not exist."""
     stub = _make_stub_client(
         detail_raises=JobcanClientError(
-            "Transient HTTP 503 from https://recruit.jobcan.jp/aozora/job_offers/1777023"
+            "Transient HTTP 503 from https://recruit.jobcan.jp/aozora/job_offers/1777023",
+            status_code=503,
         )
     )
     client = _client_with(stub)
@@ -241,7 +243,9 @@ def test_get_job_detail_network_error_returns_503() -> None:
     HTML page as 5xx, not a redirect — there is nothing the user can do at
     the canonical URL if our network can't reach Jobcan at all."""
     stub = _make_stub_client(
-        detail_raises=JobcanClientError("Network error after 3 attempts: timeout")
+        detail_raises=JobcanClientError(
+            "Network error after 3 attempts: timeout", status_code=None
+        )
     )
     client = _client_with(stub)
 
@@ -272,7 +276,8 @@ def test_get_job_detail_negative_cache_returns_cached_status(
     upstream pressure during outages."""
     stub = _make_stub_client(
         detail_raises=JobcanClientError(
-            "HTTP 404 from https://recruit.jobcan.jp/aozora/job_offers/9999999"
+            "HTTP 404 from https://recruit.jobcan.jp/aozora/job_offers/9999999",
+            status_code=404,
         )
     )
     client = _client_with(stub)
@@ -362,7 +367,8 @@ def test_get_job_list_cache_hit_does_not_refetch(sample_list_html: str) -> None:
 def test_get_job_list_4xx_redirects_to_jobcan() -> None:
     stub = _make_stub_client(
         list_raises=JobcanClientError(
-            "HTTP 404 from https://recruit.jobcan.jp/aozora/list?category_id=99999"
+            "HTTP 404 from https://recruit.jobcan.jp/aozora/list?category_id=99999",
+            status_code=404,
         )
     )
     client = _client_with(stub)
@@ -448,11 +454,14 @@ def test_app_config_from_env_parses_allowlist(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_classify_client_error_4xx() -> None:
+    """Phase 2A.3 (#7): JobcanClientError now carries `status_code`. 4xx upstream
+    failures pass the exact status through so the proxy can redirect with the
+    same code Jobcan would have sent."""
     from sync.app import _classify_client_error
 
     assert (
         _classify_client_error(
-            JobcanClientError("HTTP 404 from https://recruit.jobcan.jp/x")
+            JobcanClientError("HTTP 404 from https://recruit.jobcan.jp/x", status_code=404)
         )
         == 404
     )
@@ -463,25 +472,26 @@ def test_classify_client_error_5xx_transient() -> None:
 
     assert (
         _classify_client_error(
-            JobcanClientError("Transient HTTP 503 from https://recruit.jobcan.jp/x")
+            JobcanClientError(
+                "Transient HTTP 503 from https://recruit.jobcan.jp/x", status_code=503
+            )
         )
         == 503
     )
 
 
 def test_classify_client_error_network_returns_503() -> None:
+    """status_code=None (network-level failure) deliberately maps to 503: the
+    canonical Jobcan URL is just as unreachable for the user as for us, so a
+    302 to it would only push the user onto the same broken network."""
     from sync.app import _classify_client_error
 
     assert (
-        _classify_client_error(JobcanClientError("Network error after 3 attempts: timeout"))
+        _classify_client_error(
+            JobcanClientError("Network error after 3 attempts: timeout", status_code=None)
+        )
         == 503
     )
-
-
-def test_classify_client_error_unknown_returns_500() -> None:
-    from sync.app import _classify_client_error
-
-    assert _classify_client_error(JobcanClientError("something else")) == 500
 
 
 # ───────────────────────── structure change short-circuit ────────────────────

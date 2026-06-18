@@ -42,6 +42,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -50,6 +52,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError as PydanticValidationError
 from starlette.concurrency import run_in_threadpool
 
+from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
 from .jobcan_client import JobcanClient
 from .models import (
@@ -58,7 +61,7 @@ from .models import (
     JobcanValidationError,
 )
 from .parser import parse_job_detail, parse_job_list
-from .renderer import render_job_detail, render_job_list
+from .renderer import render_error, render_job_detail, render_job_list
 
 _logger = logging.getLogger(__name__)
 
@@ -70,23 +73,6 @@ JOBCAN_LIST_FALLBACK = (
     "https://recruit.jobcan.jp/aozora/list"
     "?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
 )
-
-# Returned for any error class that should not redirect (5xx / parse failures).
-# Kept ASCII-clean for HTTP header consistency; body is the only Japanese-bearing
-# response surface and renders without a template to avoid extending the failure
-# blast radius into Jinja2.
-_ERROR_HTML_TEMPLATE = (
-    "<!DOCTYPE html>\n"
-    "<html lang=\"ja\">\n"
-    "<head><meta charset=\"utf-8\"><title>{title}</title>"
-    "<meta name=\"robots\" content=\"noindex, nofollow\"></head>\n"
-    "<body>\n"
-    "<h1>{title}</h1>\n"
-    "<p>{message}</p>\n"
-    '<p><a href="{fallback_url}">Jobcan の元ページを開く</a></p>\n'
-    "</body></html>\n"
-)
-
 
 def _parse_csv_env(value: str) -> frozenset[str]:
     """Parse a comma-separated env var into a frozenset of trimmed entries.
@@ -122,15 +108,6 @@ class AppConfig:
         )
 
 
-def _is_valid_id(value: str) -> bool:
-    """Reject non-ASCII digits early (e.g. full-width Jobcan rejects with 404).
-
-    Mirrors the CLI guard (`cli.py`) so callers see the same input contract
-    whether they hit the proxy or run the CLI directly.
-    """
-    return value.isascii() and value.isdigit()
-
-
 def _allowed(value: str, allowlist: frozenset[str]) -> bool:
     """Empty allowlist = unrestricted (Phase 2A.2 default).
 
@@ -142,7 +119,69 @@ def _allowed(value: str, allowlist: frozenset[str]) -> bool:
 
 
 def _error_html(title: str, message: str, fallback_url: str) -> str:
-    return _ERROR_HTML_TEMPLATE.format(title=title, message=message, fallback_url=fallback_url)
+    # Phase 2A.3 cleanup (code-review #5): delegate to the Jinja2-backed
+    # `render_error` in renderer.py so autoescape covers user-controlled
+    # message bodies (e.g. selector lists in JobcanStructureChangeError).
+    return render_error(title=title, message=message, fallback_url=fallback_url)
+
+
+def _pre_fetch_check(
+    *,
+    kind: str,
+    resource_id: str,
+    log_key: str,
+    fallback_url: str,
+    allowlist: frozenset[str],
+    fetch_enabled: bool,
+    cache: Cache,
+    maintenance_message: str,
+) -> Response | None:
+    """Validate, allowlist-filter, and cache-lookup before any Jobcan fetch.
+
+    Phase 2A.3 cleanup (code-review #3): the detail and list endpoints used
+    to duplicate this six-step gate (id check → allowlist → cache hit →
+    negative cache → fetch disabled → proceed) almost verbatim. Centralising
+    here means new pre-fetch behaviour (e.g. per-IP rate-limit, request id)
+    drops into one place. Returns:
+
+    - `HTMLResponse` / `RedirectResponse` when the request can short-circuit
+      (cache hit, negative cache hit, fetch-disabled maintenance)
+    - `None` when the caller should proceed to fetch
+
+    Also raises `HTTPException(404)` for invalid ids / allowlist rejects so
+    enumeration probes can't distinguish either case from a real 404.
+    """
+    if not is_ascii_digit_id(resource_id):
+        raise HTTPException(status_code=404, detail="not found")
+
+    if not _allowed(resource_id, allowlist):
+        _logger.info("allowlist reject", extra={"kind": kind, log_key: resource_id})
+        raise HTTPException(status_code=404, detail="not found")
+
+    cached = cache.get(kind, resource_id)
+    if cached is not None:
+        _logger.info("cache hit", extra={"kind": kind, log_key: resource_id})
+        return HTMLResponse(content=cached)
+
+    neg_status = cache.get_negative(kind, resource_id)
+    if neg_status is not None:
+        return _render_negative(neg_status, fallback_url, kind=kind, key=resource_id)
+
+    if not fetch_enabled:
+        _logger.info(
+            "fetch disabled, returning maintenance page",
+            extra={"kind": kind, log_key: resource_id},
+        )
+        return HTMLResponse(
+            content=_error_html(
+                title="メンテナンス中",
+                message=maintenance_message,
+                fallback_url=fallback_url,
+            ),
+            status_code=503,
+        )
+
+    return None
 
 
 def _apply_security_headers(response: Response) -> Response:
@@ -171,10 +210,26 @@ def create_app(
     app_config = config or AppConfig.from_env()
     proxy_cache: Cache = cache or InMemoryCache(CacheConfig())
 
+    # Phase 2A.3 cleanup (code-review #6): single long-lived JobcanClient so
+    # the underlying httpx.Client keeps its connection pool, TLS session, and
+    # DNS cache across requests. Previously the proxy constructed one per
+    # request inside `_do_fetch`, paying TLS handshake cost on every fetch
+    # under Cloud Run concurrency. Closed via the lifespan shutdown phase so
+    # tests that build multiple apps in one process don't leak sockets.
+    proxy_client = client_factory()
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            proxy_client.close()
+
     app = FastAPI(
         title="Aozora Jobcan Proxy",
         description="Phase 2A.2 — Cloud-Run-ready Jobcan public-page proxy",
         version="0.2.0",
+        lifespan=_lifespan,
     )
 
     @app.middleware("http")
@@ -190,93 +245,53 @@ def create_app(
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def get_job_detail(job_id: str) -> Response:
-        if not _is_valid_id(job_id):
-            # 404 (not 400) so enumeration probes cannot distinguish
-            # "format invalid" from "id not in allowlist" — same response.
-            raise HTTPException(status_code=404, detail="not found")
-
-        if not _allowed(job_id, app_config.job_id_allowlist):
-            _logger.info("allowlist reject", extra={"kind": "detail", "job_id": job_id})
-            raise HTTPException(status_code=404, detail="not found")
-
         fallback_url = JOBCAN_DETAIL_FALLBACK.format(job_id=job_id)
-
-        cached = proxy_cache.get_detail(job_id)
-        if cached is not None:
-            _logger.info("cache hit", extra={"kind": "detail", "job_id": job_id})
-            return HTMLResponse(content=cached)
-
-        neg_status = proxy_cache.get_negative("detail", job_id)
-        if neg_status is not None:
-            return _render_negative(neg_status, fallback_url, kind="detail", key=job_id)
-
-        if not app_config.fetch_enabled:
-            _logger.info(
-                "fetch disabled, returning maintenance page",
-                extra={"kind": "detail", "job_id": job_id},
-            )
-            return HTMLResponse(
-                content=_error_html(
-                    title="メンテナンス中",
-                    message="求人情報は現在準備中です。Jobcan の元ページを直接ご覧ください。",
-                    fallback_url=fallback_url,
-                ),
-                status_code=503,
-            )
-
-        html = await _fetch_and_render_detail(
-            client_factory=client_factory,
+        early = _pre_fetch_check(
+            kind="detail",
+            resource_id=job_id,
+            log_key="job_id",
+            fallback_url=fallback_url,
+            allowlist=app_config.job_id_allowlist,
+            fetch_enabled=app_config.fetch_enabled,
+            cache=proxy_cache,
+            maintenance_message=(
+                "求人情報は現在準備中です。Jobcan の元ページを直接ご覧ください。"
+            ),
+        )
+        if early is not None:
+            return early
+        return await _fetch_and_render_detail(
+            client=proxy_client,
             job_id=job_id,
             fallback_url=fallback_url,
             cache=proxy_cache,
         )
-        return html
 
     @app.get("/jobs/", response_class=HTMLResponse)
     async def get_job_list(
         category_id: Annotated[str, Query(..., min_length=1, max_length=16)],
     ) -> Response:
-        if not _is_valid_id(category_id):
-            raise HTTPException(status_code=404, detail="not found")
-
-        if not _allowed(category_id, app_config.category_id_allowlist):
-            _logger.info(
-                "allowlist reject", extra={"kind": "list", "category_id": category_id}
-            )
-            raise HTTPException(status_code=404, detail="not found")
-
         fallback_url = JOBCAN_LIST_FALLBACK.format(category_id=category_id)
-
-        cached = proxy_cache.get_list(category_id)
-        if cached is not None:
-            _logger.info("cache hit", extra={"kind": "list", "category_id": category_id})
-            return HTMLResponse(content=cached)
-
-        neg_status = proxy_cache.get_negative("list", category_id)
-        if neg_status is not None:
-            return _render_negative(neg_status, fallback_url, kind="list", key=category_id)
-
-        if not app_config.fetch_enabled:
-            _logger.info(
-                "fetch disabled, returning maintenance page",
-                extra={"kind": "list", "category_id": category_id},
-            )
-            return HTMLResponse(
-                content=_error_html(
-                    title="メンテナンス中",
-                    message="求人一覧は現在準備中です。Jobcan の元ページを直接ご覧ください。",
-                    fallback_url=fallback_url,
-                ),
-                status_code=503,
-            )
-
-        html = await _fetch_and_render_list(
-            client_factory=client_factory,
+        early = _pre_fetch_check(
+            kind="list",
+            resource_id=category_id,
+            log_key="category_id",
+            fallback_url=fallback_url,
+            allowlist=app_config.category_id_allowlist,
+            fetch_enabled=app_config.fetch_enabled,
+            cache=proxy_cache,
+            maintenance_message=(
+                "求人一覧は現在準備中です。Jobcan の元ページを直接ご覧ください。"
+            ),
+        )
+        if early is not None:
+            return early
+        return await _fetch_and_render_list(
+            client=proxy_client,
             category_id=category_id,
             fallback_url=fallback_url,
             cache=proxy_cache,
         )
-        return html
 
     return app
 
@@ -314,7 +329,7 @@ def _render_negative(
 
 async def _fetch_and_render_detail(
     *,
-    client_factory: type[JobcanClient],
+    client: JobcanClient,
     job_id: str,
     fallback_url: str,
     cache: Cache,
@@ -322,11 +337,11 @@ async def _fetch_and_render_detail(
     """Fetch + parse + render one job detail page, with full exception mapping."""
 
     def _do_fetch() -> tuple[str, str]:
-        # JobcanClient is sync (httpx.Client). Wrapping the network + parse
-        # in a single threadpool call keeps the FastAPI event loop free under
-        # concurrency (Codex Q4) without rewriting the existing CLI path.
-        with client_factory() as client:
-            return client.fetch_job_detail(job_id)
+        # JobcanClient is sync (httpx.Client). Wrapping the network call in a
+        # threadpool keeps the FastAPI event loop free under concurrency
+        # (Codex Q4). The client is long-lived (Phase 2A.3 #6), so its
+        # connection pool / TLS session is reused across requests.
+        return client.fetch_job_detail(job_id)
 
     try:
         source_url, html = await run_in_threadpool(_do_fetch)
@@ -413,14 +428,13 @@ async def _fetch_and_render_detail(
 
 async def _fetch_and_render_list(
     *,
-    client_factory: type[JobcanClient],
+    client: JobcanClient,
     category_id: str,
     fallback_url: str,
     cache: Cache,
 ) -> Response:
     def _do_fetch() -> tuple[str, str]:
-        with client_factory() as client:
-            return client.fetch_job_list(category_id)
+        return client.fetch_job_list(category_id)
 
     try:
         source_url, html = await run_in_threadpool(_do_fetch)
@@ -508,37 +522,23 @@ async def _fetch_and_render_list(
     return HTMLResponse(content=rendered)
 
 
-# HTTP statuses that JobcanClient surfaces as "HTTP {N} from {url}" messages.
-# These split JobcanClientError instances into 4xx (redirect-able) vs 5xx /
-# network (HTML maintenance page) without exposing the underlying httpx
-# exception types to the route layer.
-_HTTP_PREFIX = "HTTP "
-
-
 def _classify_client_error(exc: JobcanClientError) -> int:
-    """Return the HTTP status code embedded in the error, or 500 if untaggable.
+    """Translate a JobcanClientError into the HTTP status the proxy returns.
 
-    Naive string scrape because JobcanClient's error message format already
-    encodes the status — see `_get_with_retry` in jobcan_client.py. Tying
-    the format to a constant is more brittle than this since the client
-    has multiple message paths (network exhausted, transient, permanent).
+    Phase 2A.3 cleanup (code-review #7): JobcanClientError now carries
+    `status_code` as a typed attribute set by jobcan_client.py at raise time.
+    The earlier `_classify_client_error` parsed it back out of the message
+    string; this version dispatches on the attribute directly so the proxy
+    breaks loudly (mypy / runtime) if jobcan_client.py ever forgets to set
+    a code, instead of silently degrading to 500.
+
+    Network failures (status_code=None) map to 503 because the canonical
+    Jobcan URL is just as unreachable for the user — a redirect would push
+    them onto the same network they can't reach.
     """
-    message = str(exc)
-    if message.startswith(_HTTP_PREFIX):
-        # Format: "HTTP 404 from ..."
-        try:
-            return int(message.split(" ", 2)[1])
-        except (IndexError, ValueError):
-            return 500
-    if "Transient HTTP" in message:
-        try:
-            # Format: "Transient HTTP 503 from ..."
-            return int(message.split("Transient HTTP", 1)[1].strip().split(" ", 1)[0])
-        except (IndexError, ValueError):
-            return 500
-    if "Network error" in message:
+    if exc.status_code is None:
         return 503
-    return 500
+    return exc.status_code
 
 
 def _handle_client_error(

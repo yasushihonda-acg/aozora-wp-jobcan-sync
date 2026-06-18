@@ -27,7 +27,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from cachetools import TTLCache
 
@@ -58,8 +58,15 @@ class Cache(Protocol):
 
     Implementations are responsible for namespacing keys themselves —
     callers pass the raw resource id, not a fully-qualified key.
+
+    Phase 2A.3 (#3 cleanup): `get(kind, key)` / `set(kind, key, value)` are
+    the kind-dispatched API that the common pre-fetch helper uses. The
+    explicit detail/list helpers stay for callers that already pin a
+    resource type at the call site.
     """
 
+    def get(self, kind: str, key: str) -> str | None: ...
+    def set(self, kind: str, key: str, html: str) -> None: ...
     def get_detail(self, job_id: str) -> str | None: ...
     def set_detail(self, job_id: str, html: str) -> None: ...
     def get_list(self, category_id: str) -> str | None: ...
@@ -98,29 +105,57 @@ class InMemoryCache:
         )
         self._lock = threading.Lock()
 
-    def get_detail(self, job_id: str) -> str | None:
+    # Phase 2A.3 cleanup (code-review #8): the three (cache, key) pairs are
+    # the only thing that distinguishes get_detail / get_list / get_negative.
+    # Centralising the lock-and-delegate boilerplate here means cross-cutting
+    # concerns (metrics, eviction warnings, debug logs) can be added in one
+    # place instead of six. Public API stays unchanged so callers and tests
+    # don't move.
+    def _get(self, store: TTLCache[str, Any], key: str) -> Any:
         with self._lock:
-            return self._detail.get(job_id)
+            return store.get(key)
+
+    def _set(self, store: TTLCache[str, Any], key: str, value: Any) -> None:
+        with self._lock:
+            store[key] = value
+
+    def _store_for(self, kind: str) -> TTLCache[str, Any]:
+        """Dispatch from kind to the underlying positive-cache TTLCache.
+
+        Phase 2A.3 (#3 cleanup): lets the route helper take `kind` as a
+        single parameter instead of branching on it. Unknown kinds raise
+        rather than silently mis-cache — a typo would otherwise corrupt
+        a different resource type's namespace.
+        """
+        if kind == "detail":
+            return self._detail
+        if kind == "list":
+            return self._list
+        raise ValueError(f"unknown cache kind: {kind!r}")
+
+    def get(self, kind: str, key: str) -> str | None:
+        return self._get(self._store_for(kind), key)
+
+    def set(self, kind: str, key: str, html: str) -> None:
+        self._set(self._store_for(kind), key, html)
+
+    def get_detail(self, job_id: str) -> str | None:
+        return self._get(self._detail, job_id)
 
     def set_detail(self, job_id: str, html: str) -> None:
-        with self._lock:
-            self._detail[job_id] = html
+        self._set(self._detail, job_id, html)
 
     def get_list(self, category_id: str) -> str | None:
-        with self._lock:
-            return self._list.get(category_id)
+        return self._get(self._list, category_id)
 
     def set_list(self, category_id: str, html: str) -> None:
-        with self._lock:
-            self._list[category_id] = html
+        self._set(self._list, category_id, html)
 
     def get_negative(self, kind: str, key: str) -> int | None:
-        with self._lock:
-            return self._negative.get(f"{kind}:{key}")
+        return self._get(self._negative, f"{kind}:{key}")
 
     def set_negative(self, kind: str, key: str, status_code: int) -> None:
-        with self._lock:
-            self._negative[f"{kind}:{key}"] = status_code
+        self._set(self._negative, f"{kind}:{key}", status_code)
 
     def clear(self) -> None:
         with self._lock:

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import typer
 
+from ._validators import is_ascii_digit_id
 from .jobcan_client import JobcanClient
 from .models import JobcanClientError, JobcanStructureChangeError, JobcanValidationError
 from .parser import parse_job_detail, parse_job_list
@@ -43,10 +44,7 @@ def render(
     fixture: Path | None = _FIXTURE_OPT,
 ) -> None:
     """Fetch and render a single job offer."""
-    # Use ASCII-only digit check; `str.isdigit()` accepts full-width '１２３'
-    # and Arabic-Indic digits, which Jobcan rejects with 404 and obscures the
-    # encoding root cause from the operator.
-    if not (job_id.isascii() and job_id.isdigit()):
+    if not is_ascii_digit_id(job_id):
         typer.echo(f"job_id must be ASCII digits, got: {job_id!r}", err=True)
         raise typer.Exit(code=1)
 
@@ -102,7 +100,7 @@ def list_(
     fixture: Path | None = _FIXTURE_OPT,
 ) -> None:
     """Fetch and render a Jobcan category listing page."""
-    if not (category_id.isascii() and category_id.isdigit()):
+    if not is_ascii_digit_id(category_id):
         typer.echo(f"category_id must be ASCII digits, got: {category_id!r}", err=True)
         raise typer.Exit(code=1)
 

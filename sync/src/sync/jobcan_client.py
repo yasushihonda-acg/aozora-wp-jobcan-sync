@@ -93,8 +93,12 @@ class JobcanClient:
                 if attempt < self.config.max_retries:
                     time.sleep(self.config.retry_base_delay * (2**attempt))
                     continue
+                # status_code=None means "network failure, the canonical URL
+                # is just as unreachable for the user as for us" — the proxy
+                # treats it like a 5xx (HTML maintenance page, not redirect).
                 raise JobcanClientError(
-                    f"Network error after {attempt + 1} attempts: {exc}"
+                    f"Network error after {attempt + 1} attempts: {exc}",
+                    status_code=None,
                 ) from exc
 
             if resp.status_code == 200:
@@ -105,10 +109,16 @@ class JobcanClient:
                 if attempt < self.config.max_retries:
                     time.sleep(self.config.retry_base_delay * (2**attempt))
                     continue
-                raise JobcanClientError(f"Transient HTTP {resp.status_code} from {url}")
+                raise JobcanClientError(
+                    f"Transient HTTP {resp.status_code} from {url}",
+                    status_code=resp.status_code,
+                )
 
             # 4xx (other than 429): permanent — do not retry
-            raise JobcanClientError(f"HTTP {resp.status_code} from {url}")
+            raise JobcanClientError(
+                f"HTTP {resp.status_code} from {url}",
+                status_code=resp.status_code,
+            )
 
         # Every loop body path returns or raises; this satisfies the type checker.
         raise AssertionError("unreachable: retry loop completed")  # pragma: no cover
