@@ -1086,7 +1086,19 @@
     linear-gradient(180deg, rgba(0, 196, 204, 0.10) 0%, transparent 80%),
     var(--color-bg-alt);
 }
-.job-detail-hero__inner { max-width: 880px; }
+.job-detail-hero__inner {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  align-items: center;
+}
+@media (min-width: 900px) {
+  .job-detail-hero__inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+    gap: var(--space-10);
+  }
+}
+.job-detail-hero__copy { max-width: 60ch; }
 .job-detail-hero__tags {
   display: flex;
   gap: var(--space-2);
@@ -1104,8 +1116,18 @@
   color: var(--color-ink);
   font-size: var(--text-lg);
   line-height: var(--lh-loose);
-  max-width: 56ch;
   margin: 0;
+}
+.job-detail-hero__media {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+  background: #fff;
+}
+.job-detail-hero__media img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .job-detail-summary {
