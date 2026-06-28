@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@600&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="../assets/css/tokens.css?v=2">
-  <link rel="stylesheet" href="../assets/css/components.css?v=2">
-  <link rel="stylesheet" href="../assets/css/pages.css?v=2">
+  <link rel="stylesheet" href="../assets/css/tokens.css?v=3">
+  <link rel="stylesheet" href="../assets/css/components.css?v=3">
+  <link rel="stylesheet" href="../assets/css/pages.css?v=3">
 
   <!-- JobPosting 構造化データ (Phase A 雛形 / Phase B で正本化) -->
   <script type="application/ld+json">
@@ -50,13 +50,6 @@
 </head>
 <body class="page-job-detail">
 
-  <div class="top-bar">
-    <div class="container top-bar__inner">
-      <span>採用専用ダイヤル <a href="tel:092-000-0000">092-000-0000</a></span>
-      <span>平日 9:00 – 18:00</span>
-    </div>
-  </div>
-
   <header class="site-header">
     <div class="container site-header__inner">
       <a href="../index.html" class="site-header__brand" aria-label="A.C.G あおぞらケアグループ 採用情報トップ">
@@ -67,9 +60,6 @@
         <ul class="site-nav__list">
           <li><a class="site-nav__link" href="../index.html">採用トップ</a></li>
           <li><a class="site-nav__link" href="../jobs.html" aria-current="page">募集職種</a></li>
-          <li><a class="site-nav__link" href="../index.html#staff">スタッフ紹介</a></li>
-          <li><a class="site-nav__link" href="../index.html#flow">選考フロー</a></li>
-          <li><a class="site-nav__link" href="../index.html#faq">よくある質問</a></li>
         </ul>
       </nav>
       <a class="site-header__cta" href="https://recruit.jobcan.jp/aozora/entry/new/90447" target="_blank" rel="noopener">応募する</a>
@@ -108,10 +98,7 @@
         <header class="job-detail-summary">
           <dl class="job-detail-summary__meta">
             <div><dt>勤務地</dt><dd>【鹿児島】あおぞらケアグループ小松原（相談支援・就労・GH）</dd></div>
-            <div><dt>給与目安</dt><dd>月給 22万 〜 32万円 (経験・資格による)</dd></div>
-            <div><dt>勤務時間</dt><dd>シフト制 / 日勤中心 (詳細下記)</dd></div>
             <div><dt>雇用形態</dt><dd>正社員</dd></div>
-            <div><dt>カテゴリ</dt><dd>生活相談員</dd></div>
             <div><dt>掲載 ID</dt><dd>#90447</dd></div>
           </dl>
           <div class="job-detail-summary__cta">
@@ -119,7 +106,7 @@
             <a class="btn btn--ghost" href="../jobs.html">他の求人を見る</a>
           </div>
           <p class="notice-bar" style="margin-top: var(--space-5);">
-            応募フォームが開けないときは、お電話 <a href="tel:092-000-0000">092-000-0000</a> または <a href="mailto:recruit@aozora-cg.com">recruit@aozora-cg.com</a> までご連絡ください。
+            応募ボタンを押すと、外部サイト (ジョブカン採用管理) の応募フォームに遷移します。
           </p>
         </header>
 
@@ -129,126 +116,7 @@
             <h2 class="job-detail-section__title">仕事内容</h2>
           </div>
           <div class="job-detail-section__body">
-            <p>利用者様・ご家族と現場・関係機関をつなぐ要となるポジションです。夜勤は希望者のみ、日中シフトが中心です。</p><ul><li>利用者様・ご家族の相談窓口</li><li>入所 / 退所手続、契約書類の整備</li><li>ケアプラン作成 (ケアマネとの連携)</li><li>外部関係機関 (病院・市役所・包括) との調整</li><li>必要に応じて介助サポート</li></ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Requirements</span>
-            <h2 class="job-detail-section__title">必須資格・経験</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <ul>
-              <li>社会福祉士・精神保健福祉士・介護福祉士・実務者研修いずれか (相談員任用要件を満たす方)</li>
-              <li>PC 基本操作 (Word / Excel / メール)</li>
-              <li>普通自動車免許 (AT 限定可)</li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Preferred</span>
-            <h2 class="job-detail-section__title">歓迎条件</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <ul>
-              <li>介護施設・福祉施設での相談員経験</li>
-              <li>ケアマネジャー資格保有 (資格手当 月 15,000 円)</li>
-              <li>地域包括ケアシステムの理解</li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Compensation</span>
-            <h2 class="job-detail-section__title">給与・待遇</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <ul>
-              <li>月給 22万 〜 32万円 (経験・資格による)</li>
-              <li>資格手当: 介護福祉士 10,000 円、社会福祉士 15,000 円、ケアマネ 15,000 円</li>
-              <li>処遇改善手当: 月 10,000 〜 30,000 円</li>
-              <li>賞与: 年 2 回 (前年実績あり)</li>
-              <li>昇給: 年 1 回</li>
-              <li>交通費: 月 30,000 円まで実費支給</li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Working Hours</span>
-            <h2 class="job-detail-section__title">勤務時間</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <p>日勤中心 (休憩 60 分)</p><ul><li>9:00 〜 18:00 (基本シフト)</li><li>週休 3 日制を選択可 (短時間正社員)</li><li>夜勤は希望者のみ</li></ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Holidays</span>
-            <h2 class="job-detail-section__title">休日・休暇</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <ul>
-              <li>年間休日 110 〜 120 日 (シフト制 / 施設による)</li>
-              <li>有給休暇 (初年度 10 日、最大 20 日)</li>
-              <li>夏季休暇 3 日、冬季休暇 3 日 (シフト調整)</li>
-              <li>慶弔休暇、産前産後休暇、育児休業 (取得実績多数)</li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Benefits</span>
-            <h2 class="job-detail-section__title">福利厚生</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <ul>
-              <li>社会保険完備 (健康保険・厚生年金・雇用保険・労災保険)</li>
-              <li>退職金制度 (勤続 3 年以上)</li>
-              <li>制服貸与 (現場職種)</li>
-              <li>研修制度: 入職時研修、ステップアップ研修、外部研修費補助</li>
-              <li>資格取得支援 (初任者研修・実務者研修・介護福祉士の費用補助)</li>
-              <li>育児・介護休業の取得実績多数、職場復帰サポート</li>
-              <li>マイカー通勤可 (駐車場あり) ※施設による</li>
-              <li>副業 OK、年齢・性別・国籍不問</li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">Workplace</span>
-            <h2 class="job-detail-section__title">施設・職場の紹介</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <p>【鹿児島】あおぞらケアグループ小松原（相談支援・就労・GH） の事業所での勤務となります。あおぞらケアグループは鹿児島・福岡を中心に、医療福祉・介護事業、施設紹介事業、IT 事業を展開しています。20 代〜 70 代まで幅広い年齢層が活躍する、長く続けられる職場です。</p>
-            <p><a href="https://aozora-cg.com/" target="_blank" rel="noopener">施設一覧 (コーポレートサイト) →</a></p>
-          </div>
-        </section>
-
-        <section class="job-detail-section">
-          <div class="job-detail-section__head">
-            <span class="job-detail-section__en">How to Apply</span>
-            <h2 class="job-detail-section__title">応募方法</h2>
-          </div>
-          <div class="job-detail-section__body">
-            <p>「この求人に応募する」ボタンから、ジョブカン応募フォーム (<code>recruit.jobcan.jp</code>) に進み、必要事項をご入力ください。</p>
-            <ul>
-              <li>応募ボタンからフォーム入力 (約 5 分)</li>
-              <li>採用担当より 3 営業日以内に書類選考結果のご連絡</li>
-              <li>書類通過後、現場見学・面接 1 〜 2 回</li>
-              <li>内定通知 → 入職日の調整</li>
-            </ul>
-            <p class="notice-bar">
-              ご応募やお問い合わせは、お電話 <a href="tel:092-000-0000">092-000-0000</a> でも承ります。応募フォームが開けない場合の代替手段としてもご利用ください。
-            </p>
+            <p>#ケア重視#未経験ブランクOK＃キャリアアップ＃定年なし#副業OK＃鹿児島・福岡鹿児島市小松原にある就労継続支援、相談支援、共同生活援助(GH定員20名)が一体となったホームにて一緒に働きませんか？20～70代まで幅広い年齢層の方が活躍中です。今までのご経験やスキルを当社で発揮して頂ける方を募集しています。【仕事内容】相談支援業務全般相談支援事業所にて、障がい者の方々の支援計画を作成します。当職場では現在2名が従事しておりますので、経験が少なく不安があられる方でも周りのスタッフに相談しながら進めていくことができます。</p>
           </div>
         </section>
 
@@ -258,13 +126,12 @@
             <div>
               <span class="eyebrow" style="color: rgba(255,255,255,0.78);">Apply Now</span>
               <h2 class="entry-cta__title">この求人に応募する</h2>
-              <p class="entry-cta__lead">ジョブカン応募フォームへ進みます。<br>5 分程度で完了します。</p>
+              <p class="entry-cta__lead">ジョブカン応募フォームへ進みます。</p>
             </div>
             <div>
               <div class="entry-cta__actions">
                 <a class="btn btn--on-dark" href="https://recruit.jobcan.jp/aozora/entry/new/90447" target="_blank" rel="noopener">エントリーフォームへ進む</a>
               </div>
-              <p class="entry-cta__alt">フォームが開けないときは <a href="tel:092-000-0000">お電話 (092-000-0000)</a> または <a href="mailto:recruit@aozora-cg.com">recruit@aozora-cg.com</a> まで。</p>
             </div>
           </div>
         </section>
@@ -295,21 +162,6 @@
               </li>
           </ul>
         </div>
-
-        <div class="aside-card">
-          <h3 class="aside-card__title">問い合わせ</h3>
-          <div class="aside-card__contact">
-            <a href="tel:092-000-0000">
-              <span>採用専用ダイヤル</span>
-              <strong>092 – 000 – 0000</strong>
-            </a>
-            <a href="mailto:recruit@aozora-cg.com">
-              <span>採用担当メール</span>
-              <strong style="font-size: var(--text-base);">recruit@aozora-cg.com</strong>
-            </a>
-          </div>
-          <p style="font-family: var(--font-display); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-muted); margin: var(--space-4) 0 0;">平日 9:00 – 18:00 / 土日祝休</p>
-        </div>
       </aside>
     </div>
   </main>
@@ -330,19 +182,6 @@
           <ul class="site-footer__nav">
             <li><a href="../index.html">採用トップ</a></li>
             <li><a href="../jobs.html">募集職種一覧</a></li>
-            <li><a href="../index.html#staff">スタッフ紹介</a></li>
-            <li><a href="../index.html#flow">選考フロー</a></li>
-            <li><a href="../index.html#faq">よくある質問</a></li>
-            <li><a href="../index.html#blog">育休ブログ</a></li>
-            <li><a href="../index.html#news">お知らせ・コラム</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Contact</h4>
-          <ul class="site-footer__nav">
-            <li><a href="tel:092-000-0000">092-000-0000</a></li>
-            <li><a href="mailto:recruit@aozora-cg.com">recruit@aozora-cg.com</a></li>
-            <li style="color: var(--color-faint); font-size: var(--text-xs); margin-top: var(--space-2);">平日 9:00 – 18:00</li>
           </ul>
         </div>
       </div>
@@ -355,7 +194,6 @@
 
   <div class="entry-cta-bar" role="region" aria-label="固定エントリーバー">
     <a class="btn btn--primary" href="https://recruit.jobcan.jp/aozora/entry/new/90447" target="_blank" rel="noopener">応募する</a>
-    <a class="btn btn--ghost" href="tel:092-000-0000" aria-label="電話で問い合わせる">電話</a>
   </div>
 
 </body>
