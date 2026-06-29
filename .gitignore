@@ -25,3 +25,6 @@ generated-images/
 
 # Serena local cache
 .serena/
+
+# mockup-rebuild ヘルパーのローカル出力 (再生成可能、機微情報なしだが冗長)
+scripts/mockup-rebuild/jobs_data.json
