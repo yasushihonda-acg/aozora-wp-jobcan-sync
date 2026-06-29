@@ -95,9 +95,11 @@ for i in $(seq 1 $MAX); do
     -F "n=1")
   echo "[${MODE}/${CATEGORY:-sheet}] attempt ${i}: HTTP ${HTTP_CODE}"
   [ "$HTTP_CODE" = "200" ] && break
-  echo "[${MODE}/${CATEGORY:-sheet}] retry in ${DELAY}s"
-  sleep "$DELAY"
-  DELAY=$((DELAY * 2))
+  if [ "$i" -lt "$MAX" ]; then
+    echo "[${MODE}/${CATEGORY:-sheet}] retry in ${DELAY}s"
+    sleep "$DELAY"
+    DELAY=$((DELAY * 2))
+  fi
 done
 
 if [ "$HTTP_CODE" != "200" ]; then
