@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # aozora-illust: メインキャラ厳密再現で画像生成
 # usage:
-#   gen.sh --mode=single --category=<key> --scene="<英語シーン記述>" [--outfit="<override>"]
-#   gen.sh --mode=sheet [--scene="<6 パネル指定>"]
+#   gen.sh --mode=single --category=<key> --scene="<英語シーン記述>" [--outfit="<override>"] [--ref-mode=both|face-only]
+#   gen.sh --mode=sheet [--scene="<6 パネル指定>"] [--ref-mode=both|face-only]
+#
+# --ref-mode:
+#   both (default) — baseline (full scene) + close-up を両方 reference に渡す。
+#                    キャラ同一性は最強だが、reference の構図 (タブレット相談等) を強く継承する。
+#   face-only      — close-up (顔のみ) だけを渡す。構図は prompt のシーン記述で自由制御可。
+#                    職種別シーン差別化が必要なときに使う (実証 2026-06-30)。
 set -u
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -21,17 +27,24 @@ MODE="single"
 CATEGORY=""
 SCENE=""
 OUTFIT_OVERRIDE=""
+REF_MODE="both"
 for arg in "$@"; do
   case "$arg" in
     --mode=*)     MODE="${arg#--mode=}" ;;
     --category=*) CATEGORY="${arg#--category=}" ;;
     --scene=*)    SCENE="${arg#--scene=}" ;;
     --outfit=*)   OUTFIT_OVERRIDE="${arg#--outfit=}" ;;
+    --ref-mode=*) REF_MODE="${arg#--ref-mode=}" ;;
     -h|--help)
-      sed -n '2,6p' "$0"; exit 0 ;;
+      sed -n '2,12p' "$0"; exit 0 ;;
     *) echo "ERROR: unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
+
+case "$REF_MODE" in
+  both|face-only) ;;
+  *) echo "ERROR: --ref-mode must be 'both' or 'face-only' (got: $REF_MODE)" >&2; exit 2 ;;
+esac
 
 FACE_SPEC="$(cat "$PROMPTS_DIR/face-spec.txt")"
 STYLE_SPEC="$(cat "$PROMPTS_DIR/style-spec.txt")"
@@ -81,13 +94,19 @@ KEY=$(gcloud secrets versions access latest --secret=openai-api-key --project=op
 MAX=3
 DELAY=10
 HTTP_CODE=""
+REF_ARGS=()
+if [ "$REF_MODE" = "both" ]; then
+  REF_ARGS+=(-F "image[]=@${REF_FULL}" -F "image[]=@${REF_FACE}")
+else
+  REF_ARGS+=(-F "image[]=@${REF_FACE}")
+fi
+
 for i in $(seq 1 $MAX); do
   HTTP_CODE=$(curl -s -o "$RESP" -w "%{http_code}" \
     -X POST "https://api.openai.com/v1/images/edits" \
     -H "Authorization: Bearer $KEY" \
     -F "model=gpt-image-2" \
-    -F "image[]=@${REF_FULL}" \
-    -F "image[]=@${REF_FACE}" \
+    "${REF_ARGS[@]}" \
     -F "prompt=${PROMPT}" \
     -F "size=1536x1024" \
     -F "quality=high" \
