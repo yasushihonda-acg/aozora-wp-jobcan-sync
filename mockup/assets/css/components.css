@@ -1445,6 +1445,36 @@
 }
 
 /* ============================================================
+   Job detail: 「← 求人一覧へ戻る」 戻りリンク (hero 直上、breadcrumb の上)
+   ============================================================ */
+.job-detail__back-nav {
+  margin: 0 0 var(--space-3);
+}
+.job-detail__back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 8px 10px;
+  background: #fff;
+  border: 1.5px solid var(--color-accent);
+  color: var(--color-accent-dark);
+  border-radius: 999px;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+.job-detail__back-link:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+.job-detail__back-arrow {
+  font-size: 1.15em;
+  line-height: 1;
+  font-weight: var(--weight-bold);
+}
+
+/* ============================================================
    Job detail: hashtag chip group (ハッシュタグを本文から分離)
    ============================================================ */
 .job-hashtags {
