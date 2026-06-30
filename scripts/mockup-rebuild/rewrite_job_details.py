@@ -522,6 +522,24 @@ def rewrite_file(path: Path, job: dict) -> bool:
         build_new_main_html(job)
     )
 
+    # 「← 求人一覧へ戻る」 ナビを breadcrumb の上に挿入 (冪等)
+    breadcrumb = soup.find("p", class_="breadcrumb")
+    if breadcrumb is not None:
+        # 既存の back-nav があれば一旦削除して入れ直す (冪等のため)
+        existing = soup.find("nav", class_="job-detail__back-nav")
+        if existing is not None:
+            existing.decompose()
+        back_html = (
+            '<nav class="job-detail__back-nav" aria-label="ナビゲーション">'
+            '<a class="job-detail__back-link" href="../jobs.html">'
+            '<span class="job-detail__back-arrow" aria-hidden="true">←</span>'
+            "求人一覧へ戻る"
+            "</a>"
+            "</nav>"
+        )
+        back_nav = BeautifulSoup(back_html, "html.parser")
+        breadcrumb.insert_before(back_nav)
+
     # hero copy 置換
     hero = soup.find("div", class_="job-detail-hero__copy")
     if not hero:
