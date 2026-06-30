@@ -3,7 +3,8 @@
 - description → 整形リード文 (body_html の先頭、ハッシュタグ羅列除去 + 100-130 字に短縮)
 - meta-grid dl 追加 (月給 + 年休、salary/休日・休暇 から自動抽出)
 - address → 「市区名 + 補足」形式に整形
-- thumbnail / labels / title は既存維持
+- thumbnail → カテゴリ別 variant を cycle (同カテゴリ内で絵を分散)
+- labels / title は既存維持
 
 冪等: 既に新デザインの 3 件カード (1777023/2199420/452341) も同じパイプラインで再生成し統一感を出す。
 """
@@ -27,6 +28,31 @@ HOLIDAY_RE = re.compile(r"年間休日\s*(\d+)\s*日")
 
 # ハッシュタグ連続羅列 (先頭) を除去
 HASHTAG_HEAD_RE = re.compile(r"^[#＃][^#＃◆■★●※【\n]+(?:\s*[#＃][^#＃◆■★●※【\n]+)*\s*")
+
+# 求人ラベル → カテゴリ key 対応 (job-list-card__label 1 件目を見て判定)
+LABEL_TO_CATEGORY = {
+    "介護職": "care",
+    "相談員": "consultant",  # 既存 illust-job-nurse.png は使用停止、consultant variant に置換
+    "事務職": "office",
+    "ITエンジニア職": "it",
+}
+
+# カテゴリ別 thumbnail variant 一覧 (cycling 順)
+CATEGORY_VARIANTS: dict[str, list[str]] = {
+    "care": ["illust-job-care.png", "illust-job-care-2.png", "illust-job-care-3.png"],
+    "consultant": ["illust-job-consultant.png", "illust-job-consultant-2.png"],
+    "office": ["illust-job-office.png", "illust-job-office-2.png"],
+    "it": ["illust-job-it.png"],
+}
+
+
+def detect_category(card) -> str | None:
+    """カードの 1 件目 label からカテゴリ key を判定."""
+    label = card.find("li", class_="job-list-card__label")
+    if not label:
+        return None
+    text = label.get_text(strip=True)
+    return LABEL_TO_CATEGORY.get(text)
 
 
 def yen_to_man(yen_str: str) -> str:
@@ -152,6 +178,9 @@ def main() -> None:
     cards = soup.find_all("li", class_="job-list-card")
     print(f"Found {len(cards)} cards in jobs.html")
 
+    # カテゴリ別 thumbnail cycling 用カウンタ
+    category_counters: dict[str, int] = {k: 0 for k in CATEGORY_VARIANTS}
+
     updated = 0
     for card in cards:
         link = card.find("a", class_="job-list-card__link")
@@ -170,6 +199,16 @@ def main() -> None:
         body = link.find("div", class_="job-list-card__body")
         if not body:
             continue
+
+        # thumbnail src cycling (カテゴリ判定 → variant を順に割当)
+        category = detect_category(card)
+        if category and category in CATEGORY_VARIANTS:
+            thumb_img = link.find("img", class_="job-list-card__thumb-img")
+            if thumb_img:
+                variants = CATEGORY_VARIANTS[category]
+                idx = category_counters[category] % len(variants)
+                thumb_img["src"] = f"assets/img/{variants[idx]}"
+                category_counters[category] += 1
 
         # address 更新
         addr_el = body.find("p", class_="job-list-card__address")
@@ -210,6 +249,7 @@ def main() -> None:
 
     JOBS_HTML.write_text(str(soup), encoding="utf-8")
     print(f"\nUpdated {updated}/{len(cards)} cards in {JOBS_HTML}")
+    print("Thumbnail cycling counts:", category_counters)
 
 
 if __name__ == "__main__":
