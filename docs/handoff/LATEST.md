@@ -1,91 +1,82 @@
-# Handoff — 2026-06-19 朝 (Phase 2B-exec 実 GCP デプロイ完了セッション)
+# Handoff — 2026-06-30 (Phase A モック整形 5 PR + 機械生成パイプライン構築)
 
 ## TL;DR
 
-本セッションで **Phase 2B-exec (実 GCP リソース作成 + Cloud Run deploy + 動作確認) を完遂**。Service URL `https://aozora-sync-flry56mxwa-an.a.run.app` が稼働中、`/jobs/{id}` と `/jobs/?category_id=...` は HTTP 200 + 自社 BEM デザインで応答。実 deploy で検出した 4 件の修正点を `infra/README.md` に反映 + 1 件の known issue (`/healthz` GFE 404) を記録。次セッションは **(a) `/healthz` rename** または **(b) WP 統合 (server-to-server fetch ターゲット組込)** から本田様の指示で着手可能。
+本セッションで **Phase A モック (jobs.html + 詳細 34 件) を ジョブカン正本データで全面整形**。一覧/詳細とも給与・勤務時間・年間休日・福利厚生・応募資格・選考フローを表示、ハッシュタグ羅列+本文ベタ流しを解消。詳細ページに「← 求人一覧へ戻る」ナビ追加。sync の parser を経由した機械生成スクリプト (`scripts/mockup-rebuild/`) を構築、Phase A 中の追加対応 / Jobcan 更新反映に再利用可能。
 
-🔗 決裁者向け公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
-🚀 Cloud Run service: https://aozora-sync-flry56mxwa-an.a.run.app
+🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
+🚀 Cloud Run (Phase 2B-exec): https://aozora-sync-flry56mxwa-an.a.run.app (前セッションで稼働開始)
 
 ## 今セッションで完了したこと
 
-### Phase 2B-exec 実行結果 (6 step)
+### マージ済 PR (5 件)
 
-| Step | 結果 | 検出された修正点 |
+| PR | タイトル | 内容 |
 |---|---|---|
-| 1. API 有効化 | ✅ 成功 | (なし) |
-| 2. AR repo + cleanup policy | ✅ 成功 | (なし) |
-| 3. docker build/push | ✅ (2 修正) | (a) docker push に `CLOUDSDK_ACTIVE_CONFIG_NAME` prefix なしで permission denied (bash subshell で direnv 不発火) (b) Apple Silicon の `docker build` は arm64 image を生成、Cloud Run が拒否 → buildx + `--platform linux/amd64 --push` で解決 |
-| 4. Cloud Run deploy | ✅ (1 修正) | `cpu=0.5` + `concurrency=10` は Cloud Run 仕様で不可 (cpu<1 は concurrency=1 必須) → `cpu=1` で解決 |
-| 5. 動作確認 | ⚠️ partial | `/jobs/1777023` HTTP 200 (6755 bytes, sync-job-detail BEM 確認), `/jobs/?category_id=18773` HTTP 200 (21482 bytes, sync-job-list 確認), `/healthz` HTTP 404 (GFE intercepted、known issue) |
-| 6. Billing alert | ⏭ 手動 | billing account `01F6B4-48EE02-E5EFB8` に紐付け済、$5 alert 設定は本田様の Console 手動操作 |
+| #34 | `aozora-illust --ref-mode=face-only + illust-job v4` | スキルに `--ref-mode=both\|face-only` 追加、close-up reference のみ渡すモード追加。illust-job 4 枚 v4 (office/it シーン差別化成功、care/nurse は単独 portrait + カード見出しテキストで職種識別) |
+| #35 | `求人カード/詳細ページの情報設計刷新 (3 件試作)` | 詳細 3 件 (2199420 介護OPEN / 1777023 介護博多 / 452341 IT) を hero (タグ+リード+ハッシュタグ chip) + summary 8 項目 + 仕事内容 + 応募資格 + 待遇・福利厚生 + 選考フロー で再構成。CSS コンポーネント (`.job-hashtags` / `.is-accent` / `.job-benefits` / `.job-qualification__row` / `.selection-flow__step` / `.job-card__meta-grid`) を `components.css` に追加 |
+| #36 | `jobs.html 一覧 34 件カードを正本データで統一` | sync の `JobcanClient + parser` で 34 件 fetch (0 errors) → ヘルパー (`scripts/mockup-rebuild/fetch_all.py` + `rewrite_jobs_html.py`) で機械整形 (給与/年休 chip、市区名 ／ 施設名、ハッシュタグ除去リード文) |
+| #37 | `job-detail 34 件を機械生成パイプラインで統一` | `scripts/mockup-rebuild/rewrite_job_details.py` 新規作成、34 件詳細を統一パターンで再生成 (試作 3 件も上書き)。aside/footer/header/breadcrumb/entry-cta は維持 |
+| #38 | `詳細ページに「← 求人一覧へ戻る」ボタンを 34 件全件追加` | hero 直上にターコイズ pill ボタン追加 (CSS `.job-detail__back-link`)、breadcrumb は維持。スクリプト改修 + 34 件再生成で冪等対応 |
 
-### Cloud Run 稼働状態
+### 確立した機械生成パイプライン
 
-- Service URL (新形式、推奨): `https://aozora-sync-flry56mxwa-an.a.run.app`
-- Service URL (project number 形式): `https://aozora-sync-1084369586348.asia-northeast1.run.app`
-- 両 URL とも同じ Cloud Run service にルーティングされ HTTP 200 を返す
-- Revision: `aozora-sync-00002-724` (traffic 100%、`cpu=1` / `concurrency=10` / `memory=512Mi` / `JOBCAN_FETCH_ENABLED=true`)
-- 想定月額: **約 $0.01** (Cloud Run 無料枠内 + AR cleanup policy keep-latest-2)
+```
+scripts/mockup-rebuild/
+├── README.md                  # 使い方
+├── job_ids.txt                # 対象 34 件 ID
+├── fetch_all.py               # JobcanClient + parser で正本 fetch → jobs_data.json
+├── rewrite_jobs_html.py       # 一覧 jobs.html カード再生成
+└── rewrite_job_details.py     # 詳細 34 件再生成 (hero/summary/sections + back-nav)
+```
 
-### infra/README.md 修正 (5 点を本 PR に集約)
+- Phase B (Cloud Run + sync の `job_list.html` / `job_detail.html` template) 稼働後は本ヘルパーは不要
+- Phase A 中の追加ジョブ / Jobcan 側更新 / 文言調整時に再実行可能 (冪等)
 
-1. Step 3 全コマンドに `CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync` prefix を明示
-2. Step 3b: `docker build` → `docker buildx build --platform linux/amd64 --push` (cross-build + push 一括)
-3. Step 4: `cpu=0.5` → `cpu=1` (Cloud Run 仕様準拠)
-4. Step 5: `/healthz` 期待値 と 実測値 (404) を併記、§7 known issues に詳細
-5. Step 6: billing account ID `01F6B4-48EE02-E5EFB8` を明示
+### 創作有無の判定 (本田様 2 度の確認質問への対応)
+
+- **全数値・福利厚生・休暇制度・必須/歓迎資格・選考フロー**: ジョブカン正本一致 (sync の parser.py 経由)
+- **リード文 / 仕事内容の箇条書き分解**: `body_html` の機械整形のみ (ハッシュタグ羅列除去 / 〇/□/●/★ マーカー → `<li>` 変換 / 句点切り)
+- **"必須"/"歓迎"/"休暇制度" 等のラベル**: 構造ラベル (機械生成側で付与)
+- **address の「市区名 ／ 施設名」形式**: 機械抽出 (extras.募集拠点 から正規表現) + 連結のみ
 
 ## 重要な設計判断 (本セッション)
 
-### `/healthz` 404 は WP 統合に影響なし → 後日対応
+### アプローチ A (段階的: 3 件試作 → 34 件統一) → さらに展開して全件
 
-- 採用サイト本番運用で呼ばれる URL は `/jobs/{id}` と `/jobs/?category_id=...` の 2 系統のみ
-- `/healthz` はデバッグ・監視用 (本田様向け)、欠落しても core 機能影響ゼロ
-- 原因 (GFE / Cloud Run 予約 path の可能性) の真因究明より、`/healthz` → `/health` 等への rename + redeploy で実用解決の方が ROI 高い
-- Phase 2B-exec の主目的 (Jobcan proxy が稼働して自社 BEM HTML を返す) は達成済
+- 当初 PR #35 で「試作 3 件のみ改修、残り 31 件は Phase B」と決定
+- 本田様指摘 (Image #4): 一覧の「給与 chip ありなしバラつき」が気になる → PR #36 で 34 件統一
+- 本田様指摘 (Image #5/#6): 詳細ページの 31 件もハッシュタグ羅列のまま → PR #37 で 34 件統一
+- 本田様指摘 (Image #7): 「求人一覧に戻る」 → PR #38 で navigation 補強
+- **結論**: 二重投資懸念より「Phase A 決裁者承認向けに今すぐ完成度を出す」を優先、機械生成パイプライン化により Phase B 移行時も負担最小
 
-## 簡素化後のロードマップ
+### care/nurse 詳細シーン差別化を断念 → カード見出しテキストで識別
 
-```
-[完了] Phase 2A.1 + 2A.2 + 2A.3 (アプリ層完成、cleanup 済)
-   ↓
-[完了] Phase 2B リポジトリ側 (infra/README.md + cleanup-policy.json)
-   ↓
-[完了] Phase 2B-exec (実 GCP デプロイ、本セッション)
-   ↓
-[Phase 2B 追補 / Phase 3 WP 統合] (本田様の指示で着手):
-  (a) /healthz rename + redeploy (10 分): app.py の path 変更 → buildx push → gcloud run deploy → curl 確認
-  (b) WP 統合 (採用ページから server-to-server fetch): WP 側 PHP (or WP プラグイン) で
-      https://aozora-sync-flry56mxwa-an.a.run.app/jobs/{id} を fetch → 自社採用ページに埋込
-      応募ボタンは https://recruit.jobcan.jp/aozora/entry/new/{id} へ直リンク (温存)
-  (c) Billing budget alert $5 を Cloud Console UI で設定
-   ─── Phase 4 (公式照会回答後、本番ドメイン切替): recruit.aozora-cg.com マッピング ───
-```
+- PR #34 で `--ref-mode=face-only` を導入したが、close-up reference のスタイル支配が強く、prompt で「お茶/車椅子/聴診器/医療カート」を盛っても 2 回試行とも単独 portrait に収束
+- 本田様判断 (AskUserQuestion): office/it だけ採用、care/nurse は単独 portrait + カード見出しテキスト識別
 
 ## 次のアクション (3 分割構造)
 
 ### 即着手タスク
 
-**即着手タスクなし**。下記いずれも条件待ち (本田様の優先順位指示が trigger)。
+**即着手タスクなし**。本セッションで本田様指摘事項 4 件を全て解消。次の着手は本田様の優先指示が trigger。
 
-### 条件待ち (明示 trigger 付き、3 件)
+### 条件待ち (明示 trigger 付き、4 件)
 
-| # | 項目 | A/B/C | trigger | 充足時のタスク |
-|---|------|-------|---------|--------------|
-| 1 | **/healthz → /health rename + redeploy** | C | 本田様 → 「/healthz 直して」明示指示 | `sync/src/sync/app.py` の `@app.get("/healthz")` を `/health` に変更 → pytest 確認 → buildx push → gcloud run deploy → curl 確認 (15-20 分) |
-| 2 | **WP 統合 (server-to-server fetch 組込)** | C | 本田様 → 「WP に Cloud Run の URL 組込開始」明示指示 + WP 環境のアクセス情報 | WP 側で `https://aozora-sync-flry56mxwa-an.a.run.app/jobs/{id}` を fetch する PHP/プラグインを実装、採用ページに埋込、応募ボタン動作確認 (時間は WP 構成次第) |
-| 3 | **Billing budget alert $5 設定** | A | 本田様 → 「設定したい」明示指示 (Console UI 操作なので本田様が直接実施推奨) | https://console.cloud.google.com/billing/01F6B4-48EE02-E5EFB8/budgets を開いて $5 alert を作成 (5 分) |
+| # | 項目 | カテゴリ | trigger | 充足時のタスク |
+|---|------|---------|---------|--------------|
+| 1 | **Phase A 決裁者承認の取得** | 新規価値創出 | 本田様 → 関係者へ公開モック URL + Loom ウォークスルー (5 分) を共有、承認/リビジョン回答到来 | リビジョン依頼があれば指示内容に応じて再整形 (機械生成スクリプト再実行で素早く対応可能) |
+| 2 | **`/healthz` rename + redeploy** | 守り (修正) | 本田様 → 「/healthz 直して」明示指示 | `sync/src/sync/app.py` の `@app.get("/healthz")` を `/health` に変更 → pytest 確認 → buildx push → gcloud run deploy → curl 確認 (15-20 分、前 handoff から継続) |
+| 3 | **WP 統合 (Cloud Run server-to-server fetch 組込)** | 新規価値創出 | 本田様 → 「WP に Cloud Run の URL 組込開始」明示指示 + WP 環境のアクセス情報 | WP 側で `https://aozora-sync-flry56mxwa-an.a.run.app/jobs/{id}` を fetch する PHP/プラグインを実装、採用ページに埋込、応募ボタン動作確認 |
+| 4 | **Billing budget alert $5 設定** | 整理・点検 | 本田様 → 「設定したい」明示指示 (Console UI 操作なので本田様直接実施推奨) | https://console.cloud.google.com/billing/01F6B4-48EE02-E5EFB8/budgets を開いて $5 alert 作成 (5 分) |
 
-### 却下候補 (記録のみ、過去セッションの過剰設計記録)
+### 却下候補 (記録のみ)
 
 | # | 項目 | 着手しない理由 |
 |---|------|--------------|
-| 1 | Cloud Run custom domain mapping | WP 統合前提のため不要 (本田様 2026-06-18 判断) |
-| 2 | Phase 2B-0 / 2B-1 / 2B-2 の 3 分割 | 2026-06-18 過剰設計と判定、廃止 (PR #23) |
-| 3 | Terraform / WIF / GitHub Actions auto-deploy | 採用サイト規模では過剰、`gcloud run deploy` 手動で十分 |
-| 4 | Memorystore / Cloud Armor / Cloud LB / Monitoring uptime | トラフィック実績ベースで Phase 2B-exec 完了後に再評価、現時点では不要 |
-| 5 | `/healthz` 404 の真因究明 (Cloud Run 予約 path 調査) | rename で実用解決可能、真因究明より ROI 低い |
+| 1 | mockup の追加 UI 機能 (検索フィルター高度化、お気に入り保存等) | Phase A 範囲外、Phase B 以降の WP プラグインで実装する想定。AI 起点の新規価値創出案発想は 4 原則 §1 違反 |
+| 2 | `scripts/mockup-rebuild/` の Phase B template 移植 (parser に「ハッシュタグ抽出 / 本文構造化」拡張) | Phase B 着手時の作業、現時点 trigger なし |
+| 3 | 詳細ページの aside (関連求人) 表示ロジック改修 (現状手書きで関連 3 件固定) | 現状で機能、Phase B 着手時の作業 |
 
 ## Issue Net 変化
 
@@ -93,25 +84,32 @@
 - 起票数: 0 件
 - Net: 0 件
 
+(本セッションは本田様指摘事項に逐次対応した 5 PR の連続、Issue 化対象なし)
+
 ## 環境状態
 
-- Git: clean (本 PR merge 後)、main 同期想定
-- Cloud Run service: `aozora-sync` 稼働中 (revision `00002-724`、traffic 100%)
-- AR repository: `asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest` (image manifest list `sha256:78cb05414749...498db1a8`)
-- Billing: project 紐付け済 (billing account `01F6B4-48EE02-E5EFB8`)、budget alert 未設定
-- 残留プロセス: なし
-- pytest: 115 件全 PASS (Phase 2A.3 完了時点、本 PR では実コード変更なし)
-- ruff / pyright: clean
+| 項目 | 状態 |
+|---|---|
+| Git | clean、main 同期 (本 PR merge 後) |
+| 最新 commit | `e494102` (#38 back-link 追加) |
+| Cloud Run service | `aozora-sync` 稼働中 (前セッション #28 で deploy 済、revision `00002-724` traffic 100%) |
+| GitHub Pages | `pages-build-deployment` success (本セッション中も逐次反映) |
+| 残留プロセス | なし |
+| OPEN PR | 0 件 (handoff PR を除く) |
+| OPEN Issue | 0 件 |
+
+## 構造的整合性チェック
+
+| チェック対象 | 結果 |
+|---|---|
+| `/impact-analysis` (型・共有ロジック・設定) | ⏭️スキップ (HTML/CSS/Python ヘルパースクリプトの変更のみ、型・共有ロジック変更なし) |
+| `/new-resource` (新規テーブル/API) | ⏭️スキップ (該当なし) |
+| `/trace-dataflow` (データフロー実装) | ⏭️スキップ (mockup 静的ファイル整形、データフローなし) |
+| グローバル memory scope チェック | ⏭️スキップ (`memory/` 配下変更なし) |
+| 同根再発スキャン | ✅ 該当なし (本セッション feat: PR のみ、修正 PR 無し) |
+| 対症療法判定 | ⏭️スキップ (修正 PR 無し) |
+| 残留プロセス | ✅ なし |
 
 ## 最終結論
 
-🛑 **executor 領分の作業ゼロ、セッション終了推奨**
-
-- OPEN PR: 1 件 (本 PR、merge 後 0 件想定)
-- OPEN Issue: 0 件
-- 即着手タスク: 0 件
-- 条件待ち: 3 件 (いずれも本田様の指示が trigger)
-- 却下候補: 5 件 (過剰設計巻き戻し + /healthz 真因究明)
-- Phase 2B-exec の主目的 (Cloud Run で Jobcan proxy が稼働) は達成
-
-根拠: [[feedback_idle_session_skip_housekeeping]] (真の executor タスクゼロ + 条件待ち trigger 未充足 = housekeeping を能動提案せず終了)
+✅ **セッション終了可** — 本田様指摘事項 4 件 (Image #4 一覧バラつき / Image #5,#6 詳細ハッシュタグ羅列 / Image #7 戻る機能) 全て解消、PR #34-#38 マージ済、Git clean、OPEN Issue 0 件、即着手タスク 0 件、残留プロセスなし。次セッションは条件待ち 4 件の trigger 充足時 (本田様の明示指示) に着手。
