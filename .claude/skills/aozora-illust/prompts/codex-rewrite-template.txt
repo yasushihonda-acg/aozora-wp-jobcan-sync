@@ -1,0 +1,62 @@
+# Task
+
+あなたは OpenAI gpt-image-2 `/v1/images/edits` エンドポイントの prompt engineering 専門家です。
+ChatGPT UI が内部で行っている prompt rewriting (GPT-4o 経由) と同等の最適化を、
+以下の SCENE 記述に対して適用してください。
+
+# 前提条件
+
+このシステムは以下の構造で prompt を組み立てます:
+
+[FACE_SPEC] (固定、変更不可)
+[STYLE_SPEC] (固定、変更不可)
+[OUTFIT_SPEC] (引数で override 済み、変更不可)
+[SCENE_LINE] ← ここを最適化してほしい
+
+reference 画像:
+- baseline.png: フルシーン (キャラ + 高齢者 + タブレット相談、ターコイズスクラブ)
+- closeup.png: キャラの顔クローズアップ portrait
+
+ref-mode=both で両方の画像を渡しています。
+モデルが reference の構図に強く引きずられがちで、過去 4 ラウンド試行した結果:
+- face-only mode: 常に正面 portrait に収束 (どんな構図ディレクティブも無視)
+- both mode + outfit override + multi-person 記述: ようやく multi-person scene が出るようになった
+
+# 既存生成結果の品質 (Claude 直接記述版)
+
+- ✅ multi-person scene の生成成功
+- ✅ 服装維持
+- ✅ キャラ同一性 OK
+- △ ChatGPT UI 直接生成と比べると「もう一歩上の品質感」に届かない
+
+# 実証されたコツ (2026-06-30 実験で効果確認済)
+
+以下の表現を SCENE に含めると、より高品質な出力が得られる:
+
+- "Create a wide, eye-level environmental scene" (環境シーン宣言)
+- "showing exactly N people" (人数厳密化)
+- "small, natural variations in pose, expression, age, and appearance" (人物個性化)
+- "candid, welcoming, lively, and professionally photographed" (雰囲気指定)
+- "balanced visual emphasis across the entire group rather than a portrait-centered composition" (構図平準化)
+- 環境描写 (窓・植物・床・家具) を 1-2 文で含める
+
+# 入力 SCENE
+
+__INPUT_SCENE__
+
+# 依頼
+
+上記 SCENE 記述を、ChatGPT UI が行うような自然な英語表現 + 構図描写 + 雰囲気描写の
+バランスで rewrite してください。
+
+制約:
+- 元の意図 (人数・構図・動作) を維持
+- 服装指定文言は OUTFIT_SPEC 側で既に強制されているので SCENE には書かない
+- face-spec / style-spec / outfit-spec の内容を繰り返さない (これらは別途 prepend される)
+- 過剰に長くしない (200-400 単語推奨)
+- 出力は最適化後の SCENE 文字列のみ。説明文や前置きは不要。
+- **必ず以下のマーカー間に最適化済 SCENE を 1 つだけ書く** (パーサーが marker 間を抽出する):
+
+<<<CODEX_SCENE_START>>>
+(最適化後の SCENE をここに 1 段落以上で書く)
+<<<CODEX_SCENE_END>>>
