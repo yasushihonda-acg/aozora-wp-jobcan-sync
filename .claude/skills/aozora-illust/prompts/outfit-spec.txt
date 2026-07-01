@@ -1,10 +1,19 @@
-OUTFIT (default — solid black polo shirt):
-- Solid pure black polo shirt, short sleeves, with a small two- or three-button placket at the front.
-- NO accent color, NO turquoise piping, NO trim on the collar or sleeves. The shirt is completely black, single-color, plain.
-- White ID lanyard with a clear ID card hanging at chest.
-- IMPORTANT: The reference images show a turquoise V-neck scrub — IGNORE that outfit color entirely. The OUTPUT must wear a fully solid black polo shirt as described above (no accent colors anywhere on the shirt). Keep the same face, hair, glasses, earring, and skin tone from the reference; only the top garment changes.
+OUTFIT (default — BLACK V-neck scrub with BLUE lanyard):
+- Solid BLACK V-neck scrub top, short sleeves, plain single-color (pure black or very dark charcoal).
+- NO piping, NO trim, NO accent color on the collar or sleeves. The scrub is completely black.
+- One chest pocket on the left side (subtle, matching the baseline).
+- BLUE LANYARD around the neck (bright cobalt / royal blue, clearly visible against the black scrub) with a transparent-case ID badge hanging at chest level.
+- IMPORTANT: The character's identity (face, hair, glasses, earring, skin tone) must match the reference exactly. Only the scene, action, and secondary props change.
 
 OUTFIT VARIATIONS (allowed when the scene calls for it — face / hair / glasses / earring must still match):
-- Office: solid black polo with a soft charcoal-gray or pale beige cardigan over it (cardigan itself is also free of bright accent colors).
-- Management: tailored jacket in a neutral muted tone (charcoal / dark navy / beige) worn over the solid black polo.
-- Casual visit / blog: solid black polo only, no lanyard.
+- Office: black scrub with a neutral charcoal or beige cardigan over it (cardigan itself is a subdued neutral tone, no bright accent).
+- Management / consultant: tailored jacket in a neutral muted tone (charcoal / dark navy / beige) worn open over the black scrub.
+- Casual visit / blog: black scrub only, lanyard optional.
+- Home-visit nurse: black scrub with a small crossbody bag or medical kit, blue lanyard maintained.
+
+FORBIDDEN:
+- Turquoise / teal / cyan colored scrubs (this is the OLD baseline, do not use).
+- White piping or trim on the scrub.
+- White or grey lanyard (must be blue).
+- Bright accent colors on the shirt itself (only the lanyard is bright).
+- Polo shirts (this is a scrub with V-neck, not a polo with button placket).

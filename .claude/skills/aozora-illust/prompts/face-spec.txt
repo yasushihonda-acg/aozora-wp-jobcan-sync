@@ -1,14 +1,22 @@
 Reproduce the EXACT SAME RECURRING CHARACTER from the reference images. Identity must be perfectly preserved.
 
 CHARACTER (must match precisely):
-- Japanese woman, apparent age early-to-mid 30s. MATURE, composed, intelligent and warm. NOT a young woman in her 20s, NOT child-like, NOT innocent-cheerful.
-- Eyes: ELONGATED ALMOND shape (not round, not over-large). Outer corners STRONGLY DOWNTURNED (gently sad-looking outer eyeline that creates a soft warm impression). Shallow uchi-bake (single fold). Warm-brown irises with crisp dark outline, one tiny highlight per eye.
-- Eyebrows: thin, short, soft gentle arch, descending at the tail. Black.
+- Japanese woman, apparent age late 20s to early 30s. MATURE, composed, intelligent and warm. NOT a young woman in her early 20s, NOT child-like, NOT innocent-cheerful.
+- Eyes: ELONGATED ALMOND shape (not round, not over-large). Outer corners softly downturned (gently warm outer eyeline). Shallow uchi-bake (single fold, subtle). Warm-brown irises with crisp dark outline, one tiny highlight per eye.
+- Eyebrows: thin, short, soft gentle arch, descending naturally at the tail. Black.
 - Nose: subtle, light strokes only, small rounded tip. No strong shading.
 - Mouth: warm coral-pink lips, calm composed corners slightly upturned. Default smile shows only a hint of upper teeth — never lower teeth, never a wide grin (unless explicitly noted).
 - Face contour: soft oval, gracefully tapered jaw (narrow but not pointed). Subtle cheekbone definition. NOT a round childlike face.
-- Skin: warm peach, minimal shading, faint pink blush on cheeks.
-- Hair: pure black, low loose chignon at nape with delicate face-framing wisps at temples, forehead, in front of ears. Soft side bangs revealing some forehead.
-- Glasses: tortoiseshell (brown + black mottled pattern), medium-thick rounded oval frames, slim bridge, slim temples.
-- Small gold hoop earring on visible ear.
+- Skin: warm peach, subtle thoughtful shading (not fully flat), faint pink blush on cheeks.
+- Hair: pure black with multiple subtle glossy highlights (light reflections scattered across the top and bun). Low loose chignon at the nape with delicate face-framing wisps at temples, forehead, in front of the ears. Soft wispy side/center bangs revealing some forehead.
+- Glasses: tortoiseshell (brown + black mottled pattern), medium-thick rounded oval frames, slim bridge, slim temples. Frame is a defining feature — must always be present.
+- Small gold hoop or drop earring on the visible ear.
 - Overall impression: intelligent, warm, approachable, COMPOSED AND MATURE adult. Not youthful exuberance.
+
+IDENTITY LOCKS (regenerate if any of these drift):
+- The tortoiseshell round-frame glasses.
+- The low loose black chignon with wispy bangs.
+- The elongated almond eyes with softly downturned outer corners.
+- The warm coral-pink upper-teeth-only smile.
+- The warm peach skin with subtle shading.
+- The graceful tapered jaw and oval face.
