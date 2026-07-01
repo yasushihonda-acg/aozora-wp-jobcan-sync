@@ -1,13 +1,13 @@
-# イラスト刷新 台帳 (2026-07-01)
+# イラスト刷新 台帳 (2026-07-02 更新)
 
-決裁者指定の新メインキャラ (Image #5 = full baseline / Image #6 = close-up baseline) への刷新に伴う、mockup 内全画像の対応台帳。
+決裁者指定の新メインキャラ (2026-07-02 版 Image #5 = 歩行介助シーン baseline、黒ポロシャツ + 青ランヤード) への刷新に伴う、mockup 内全画像の対応台帳。
 
 ## 判定サマリ
 
 - **IN スコープ**: 12 枚 (イラスト系のみ)
 - **OUT スコープ**: 11 枚 (実写別レイヤー + 人物なし挿絵)
-- **予算上限**: $10 (Codex 推奨、超過時停止)
-- **想定生成回数**: 40 回相当
+- **生成経路**: ChatGPT UI (character-critical illustration)、`docs/specs/chatgpt-ui-prompts.md` 参照
+- **OpenAI API 予算残**: $5.88 / $10 (本セッション累計 $4.12 消費、人物なし挿絵 or 実験用途に保持)
 
 ## レイヤー分離原則
 
@@ -19,20 +19,20 @@
 
 ## IN スコープ (12 枚)
 
-| # | ファイル | 現状 | 対応 | Round |
-|---|---------|------|------|-------|
-| 1 | `illust-job-care.png` | 求人カード、メインキャラ | regenerate | α |
-| 2 | `illust-job-consultant.png` | 求人カード、メインキャラ | regenerate | α |
-| 3 | `illust-job-nurse.png` | 求人カード、メインキャラ | regenerate | β |
-| 4 | `illust-job-office.png` | 求人カード、メインキャラ | regenerate | β |
-| 5 | `illust-job-it.png` | 求人カード、メインキャラ | regenerate | β |
-| 6 | `illust-job-care-2.png` | 求人カード、メインキャラ | regenerate | β |
-| 7 | `illust-job-care-3.png` | 求人カード、メインキャラ | regenerate | β |
-| 8 | `illust-job-default.png` | 求人カード fallback、メインキャラ | regenerate | γ |
-| 9 | `illust-job-consultant-2.png` | 求人カード、メインキャラ | regenerate | γ |
-| 10 | `illust-job-office-2.png` | 求人カード、メインキャラ | regenerate | γ |
-| 11 | `illust-philosophy.jpg` | 3 人物フラットベクター (ターコイズスクラブ介護士 + 車椅子高齢者 + 家族) | regenerate (メインキャラを黒 scrub に置換、複数人シーン維持) | γ |
-| 12 | `illust-flow.jpg` | 2 人物フラットベクター (ターコイズスクラブ介護士 + 応募者) | regenerate (メインキャラを黒 scrub に置換、面接シーン維持) | γ |
+| # | ファイル | 現状 | 対応 | 状態 |
+|---|---------|------|------|-----|
+| 1 | `illust-job-care.png` | 歩行介助シーン、黒ポロ、青ランヤード + 青アクセント背景 | **完了 (2026-07-02、Image #5 採用)** | ✅ 配置済 |
+| 2 | `illust-job-consultant.png` | 相談員 (旧 V-neck scrub 版が Round α で merged、要 polo 再生成) | ChatGPT UI で再生成 | 🔄 UI 待ち |
+| 3 | `illust-job-nurse.png` | 訪問看護 (旧 V-neck scrub 版が Round α で merged、要 polo 再生成) | ChatGPT UI で再生成 | 🔄 UI 待ち |
+| 4 | `illust-job-office.png` | 事務 | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 5 | `illust-job-it.png` | IT / システム | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 6 | `illust-job-care-2.png` | care variant 2 | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 7 | `illust-job-care-3.png` | care variant 3 | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 8 | `illust-job-default.png` | fallback 汎用 | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 9 | `illust-job-consultant-2.png` | 相談員 variant 2 | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 10 | `illust-job-office-2.png` | 事務 variant 2 | ChatGPT UI で生成 | 🔄 UI 待ち |
+| 11 | `illust-philosophy.jpg` | 3 人物フラットベクター (ターコイズスクラブ介護士 + 車椅子高齢者 + 家族) | ChatGPT UI で再生成 (メインキャラを黒ポロに置換、複数人シーン維持) | 🔄 UI 待ち |
+| 12 | `illust-flow.jpg` | 2 人物フラットベクター (ターコイズスクラブ介護士 + 応募者) | ChatGPT UI で再生成 (メインキャラを黒ポロに置換、面接シーン維持) | 🔄 UI 待ち |
 
 ## OUT スコープ (11 枚)
 
@@ -53,15 +53,19 @@
 
 ## アーカイブ
 
-旧 baseline PNG 2 枚を保管済:
+旧 baseline PNG (履歴参照のみ):
 
 ```
-.claude/memory/archive/illustration-baseline-2026-06-29.png
-.claude/memory/archive/illustration-baseline-character-closeup-2026-06-29.png
+.claude/memory/archive/illustration-baseline-2026-06-29.png                   # 最旧 (ターコイズスクラブ + 透明水彩)
+.claude/memory/archive/illustration-baseline-character-closeup-2026-06-29.png # 最旧 close-up
+.claude/memory/archive/illustration-baseline-2026-07-01.png                   # Phase 1.5 (V-neck scrub 版)
+.claude/memory/archive/illustration-baseline-character-closeup-2026-07-01.png # Phase 1.5 close-up
 ```
 
-新 baseline (Image #5/#6) 差替は Phase 1 で実施。
+現行 baseline: `.claude/memory/illustration-baseline.png` (2026-07-02 版 = Image #5 歩行介助シーン、黒ポロシャツ + 青ランヤード + 青アクセント背景)
 
-## 承認ゲート
+## 進捗
 
-本台帳を本田様がご承認いただき次第、Phase 1 (Atomic 真理ソース更新) に着手。
+- 2026-07-01: Phase 1 (Atomic 真理ソース更新)、Phase 1.5 (画風 + accessories rule) 完了
+- 2026-07-02: 制服 spec pivot (V-neck scrub → 黒ポロシャツ)、生成経路 pivot (API → ChatGPT UI)、Round α care 完了 (Image #5 採用)
+- 次: Round β/γ の 11 枚を ChatGPT UI で生成 → 集まり次第 Phase 4 (mockup 反映 + PR)
