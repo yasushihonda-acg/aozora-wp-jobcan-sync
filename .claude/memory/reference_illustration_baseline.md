@@ -18,9 +18,10 @@ metadata:
 
 つまり:
 - ✅ MUST: キャラクター (顔・髪・眼鏡・体格) を厳密に一致
-- ✅ MUST: 絵のタッチ (**polished anime/manga illustrated style, fine detailed linework, subtle thoughtful shading**)
+- ✅ MUST: 絵のタッチ (**editorial magazine illustration in the vein of Eguchi Hisashi 江口寿史、極めて繊細で優雅な細線、cel-shading 最小限、magazine printed feel**)
 - ✅ MUST: 色調 (**warm peach 肌、black scrub、blue lanyard アクセント、白〜淡ベージュ背景**)
-- ✅ MUST: 全体トンマナ (清潔感、知的・親しみ、大人の落ち着き、過剰な装飾なし)
+- ✅ MUST: 全体トンマナ (清潔感、知的・親しみ、大人の落ち着き、過剰な装飾なし、editorial elegance)
+- ✅ MUST: **アクセサリー職種別ルール** (2026-07-01 決裁者指示): care / nurse ではピアス NG、consultant / office / it は小スタッド OK。詳細は `.claude/skills/aozora-illust/prompts/outfit-spec.txt` ACCESSORIES RULES
 - 🟢 OK: シーン (利用者様の年齢/服装、背景の小道具、職務動作)
 - 🟢 OK: 服装の細部 (**BLACK V ネックスクラブ既定**、職種により襟付き等の派生は許容)
 
@@ -109,19 +110,37 @@ metadata:
 - 事務シーン: 黒スクラブの上にニュートラルカーディガン (charcoal / beige)
 - 経営/管理シーン: テーラードジャケット (charcoal / navy / beige) を黒スクラブに重ね着
 - ブログ・カジュアル: 黒スクラブのみ、ランヤードなしも可
-- ※派生時も顔・髪・眼鏡・ピアスは完全一致
+- ※派生時も顔・髪・眼鏡は完全一致 (ピアスは職種別ルールに従う)
 
-## 画風 (厳密一致)
+### アクセサリー職種別ルール (2026-07-01 決裁者指示、介護業界の一般的な服装規定準拠、Phase 1.5 で reference-based generation の制約を踏まえた実務的緩和版)
 
-baseline (Image #5/#6) 観察に基づく画風スペック:
-- **polished anime/manga illustrated style** (完成度の高いイラスト・漫画調)
-- **fine detailed linework** (繊細で意図された線、細く精緻、機械的にならない)
-- **subtle thoughtful shading** (顔・肌・服・髪に軽い陰影あり、フラット塗りではない)
-- **crisp clean lines** (線・色のにじみは最小、シャープ)
-- **subtle glossy highlights on hair** (黒髪に光沢の小ハイライトが複数点在)
-- **color temperature: 暖色寄り** (warm peach 肌、暖かい表情)
-- **background: 白 or 淡いベージュ・水色** (シンプル、キャラを引き立てる、複雑な背景 NG)
-- **NG**: 過度な透明水彩ぼかし、フラットベクター簡略化、アニメ調の巨大黒目、油彩風厚塗り、3D 風シェーディング、江口寿史風・特定作家風の類似
+**共通 (全職種で絶対 NG)**: hoop / drop / dangle 系ピアス (認知症の利用者に引っ張られるリスク、医療安全、印象上の unprofessionalism)。生成物にこれが描画された場合は再生成対象。
+
+| 職種 | ピアス | ネイル | ウォッチ | リング |
+|------|-------|--------|---------|-------|
+| **care / care-2 / care-3** | 描画されない方が理想。**極小 stud (dot-size, close to earlobe)** まで許容。hoop/dangle 絶対 NG | 短く、装飾 NG | NG (ゴム/シリコンのみ) | NG |
+| **nurse (訪問看護含む)** | 同上 (nothing 理想、極小 stud まで許容、hoop/dangle 絶対 NG) | 短く、装飾 NG | 医療用のみ or NG | NG |
+| **consultant / consultant-2** | 小 stud OK (subtle, close-to-ear) | 落ち着いた色 OK | OK | active-work hand は NG |
+| **office / office-2** | 小 hoop/drop OK (subtle) | OK | OK | 小さめ OK |
+| **it** | 小 hoop/drop OK | OK | OK | OK |
+| **default (fallback)** | care と同じ | 短く | 控えめ | NG |
+| **philosophy / flow 挿絵** | シーンの役割による (介護シーンでは nothing 理想 or 極小 stud、相談シーンでは小 stud OK) | 同上 | 同上 | 同上 |
+
+**identity locks から earring を除外** (顔・髪・眼鏡・目・輪郭・肌の 6 点のみ)。ピアスはシーン記述で明示された時のみ描画、なければ非描画が既定。
+
+**Baseline PNG 側の対応 (2026-07-01 Phase 1.5)**: `illustration-baseline.png` と `illustration-baseline-character-closeup.png` の元画像に earring が描画されていたため、reference-based generation で inherit されないよう **canvas patch で耳付近を bare 化**した (`archive/*-2026-06-29.png` に旧版保管)。identity にはほぼ影響なし (顔・髪・眼鏡・skin tone は保持)。
+
+## 画風 (厳密一致、2026-07-01 決裁者指示で editorial illustration 方向に精緻化)
+
+決裁者指定の雰囲気イメージ (Image #7/#8) に基づく画風スペック:
+- **editorial magazine illustration in the vein of Eguchi Hisashi (江口寿史)** — 洗練された誌面 illustration の空気感、magazine printed feel
+- **極めて繊細で優雅な細線** (extremely thin refined pen-work、機械的でも厚くもない、editorial pen-drawing quality)
+- **cel-shading は最小限** (mostly flat with only subtlest tonal work — 顎下・首元の陰影と髪の thin highlight strokes のみ、glossy shine は NG)
+- **crisp clean edges** (線・色のにじみは最小、シャープ)
+- **少し elongated で elegant な proportion** (大人の refined 感、chibi/anime 幼型 NG)
+- **color temperature: 暖色寄り** (warm peach 肌、warm coral lips、暖かい表情)
+- **background: 白、淡ベージュ、僅かな緑の hint** (シンプル、キャラを引き立てる、複雑な背景 NG)
+- **NG**: 過度な透明水彩ぼかし、フラットベクター簡略化、アニメ調の巨大黒目、油彩風厚塗り、3D 風シェーディング、commercial anime 寄り (thick outline + glossy shading)
 
 ## 副役・小道具 (柔軟可だが画風統一)
 
@@ -175,10 +194,11 @@ Round B (キャラ検証) 以降は本チェックリストで全項目を Pass 
 
 ## 旧 baseline との差分サマリ (2026-06-29 → 2026-07-01)
 
-| 項目 | 2026-06-29 版 | 2026-07-01 版 |
-|------|--------------|--------------|
-| 服装 | ターコイズ V ネックスクラブ + 白パイピング + 白 ID ストラップ | **BLACK V ネックスクラブ + BLUE lanyard + ID badge** |
-| 画風 | 透明水彩淡彩、フラット塗り、シェーディング最小 | **polished anime/manga touch、fine detailed linework、subtle glossy shading** |
-| パレット anchor | ターコイズ `#00c4cc` | **BLACK scrub + BLUE lanyard 対比** |
-| 背景 | 淡い緑背景、木製家具、ターコイズランプ/マグ | 白〜淡ベージュ minimal background、シーン別小道具のみ |
-| 顔・髪・眼鏡 | 継続 (同キャラ想定) | **継続** (核となる特徴は不変) |
+| 項目 | 2026-06-29 版 | 2026-07-01 版 (Phase 1) | 2026-07-01 版 (Phase 1.5、決裁者再指示) |
+|------|--------------|----------------------|--------------------------------|
+| 服装 | ターコイズ V ネックスクラブ + 白パイピング + 白 ID ストラップ | **BLACK V ネックスクラブ + BLUE lanyard + ID badge** | 継続 (Phase 1 と同) |
+| 画風 | 透明水彩淡彩、フラット塗り、シェーディング最小 | polished anime/manga touch、fine detailed linework、subtle glossy shading | **editorial magazine illustration in the vein of Eguchi Hisashi、極めて繊細な細線、cel-shading 最小、magazine printed feel** |
+| パレット anchor | ターコイズ `#00c4cc` | BLACK scrub + BLUE lanyard 対比 | 継続 (Phase 1 と同) |
+| 背景 | 淡い緑背景、木製家具、ターコイズランプ/マグ | 白〜淡ベージュ minimal background、シーン別小道具のみ | 継続 (editorial illustration の空気感で更に簡素化) |
+| 顔・髪・眼鏡 | 継続 | 継続 | 継続 (核となる特徴は不変) |
+| ピアス | 継続 (identity lock) | 継続 (identity lock) | **職種別ルール**: care/nurse は NG、consultant/office/it は小スタッド OK。**identity lock から除外** |

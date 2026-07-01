@@ -10,8 +10,8 @@
 | 2 | **髪** | 黒髪 + 低い位置のシニヨン + 後れ毛 + ウィスピーバング + glossy highlights | 髪型が違う、フラット塗り、明るい茶髪 |
 | 3 | **眼鏡** | べっ甲丸縁太フレーム、レンズはラウンドオーバル | 眼鏡なし、四角フレーム、細縁、単色フレーム |
 | 4 | **年齢感** | 20 代後半〜30 代前半、大人の落ち着き | 幼く見える、20 代前半に見える、老けて見える |
-| 5 | **衣装** | BLACK V-neck scrub + BLUE lanyard + ID badge (指定シーンで allowed 派生あれば派生も OK) | ターコイズスクラブ、白 lanyard、polo shirt、パイピングあり |
-| 6 | **画風** | polished anime/manga touch、fine detailed linework、subtle shading | 透明水彩フラット塗り、フラットベクター、油彩厚塗り、3D 風、キラキラアニメ |
+| 5 | **衣装 + アクセサリー** | BLACK V-neck scrub + BLUE lanyard + ID badge。**アクセサリーは職種別ルール準拠** (care/nurse は nothing 理想、極小 stud まで許容、hoop/dangle 全職種で絶対 NG — outfit-spec.txt 参照) | ターコイズスクラブ、白 lanyard、polo shirt、パイピングあり、care/nurse で hoop/dangle ピアス描画 |
+| 6 | **画風** | editorial magazine illustration (江口寿史 esque)、極めて繊細な細線、cel-shading 最小、magazine printed feel | 透明水彩フラット塗り、フラットベクター、油彩厚塗り、3D 風、commercial anime (thick outline + glossy)、キラキラアニメ |
 | 7 | **手指** | 破綻なし (5 本指、自然な曲がり) | 6 本指、指の融合、不自然な角度 |
 | 8 | **文字混入** | 画像内にテキスト・ロゴ・シンボルなし (シーンの必要小道具のみ) | 意味不明の英数字、ブランドロゴ |
 | 9 | **職務内容整合** | シーン記述 (nurse=医療、office=デスク、care=食事介助 等) と描画内容が一致 | シーン記述と違う職務 (nurse なのに PC 前 だけ 等) |

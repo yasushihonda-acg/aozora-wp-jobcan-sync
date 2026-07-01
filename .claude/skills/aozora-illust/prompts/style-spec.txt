@@ -1,25 +1,39 @@
-ILLUSTRATION STYLE (must match the reference exactly):
-- Polished anime/manga illustrated style — completed, magazine-quality look.
-- Fine detailed linework — thin, deliberate, sharp lines. Not thick manga-outline, not sketchy.
-- Subtle thoughtful shading — soft gradients on skin, glossy highlights on hair, gentle folds on clothing. NOT flat colors, NOT heavy 3D shading.
-- Crisp clean edges — no watercolor bleed, no ink washing, no paper texture.
-- Multiple small glossy highlights scattered across the black hair (indicating light reflection).
-- Warm color temperature: warm peach skin, warm coral lips, dark black hair with brown warm highlights.
-- Background: white or very pale minimal background (light beige, soft pale blue). Complex or busy backgrounds are FORBIDDEN. The character is the focus.
-- Character composition: centered or slightly off-center portrait / half-body / 3/4 view. Occasional secondary character (elderly patient, colleague, applicant) is OK.
-- Small details rendered with care: earring, lanyard clip, scrub pocket seam, tortoiseshell frame pattern.
+ILLUSTRATION TECHNIQUE (rendering technique — applies equally to solo portraits AND multi-person environmental scenes):
+
+- RENDERING TECHNIQUE in the tradition of Eguchi Hisashi 江口寿史's illustrations — extremely refined thin-line pen-work with restrained shading. This is a TECHNIQUE, NOT a composition genre. It applies to whatever scene the SCENE description specifies (portrait, half-body, multi-person interaction, environmental illustration — all are valid, all use the same refined thin-line technique).
+- EXTREMELY THIN, DELIBERATE ELEGANT LINES — pen-like precision. Line weight is uniform and refined. NOT thick manga outlines, NOT sketchy.
+- MINIMAL cel-shading — mostly flat color with only the subtlest tonal work on skin (under chin, along jaw) and hair (single mass with just a few thin highlight strokes, no glossy shine). Clothing has minimal folds, mostly flat with light tonal variation.
+- Crisp clean edges — no watercolor bleed, no ink wash, no paper texture, no rendering thickness.
+- Character proportions slightly elongated, elegant, sophisticated — mature adult refinement. Face is oval with a graceful neck. Not chibi, not overly detailed anime.
+- Warm color temperature: warm peach skin, warm coral lips, deep black hair with restrained tonal variation.
+- Background: white, very pale ivory, soft off-cream, or the barest suggestion of foliage/interior. Additional interior props (wooden furniture, potted plants, tea utensils, medical kits) rendered in the same restrained thin-line technique. FORBIDDEN: photographic or complex textured backgrounds.
+- Secondary characters (elderly residents, colleagues, family members, applicants) — when the SCENE calls for them, they MUST be drawn with the same refined thin-line technique, at similar visual weight to the main character. The scene's composition is determined by the SCENE description, NOT by any bias toward solo portraits.
+
+COMPOSITION MANDATE:
+- If the SCENE says "two people" or "multi-person" or "with elderly resident / family member / colleague" — the output MUST show ALL those characters in the frame, at equal or intentional visual weight per the SCENE. Do NOT collapse a multi-person scene into a solo portrait.
+- Frame the shot per the SCENE description (portrait, half-body, environmental wide shot). Do NOT default to a magazine-cover-style solo portrait when the SCENE describes an interaction.
 
 FORBIDDEN:
-- Transparent watercolor flat-wash (this is the OLD baseline style, do not use).
+- Commercial anime rendering (glossy 3D-shaded hair, oversized sparkling eyes, heavy cel-shading, thick outlines).
+- Transparent watercolor flat-wash (this is the OLD 2026-06-29 baseline style, do not use).
 - Heavy washi / paper texture background.
 - Over-saturated colors, oil-paint impasto.
-- Anime-glossy oversized eyes with sparkles.
-- Flat vector / infographic simplification.
-- Specific artist name mimicry (e.g., Eguchi Hisashi, particular manga artists).
+- Flat vector / infographic simplification (illust-philosophy 旧版のような 3D-shape 単純化).
 - Text, logos, or brand marks in the image.
+- Collapsing a multi-person SCENE into a solo portrait against the SCENE's explicit intent.
 
 NG examples to avoid:
-- 透明水彩フラット塗り (旧 baseline)
-- フラットベクター (illust-philosophy 旧版のような 3D-shape 単純化)
-- 過度な線のにじみ・ぼかし
+- 透明水彩フラット塗り (2026-06-29 baseline)
+- フラットベクター (illust-philosophy 旧版)
+- polished anime with glossy highlights and thick shading (2026-07-01 前半の Round α 旧試作)
 - キラキラ・ソフトフォーカス過剰
+- 過度な線のにじみ・ぼかし
+- multi-person シーンを solo portrait に collapsing
+
+Technique vocabulary to aim for:
+- "refined thin-line rendering"
+- "restrained pen-work"
+- "understated shading"
+- "elegant sparse linework"
+- "printed illustration quality"
+- "lyrical thin-stroke technique"
