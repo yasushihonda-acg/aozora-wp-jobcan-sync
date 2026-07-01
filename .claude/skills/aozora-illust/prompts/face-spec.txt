@@ -6,17 +6,17 @@ CHARACTER (must match precisely):
 - Eyebrows: thin, short, soft gentle arch, descending naturally at the tail. Black.
 - Nose: subtle, light strokes only, small rounded tip. No strong shading.
 - Mouth: warm coral-pink lips, calm composed corners slightly upturned. Default smile shows only a hint of upper teeth — never lower teeth, never a wide grin (unless explicitly noted).
-- Face contour: soft oval, gracefully tapered jaw (narrow but not pointed). Subtle cheekbone definition. NOT a round childlike face.
-- Skin: warm peach, subtle thoughtful shading (not fully flat), faint pink blush on cheeks.
-- Hair: pure black with multiple subtle glossy highlights (light reflections scattered across the top and bun). Low loose chignon at the nape with delicate face-framing wisps at temples, forehead, in front of the ears. Soft wispy side/center bangs revealing some forehead.
+- Face contour: soft oval with a graceful slightly elongated proportion, gracefully tapered jaw (narrow but not pointed). Subtle cheekbone definition. NOT a round childlike face.
+- Skin: warm peach, subtle thoughtful shading (not fully flat, but restrained — mostly along the jaw and under the chin only), faint pink blush on cheeks.
+- Hair: pure black rendered as a solid dark mass with only a few thin editorial highlight strokes (NOT glossy anime shine). Low loose chignon at the nape with delicate face-framing wisps at temples, forehead, in front of the ears. Soft wispy side/center bangs revealing some forehead.
 - Glasses: tortoiseshell (brown + black mottled pattern), medium-thick rounded oval frames, slim bridge, slim temples. Frame is a defining feature — must always be present.
-- Small gold hoop or drop earring on the visible ear.
-- Overall impression: intelligent, warm, approachable, COMPOSED AND MATURE adult. Not youthful exuberance.
+- Earring: scene-dependent (see outfit-spec.txt ACCESSORIES RULES). For care/nurse scenes: no earring visible. For office/consultant/it scenes: small subtle stud OK. The earring is NOT an identity lock.
+- Overall impression: intelligent, warm, approachable, COMPOSED AND MATURE adult with editorial-illustration elegance. Not youthful exuberance.
 
 IDENTITY LOCKS (regenerate if any of these drift):
 - The tortoiseshell round-frame glasses.
-- The low loose black chignon with wispy bangs.
+- The low loose black chignon with wispy bangs (with restrained highlight, not glossy).
 - The elongated almond eyes with softly downturned outer corners.
 - The warm coral-pink upper-teeth-only smile.
-- The warm peach skin with subtle shading.
-- The graceful tapered jaw and oval face.
+- The warm peach skin with restrained subtle shading.
+- The graceful slightly-elongated oval face with tapered jaw.

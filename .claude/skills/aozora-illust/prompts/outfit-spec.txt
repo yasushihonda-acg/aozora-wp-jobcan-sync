@@ -3,17 +3,32 @@ OUTFIT (default — BLACK V-neck scrub with BLUE lanyard):
 - NO piping, NO trim, NO accent color on the collar or sleeves. The scrub is completely black.
 - One chest pocket on the left side (subtle, matching the baseline).
 - BLUE LANYARD around the neck (bright cobalt / royal blue, clearly visible against the black scrub) with a transparent-case ID badge hanging at chest level.
-- IMPORTANT: The character's identity (face, hair, glasses, earring, skin tone) must match the reference exactly. Only the scene, action, and secondary props change.
+- IMPORTANT: The character's identity (face, hair, glasses, skin tone) must match the reference exactly. Only the scene, action, secondary props, and accessories change according to the job type below.
 
-OUTFIT VARIATIONS (allowed when the scene calls for it — face / hair / glasses / earring must still match):
+OUTFIT VARIATIONS (allowed when the scene calls for it — face / hair / glasses must still match):
 - Office: black scrub with a neutral charcoal or beige cardigan over it (cardigan itself is a subdued neutral tone, no bright accent).
 - Management / consultant: tailored jacket in a neutral muted tone (charcoal / dark navy / beige) worn open over the black scrub.
 - Casual visit / blog: black scrub only, lanyard optional.
 - Home-visit nurse: black scrub with a small crossbody bag or medical kit, blue lanyard maintained.
 
+ACCESSORIES RULES BY JOB TYPE (介護業界の一般的な服装規定に準拠、reference-based generation の制約を踏まえた実務的緩和版):
+- **HOOP / DANGLE 系ピアスは全職種で FORBIDDEN** (認知症の利用者に引っ張られる risk、医療安全、印象上の unprofessionalism、いずれも共通)。生成物にこれが描画された場合は再生成。
+- **care / care-2 / care-3 (介護スタッフ)**: earring は描画されない方が理想。もし描画されても極小 stud (close to earlobe, dot-sized, no dangle) までは industry で許容範囲。**hoop / drop / dangle は絶対 NG**。NO rings, NO bracelets, NO wristwatch。爪短く、髪は束ねる。
+- **nurse (看護師 / 訪問看護)**: 同上。earring は描画されない方が理想、極小 stud まで許容、hoop/dangle 絶対 NG。simple medical-appropriate wristwatch OK if the scene calls for it。
+- **consultant / consultant-2 (相談員 / ケアマネジャー)**: Small subtle stud earring OK (close to earlobe, no dangle). Simple watch OK. No rings on active-work hand.
+- **office / office-2 (事務)**: Small hoop or drop earring OK (subtle). Watch OK. Small subtle rings OK.
+- **it (IT / システム)**: Small hoop or drop earring OK. Watch OK.
+- **default (fallback)**: Follow care rules (safest, most professional appearance for eldercare industry).
+- **philosophy / flow illustration** (multi-person scenes): Character defaults to no earring or 極小 stud in care-worker context; if she is in a consultative role in the scene, small stud is OK.
+
+NOTE (reference-based generation との整合): 現行 baseline PNG は 2026-07-01 に earring を除去済 (`.claude/memory/illustration-baseline*.png` の耳付近を canvas patch で bare 化)。それでも model が earring を描画する場合があるが、上記ルールで「極小 stud まで許容、hoop/dangle は再生成対象」と定めることで実務判定を安定化。
+
 FORBIDDEN:
-- Turquoise / teal / cyan colored scrubs (this is the OLD baseline, do not use).
+- Turquoise / teal / cyan colored scrubs (this is the 2026-06-29 OLD baseline, do not use).
 - White piping or trim on the scrub.
 - White or grey lanyard (must be blue).
 - Bright accent colors on the shirt itself (only the lanyard is bright).
 - Polo shirts (this is a scrub with V-neck, not a polo with button placket).
+- Dangling earrings, large hoops, or facial piercings in ANY job type (unprofessional for eldercare industry).
+- Rings on care/nurse's active-work hand.
+- Long or brightly-colored nails.
