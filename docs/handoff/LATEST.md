@@ -1,173 +1,126 @@
-# Handoff — 2026-07-01 (Phase A キャラ真理ソース刷新 + イラスト再生成セッション)
+# Handoff — 2026-07-02 (制服 spec pivot + 生成経路 pivot セッション)
 
 ## TL;DR
 
-決裁者から新キャラクター (Image #5/#6 = 黒 V-neck scrub + 青ランヤード、以降 Image #7/#8 = 江口寿史 esque editorial illustration) の直接指示を受け、**キャラ真理ソース + spec + baseline PNG を全面刷新**。合計 3 PR マージ (#45 フッターロゴ / #46 Phase 1 真理ソース刷新 / #47 Phase 1.5 style + 職種別ピアスルール + baseline earring 除去)。Round A (画風検証)、Round B (6 panel model sheet)、Round α (求人カード 3 枚 care/consultant/nurse、うち **consultant/nurse は multi-person + eye contact + 職種ルール準拠で完了**、care は 4 回試行するも Phase 1.5 spec 下で solo portrait 化する bias を克服できず判定保留) まで完了。予算消費 $3.36 / $10。
+**決裁者判断による方針転換 2 件を実施**:
+1. 制服 spec pivot: 黒 V-neck scrub → **黒ポロシャツ** (襟 + 2-3 button placket)
+2. 生成経路 pivot: API `v1/images/edits` → **ChatGPT UI** (character-critical illustration 用)
+
+理由: API 経路で care の identity + 介護 action + 服装 3 拍子を揃えるのに 8 回試行 + Codex 診断 2 回で $0.68 消費して届かず、決裁者が UI で数回で到達品質を出した (Image #4/#5)。**Image #5** (歩行介助シーン、黒ポロ + 青ランヤード + 青アクセント背景) を新 baseline PNG に採用 + `illust-job-care.png` として mockup 配置 → Round α care 完了。真理ソース 7 ファイル + PNG 差替 + ChatGPT UI プロンプト集 (`docs/specs/chatgpt-ui-prompts.md`) を **PR #49** で一括更新・マージ。
 
 🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 🚀 Cloud Run (Phase 2B-exec): https://aozora-sync-flry56mxwa-an.a.run.app (稼働中、本セッション変更なし)
 
 ## 今セッションで完了したこと
 
-### マージ済 PR (3 件)
+### マージ済 PR (1 件)
 
 | PR | タイトル | 内容 |
 |---|---|---|
-| #45 | `fix(mockup): フッターロゴの背景色をフッター #323232 に完全一致させる` | `logo-acg-light.png` を `filter: invert(1) brightness(1.6)` していた結果、白背景が純黒に反転して footer #323232 より暗い黒ボックスが浮いていた問題を修正。新規 `logo-acg-footer.png` を Canvas API で生成 (背景 #323232 リペイント)、CSS filter 削除、HTML 35 ファイルの footer src を切替。ヘッダは維持 |
-| #46 | `feat(aozora-illust): 決裁者指示によるキャラ真理ソース全面刷新 (2026-07-01)` | baseline PNG 2 枚差替 (Image #5 = full, Image #6 = close-up)、reference_illustration_baseline.md 全面書換、prompts/{face,outfit,style,codex-rewrite-template}-spec.txt 更新、SKILL.md 更新、CLAUDE.md 更新、10 項目 Pass/Fail 検証チェックリスト新規、docs/specs/illust-refresh-ledger.md 新規 (全 23 画像の対応台帳)、旧 baseline を archive に保管 |
-| #47 | `refactor(aozora-illust): Phase 1.5 — 江口寿史 esque style + 職種別アクセサリールール + baseline earring 除去` | style-spec を "editorial genre" → "thin-line technique (江口寿史 esque)" に転換 (portrait bias 回避)、COMPOSITION MANDATE 追加、outfit-spec に 職種別 ACCESSORIES RULES 追加 (care/nurse ピアス NG、consultant/office/it 小スタッド OK、hoop/dangle 全職種 NG)、baseline PNG の耳付近を Canvas patch で bare 化 (earring reference bias を根絶) |
+| #49 | `feat(aozora-illust): 制服 spec pivot (V-neck scrub → 黒ポロシャツ) + 生成経路 pivot (API → ChatGPT UI) + Round α care 完了` | 決裁者判断 (2026-07-02) による全面刷新。真理ソース 7 ファイル (CLAUDE.md / reference_illustration_baseline.md / outfit-spec.txt / verification-checklist.md / SKILL.md / codex-rewrite-template.txt / illust-refresh-ledger.md) を "V-neck scrub" → "黒ポロシャツ" に置換、コーポレートカラー #00C4CC / #575656 / #f8f5ee を明示、画風スペックから江口寿史等の作家名を除外。baseline PNG を Image #5 に差替、旧 Phase 1.5 版を archive/2026-07-01/ に保管。`illust-job-care.png` = Image #5 (歩行介助シーン) 採用。`docs/specs/chatgpt-ui-prompts.md` 新設 (PREAMBLE + 12 SCENE ブロック、決裁者原稿ベースの最小条件版)。gen.sh に `--composition-ref` / `--composition-mask` / `--quality` / `--skip-baseline` flags 追加 (本セッションの実験用)。13 files, +516 / -146 |
 
 ### 確立した実証知見
 
-#### 1. style-spec の genre 表現 vs technique 表現の composition bias
+#### 1. API `v1/images/edits` の identity 保持限界
 
-- 「editorial magazine illustration (genre)」表現は **portrait bias を強く誘発**。Phase 1.5 test v1-v5 で 5 連続 solo portrait 化
-- 「thin-line technique in the vein of Eguchi Hisashi (technique)」+ 明示 COMPOSITION MANDATE で **multi-person 復活**
-- 教訓: `v1/images/edits` の prompt engineering では **技法軸 vs ジャンル軸** の使い分けが composition 制御の鍵
+**8 連続失敗を経て確定した事実**:
+- baseline PNG が portrait crop なら prompt mandate は portrait bias を突破できない (v6-v9 で 5 連続 solo)
+- 案 2 (nurse を composition-ref に追加) で multi-person 突破 → clipboard/pen action 継承の別問題発生
+- 案 C (2-stage generation, reference-free layout → baseline refine) で介護 action 描画は成功 → **identity が Layout の caregiver との hybrid になり別人化**
+- 教訓: identity + 構図 + action の 3 拍子は API `v1/images/edits` では原理的に困難。ChatGPT UI は内部で multi-turn refinement + endpoint 選択 + fidelity tuning を実施していると推定 (Codex 診断)
 
-#### 2. reference PNG の element bias は text prompt では抑えられない
+#### 2. ChatGPT UI 経路が character-critical illustration の decisive answer
 
-- Round α v2 (care/consultant/nurse) 生成物にピアスが描画され続けた
-- outfit-spec で「care/nurse は earring NG」と明示、face-spec からも identity lock 外しても、**baseline PNG に earring が baked-in なら model が inherit**
-- 解決: **baseline PNG 側を Canvas patch で bare 化** (`illustration-baseline.png` 3,144 px 置換 + `-closeup.png` 2,855 px 置換) → 完全解消
-- 教訓: reference-based generation で除去したい element は **PNG 側で消す**、prompt override では不十分
+- 決裁者が UI で数回試行して Image #4 (第 1 案、identity + 歩行介助 + 黒ポロ) → Image #5 (改善版、施設 context + 青アクセント背景 + brand color natural 配置) に到達
+- API 経路で 8 回試行して届かなかった品質を **UI では 2 回目で達成**
+- 教訓: character-critical では **UI の業界知識 + 内部最適化に委ねる方が Claude が SCENE を細かく指定するより結果が良い**
 
-#### 3. Codex rewrite が SCENE を genre-drift させることがある
+#### 3. 最小条件プロンプト方針
 
-- Round α final の care で「TWO PEOPLE + tea offering with elderly」指定が Codex rewrite で「solo care worker at documentation task」に変質
-- SCENE の verb と object (お茶 offering、tea cup) が Codex には「care worker task = documentation」の genre-drift を起こす
-- 対策: SCENE を "MANDATORY" prefix + "NOT ..." exclusions で強化 (今セッション末尾で care v8 で試行中)
+- Claude が SCENE を詳細に書くと Claude の想定バイアスが混入 (「care=食事介助」等)
+- **職種 + accessory rule + composition の最小条件のみ渡し、SCENE は UI に判断させる**方が variant 多様性と自然さで優れる
+- 実装: `docs/specs/chatgpt-ui-prompts.md` の 12 SCENE ブロックは全て最小条件版 (JOB CATEGORY + ACCESSORY RULE + OUTFIT VARIATION + COMPOSITION の 4 項目のみ)
 
-#### 4. 介護業界のドレスコード実務ルール
+#### 4. gen.sh に追加した実験的 flags (人物なし挿絵 or 将来の実験用)
 
-- hoop / drop / dangle 系ピアスは care/nurse/consultant/office/it 全職種 で NG (認知症利用者の risk、医療安全、unprofessionalism)
-- care/nurse は極小 stud まで許容 (現実の facilities での慣行に沿う)、hoop/dangle 絶対 NG
-- consultant/office/it は 小 hoop/drop OK
-- 出典: `.claude/skills/aozora-illust/prompts/outfit-spec.txt` ACCESSORIES RULES セクション
+- `--composition-ref=<path>`: 既存の成功画像を composition-ref として image[0] に挿入、baseline は image[1,2] へシフト。solo portrait bias を打ち消す
+- `--composition-mask=<path>`: mask edit (action envelope 置換) 対応。Python PIL で mask PNG 生成推奨
+- `--quality=<low|medium|high|auto>`: 品質指定を CLI から可変に (Stage 1 実験で cost 節約)
+- `--skip-baseline=on|off`: baseline PNG を送らない (composition-only edit) — Stage 1 で用途特化
+
+これらは **character-critical では非使用**、人物なし挿絵 (`illust-numbers.jpg` の pallet 追従等) or 将来の実験用途に保持。
 
 ## 進行中 (次セッション着手対象)
 
-### Phase 3 Round α (care 1 枚残り、v8 も失敗、別 approach 要)
+### Phase 3 Round β/γ (11 枚、ChatGPT UI で本田様生成待ち)
 
-- **care v8 = 失敗** (2026-07-01 20:50 生成): "MANDATORY tea scene, NOT documentation" 明示にもかかわらず、solo portrait (オフィスデスクの記録作業シーン) に化けた
-- v1/v2 (旧 polished anime spec) では multi-person 成立していたが、Phase 1.5 (thin-line technique) 移行後 v7/v8 で連続 solo 化
-- **care カテゴリ特有の bias** (訓練データで "care worker" = "at desk documenting" の連想が強い + reference PNG が単独立ち姿) が Codex rewrite + edits API の compositional 制約を超える
-- 次セッションで検討するアプローチ:
-  - (a) `--ref-mode=face-only` で参照 PNG の単独構図 bias を切る (Phase 1.5 test v3 でも試したが outfit reference も落ちて白衣化した)
-  - (b) `--category=job-care-elderly` にリネームして解釈 hint を強化 (Codex rewrite が anchor しやすいカテゴリ名に)
-  - (c) SCENE 冒頭を「Eldercare scene: A caregiver AND an elderly resident having tea together」で multi-person を entity-first に (verb-first ではなく noun-first)
-  - (d) archive baseline (2026-06-29 版、multi-person nurse/elderly/tablet シーン) を一時的に reference PNG として使用 (identity slight drift の risk あり)
-  - (e) polished anime spec に戻して care だけ v2 手法で生成 (spec 分岐の risk あり)
-- 判定: v7 (ノート PC scene) を採用可能とするかは本田様の decision-maker 領分
+| 順 | ファイル | ラウンド | 依頼済 SCENE ブロック |
+|----|-----|-----|-----|
+| 1 | `illust-job-consultant.png` | β | #2 |
+| 2 | `illust-job-nurse.png` | β | #3 |
+| 3 | `illust-job-office.png` | β | #4 |
+| 4 | `illust-job-it.png` | β | #5 |
+| 5 | `illust-job-care-2.png` | β | #6 |
+| 6 | `illust-job-care-3.png` | γ | #7 |
+| 7 | `illust-job-default.png` | γ | #8 |
+| 8 | `illust-job-consultant-2.png` | γ | #9 |
+| 9 | `illust-job-office-2.png` | γ | #10 |
+| 10 | `illust-philosophy.jpg` | γ | #11 |
+| 11 | `illust-flow.jpg` | γ | #12 |
 
-### Phase 3 Round β/γ (残り 9 枚)
-
-- Round β (5 枚): office, it, care-2, care-3, consultant-2 — 予算 $0.80
-- Round γ (4 枚): default, office-2, illust-philosophy, illust-flow — 予算 $0.64
-- 手法: Phase 1.5 spec + patched baseline + v6 手法 (technique-based + multi-person mandate + explicit LEFT/RIGHT layout + interaction with eye contact) を継続適用
-- 予算残: $10 - $3.36 = $6.64 で余裕あり
+**各生成の手順** (`docs/specs/chatgpt-ui-prompts.md`):
+1. ChatGPT UI で新規会話を開く
+2. PREAMBLE をコピペ
+3. `.claude/memory/illustration-baseline.png` (Image #5) を UI 会話にアタッチ → "match this character's identity exactly" と明示
+4. 該当 SCENE ブロックをコピペ
+5. 生成完了 → Claude に送信 → 10 項目採点 → OK なら mockup 配置 → NG なら SCENE 微調整 or 再生成指示
+6. **1 会話 = 1 illustration** で運用 (drift 防止)
 
 ### Phase 4 (mockup 反映 + PR)
 
-- 承認済み 12 画像を `mockup/assets/img/illust-*.png` にコピー (旧を archive/ へ)
-- Playwright で index.html + jobs.html + jobs-{care,nurse,office,it}.html + jobs/*.html 3 件で新画像表示確認
-- feature branch → PR → `/code-review low` → 認可 → squash merge → main 同期 → GitHub Pages 反映確認
+Round β + γ の 11 枚が集まり次第:
+1. `mockup/assets/img/illust-*.png` に一括配置
+2. feature branch → PR → `/code-review low` → 認可 → squash merge
+3. 公開モック URL で確認
 
-## 重要な設計判断 (本セッション)
+## 予算現況
 
-### イラスト刷新スコープの絞り込み (docs/specs/illust-refresh-ledger.md 記録)
+- **OpenAI API**: 累計 $4.12 / $10 (残 $5.88)。**以降 character-critical 用途では非使用**、人物なし挿絵 (illust-numbers.jpg) or 実験用途で保持
+- **ChatGPT UI**: 本田様の ChatGPT Plus/Pro subscription 内で完結 (別勘定)
 
-- **IN スコープ** (12 枚、イラスト系): `illust-job-*.png` × 10 + `illust-philosophy.jpg` + `illust-flow.jpg`
-- **OUT スコープ** (11 枚、実写別レイヤー / 人物なし): `staff-*.jpg` × 3 + `blog-*.jpg` × 3 + `hero-main.jpg` + `category-*.jpg` × 6 + `illust-numbers.jpg` (人物なし、Phase A 承認後別作業)
-- **写真 / イラスト 2 レイヤー分離** が本プロジェクトの設計 — キャラ刷新はイラストレイヤーのみ
-
-### 予算 hard cap (Codex plan review 反映)
-
-- $10 上限 (超過時停止して報告)
-- 40 回相当の生成余地
-- 本セッション消費 $3.36 (34%)、残 $6.64 で Round β/γ 完遂可能
-
-### verification-checklist.md の 10 項目 Pass/Fail
-
-- 主観 78-82% 再現率評価から、10 項目 Pass/Fail 客観判定に転換
-- 顔・髪・眼鏡・年齢・衣装・画風・手指・文字・職務・クロップ
-- Round B 6 panel model sheet + Round α で 適用済
-
-## 次のアクション (3 分割構造)
+## 次のアクション (3 分割)
 
 ### 即着手タスク
 
-**即着手タスクなし** — 次セッション冒頭で care v8 結果確認後に判断:
-- OK なら Round β 5 枚生成 (nurse は既に完了なので実質 office+it+care-2+care-3+consultant-2)
-- NG なら care 再々生成
+**即着手タスクなし** — 次セッション冒頭で本田様が ChatGPT UI で Round β 1 枚目 (consultant) を生成して送信していただき次第、10 項目採点 + mockup 配置から着手。
 
 ### 条件待ち (明示 trigger 付き)
 
 | # | 項目 | 分類 | trigger | 充足時のタスク |
-|---|------|------|--------|--------------|
-| 1 | care 判定 (v7 accept / 別 approach 再生成) | 執行 | 本田様「care v7 採用」or「(a)-(e) いずれかの approach で再生成」 | 採用→β へ / 再生成→指定 approach 適用 |
-| 2 | Round β 生成認可 | 執行 | 本田様「β へ進んでよい」 | 5 枚生成 → 並置レビュー |
-| 3 | Round γ 生成認可 | 執行 | 本田様「γ へ進んでよい」 | 4 枚生成 → 並置レビュー |
-| 4 | Phase 4 mockup 反映 | 執行 | 本田様「12 枚 accept、mockup 反映してよい」 | mockup 差替 + PR |
-| 5 | 前 handoff からの継続項目 | 執行 | 本田様指示 | `/healthz` rename、WP 統合、Billing budget alert (前 handoff 参照) |
+|---|------|-----|--------|-------------|
+| 1 | Round β consultant 生成物 | 新規価値創出 (起点指示待ち) | 本田様「consultant 生成した、これで良い?」 | 10 項目採点 → OK なら `mockup/assets/img/illust-job-consultant.png` 配置 → 次 (nurse) 促す |
+| 2 | Round β nurse 生成物 | 同上 | 本田様 nurse 提示 | 同 |
+| 3 | Round β office 生成物 | 同上 | 本田様 office 提示 | 同 |
+| 4 | Round β it 生成物 | 同上 | 本田様 it 提示 | 同 |
+| 5 | Round β care-2 生成物 | 同上 | 本田様 care-2 提示 | 同 |
+| 6 | Round γ 5 枚 (care-3 / default / consultant-2 / office-2 / philosophy / flow) 生成物 | 同上 | 本田様 提示 | 同 |
+| 7 | Phase 4 mockup 反映認可 | 同上 | 11 枚集まり本田様「Phase 4 進んでよい」 | feature branch → 11 枚一括配置 → PR → 認可 → squash merge |
+| 8 | 前々 handoff 継続項目 | 同上 | 本田様指示 | `/healthz` rename / WP 統合 / Billing budget alert $5 |
 
-### 却下候補
+### 却下候補 (記録のみ)
 
-| # | 項目 | 却下理由 |
-|---|------|--------|
-| 1 | AI 側から「もっと良くなりそう」で prompts/*.txt を自己判断改変 | 真理ソース由来、decision-maker 領分 |
-| 2 | AI 側から baseline PNG を追加編集 | 番号単位認可なし禁止 |
-| 3 | Round β/γ を並列 (5+4 枚) 一括生成 | Codex plan review H7 (バッチゲート推奨) 準拠、逐次で認可挟む |
+| # | 項目 | 分類 | 着手しない理由 |
+|---|-----|-----|--------------|
+| 1 | Round α consultant/nurse (旧 V-neck scrub 版 mockup 残存) を prompted に再生成 | 新規価値創出 (起点 unclear) | Round β で本田様が UI 再生成するときに置換される、Claude 側で先取りする理由なし |
+| 2 | gen.sh 拡張 flags (`--composition-ref` 等) を character-critical に活用 | 新規価値創出 (起点 unclear) | 決裁者判断で UI 経路に統一済、API 経路は人物なし挿絵に限定 |
+| 3 | baseline PNG に close-up を追加生成 | 新規価値創出 (起点 unclear) | Image #5 単独で drift 起きたら次セッション協議、先取りせず |
 
-## Issue Net 変化
+### 終了判定
 
-- 前セッション終了時: OPEN 0
-- 本セッション: 新規起票 0、close 0
-- 現時点: OPEN 0
-- **Net 変化: 0 (KPI 維持)** ✅
+🛑 **即着手 = 0 件、条件待ち 8 件全て trigger 未充足** → **executor 領分の作業ゼロ、セッション終了推奨**
 
-## 環境状態
+本田様の ChatGPT UI 生成を待つフェーズ。AI 側から着手候補を昇格させない (4 原則 §1: decision-maker 領分)。
 
-- Git branch: `main`
-- 状態: clean (本セッションで別ブランチ 2 本 merge & delete 済)
-- 最新コミット: `db7faa4 refactor(aozora-illust): Phase 1.5 …` (PR #47)
-- リモート同期: ✅ origin/main と同期済
-- CI: `pages-build-deployment` (PR #45/#46/#47 マージ後の実行、次回 catchup で success 確認)
-- Cloud Run: 稼働中、本セッション変更なし
-- 予算消費: **$3.36 / $10** (33.6%、Round β/γ 予定 $1.44 分の余裕あり)
+## セッション終了可否
 
-## 構造的整合性チェック
-
-- CLAUDE.md ↔ prompts/*.txt: Phase 1.5 の style + accessories rules で同期済 ✅
-- reference_illustration_baseline.md ↔ baseline PNG: 2026-07-01 (Phase 1.5) 版で整合、archive に 2026-06-29 版保管 ✅
-- verification-checklist.md ↔ outfit-spec.txt (ACCESSORIES RULES): 同期済 ✅
-- SKILL.md ↔ prompts/verification-checklist.md: 相互リンクで同期 ✅
-- docs/specs/illust-refresh-ledger.md: 全 23 画像の IN/OUT 判定を記録済 ✅
-
-## 参考: 本セッション生成物一覧
-
-### 判定用途 (git 管理外、`generated-images/`)
-
-- `gpt-image-round-a-{1,2,3}-*.png` (Round A 画風検証、A1 採用)
-- `gpt-image-character-sheet-*.png` (Round B 6 panel model sheet)
-- `gpt-image-phase15-test-care-{,v3,v4,v5,v6}-*.png` (Phase 1.5 スタイル + composition 実験、v6 で成立)
-- `gpt-image-job-care-2026070*.png`, `-consultant-*.png`, `-nurse-*.png` (Round α v1/v2/final)
-- `target-references/target-{7,8}-eguchi-vibe.png` (Image #7/#8 決裁者提示、preview 用に copy)
-- 各 `*-preview.html` (比較レビュー用)
-
-### 真理ソース (git 管理下)
-
-- `.claude/memory/illustration-baseline.png` (Phase 1.5 版、earring patched)
-- `.claude/memory/illustration-baseline-character-closeup.png` (同上)
-- `.claude/memory/archive/*-2026-06-29.png` (旧版保管)
-- `.claude/skills/aozora-illust/prompts/*.txt` (Phase 1.5 版)
-- `.claude/skills/aozora-illust/prompts/verification-checklist.md` (10 項目)
-- `docs/specs/illust-refresh-ledger.md` (23 画像台帳)
-
-## 最終結論
-
-🛑 **executor 領分の作業は care v8 判定待ちのみ、セッション終了推奨** (次セッション冒頭で判定 → Round β 着手)
-
-前 handoff (2026-07-01 codex 統合セッション) からの継続 4 項目 (`/healthz` rename / WP 統合 / Billing budget alert / 追加カテゴリイラスト生成) はすべて未着手継続、本田様の明示指示 trigger 待ち。
-
-本セッションの成果 (真理ソース刷新 + spec Phase 1.5 化 + Round A/B/α 実証) は次セッション以降の Round β/γ + Phase 4 の基盤として恒久化 (PR #46/#47 マージ済)。
+✅ **終了可**。本セッションの目的 (制服 spec pivot、生成経路 pivot、Round α care 完了) は全て達成。PR #49 merged、main sync 済、git clean。次セッションは本田様の UI 生成物を受け取ってから着手。
