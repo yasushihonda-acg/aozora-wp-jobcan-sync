@@ -16,6 +16,12 @@
 #                   コスト: Codex 1 call (~10s, ~¢ オーダー) + 通常の画像生成。
 #   off           — Claude (呼出元) が書いた SCENE をそのまま使う (従来動作)。
 #                   sheet モード時 / SCENE 既に最適化済 / Codex 障害時の fallback で使用。
+#
+# --composition-ref=<path>:
+#   構図参照 PNG を追加 (image[0] 位置に挿入、baseline は image[1,2] へシフト)。
+#   baseline 単独では solo portrait bias が prompt mandate を上回るケース (care 5 連続失敗 実証 2026-07-01) の対策。
+#   既存の multi-person 成功画像を渡して構図バイアスを打ち消す。SCENE 側で「image 1 は layout のみ、
+#   identity は image 2/3 由来」を明示すること。
 set -u
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -36,19 +42,52 @@ SCENE=""
 OUTFIT_OVERRIDE=""
 REF_MODE="both"
 CODEX_REWRITE="on"
+COMPOSITION_REF=""
+COMPOSITION_MASK=""
+QUALITY="high"
+SKIP_BASELINE="off"
 for arg in "$@"; do
   case "$arg" in
-    --mode=*)          MODE="${arg#--mode=}" ;;
-    --category=*)      CATEGORY="${arg#--category=}" ;;
-    --scene=*)         SCENE="${arg#--scene=}" ;;
-    --outfit=*)        OUTFIT_OVERRIDE="${arg#--outfit=}" ;;
-    --ref-mode=*)      REF_MODE="${arg#--ref-mode=}" ;;
-    --codex-rewrite=*) CODEX_REWRITE="${arg#--codex-rewrite=}" ;;
+    --mode=*)             MODE="${arg#--mode=}" ;;
+    --category=*)         CATEGORY="${arg#--category=}" ;;
+    --scene=*)            SCENE="${arg#--scene=}" ;;
+    --outfit=*)           OUTFIT_OVERRIDE="${arg#--outfit=}" ;;
+    --ref-mode=*)         REF_MODE="${arg#--ref-mode=}" ;;
+    --codex-rewrite=*)    CODEX_REWRITE="${arg#--codex-rewrite=}" ;;
+    --composition-ref=*)  COMPOSITION_REF="${arg#--composition-ref=}" ;;
+    --composition-mask=*) COMPOSITION_MASK="${arg#--composition-mask=}" ;;
+    --quality=*)          QUALITY="${arg#--quality=}" ;;
+    --skip-baseline=*)    SKIP_BASELINE="${arg#--skip-baseline=}" ;;
     -h|--help)
-      sed -n '2,20p' "$0"; exit 0 ;;
+      sed -n '2,32p' "$0"; exit 0 ;;
     *) echo "ERROR: unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
+
+if [ -n "$COMPOSITION_REF" ] && [ ! -f "$COMPOSITION_REF" ]; then
+  echo "ERROR: composition-ref not found: $COMPOSITION_REF" >&2
+  exit 2
+fi
+
+if [ -n "$COMPOSITION_MASK" ] && [ -z "$COMPOSITION_REF" ]; then
+  echo "ERROR: --composition-mask requires --composition-ref" >&2
+  exit 2
+fi
+
+if [ -n "$COMPOSITION_MASK" ] && [ ! -f "$COMPOSITION_MASK" ]; then
+  echo "ERROR: composition-mask not found: $COMPOSITION_MASK" >&2
+  exit 2
+fi
+
+case "$QUALITY" in
+  low|medium|high|auto) ;;
+  *) echo "ERROR: invalid --quality=$QUALITY (must be low|medium|high|auto)" >&2; exit 2 ;;
+esac
+
+case "$SKIP_BASELINE" in
+  on|off) ;;
+  *) echo "ERROR: --skip-baseline must be 'on' or 'off'" >&2; exit 2 ;;
+esac
 
 case "$REF_MODE" in
   both|face-only) ;;
@@ -85,7 +124,7 @@ Row 2 EXPRESSION CHART (all front view bust):
 - Panel 5 (bottom-center): Warm gentle smile, hint of upper teeth.
 - Panel 6 (bottom-right): Gentle quiet laugh, eyes softly closed in upward arc.
 
-Every panel must depict UNMISTAKABLY THE SAME PERSON. Same hairstyle, glasses, face shape, skin tone, eye shape, earring, scrub top, lanyard."
+Every panel must depict UNMISTAKABLY THE SAME PERSON. Same hairstyle, glasses, face shape, skin tone, eye shape, polo shirt, lanyard."
   FILENAME="gpt-image-character-sheet-${TS}.png"
   SCENE_LINE="$SCENE"
 else
@@ -130,7 +169,18 @@ MAX=3
 DELAY=10
 HTTP_CODE=""
 REF_ARGS=()
-if [ "$REF_MODE" = "both" ]; then
+MASK_ARGS=()
+if [ -n "$COMPOSITION_REF" ]; then
+  REF_ARGS+=(-F "image[]=@${COMPOSITION_REF}")
+  echo "[gen.sh] composition-ref inserted at image[0]: $COMPOSITION_REF"
+fi
+if [ -n "$COMPOSITION_MASK" ]; then
+  MASK_ARGS+=(-F "mask=@${COMPOSITION_MASK}")
+  echo "[gen.sh] mask applied to image[0]: $COMPOSITION_MASK"
+fi
+if [ "$SKIP_BASELINE" = "on" ]; then
+  echo "[gen.sh] skip-baseline=on: not attaching identity references (composition-only edit)"
+elif [ "$REF_MODE" = "both" ]; then
   REF_ARGS+=(-F "image[]=@${REF_FULL}" -F "image[]=@${REF_FACE}")
 else
   REF_ARGS+=(-F "image[]=@${REF_FACE}")
@@ -142,9 +192,10 @@ for i in $(seq 1 $MAX); do
     -H "Authorization: Bearer $KEY" \
     -F "model=gpt-image-2" \
     "${REF_ARGS[@]}" \
+    "${MASK_ARGS[@]}" \
     -F "prompt=${PROMPT}" \
     -F "size=1536x1024" \
-    -F "quality=high" \
+    -F "quality=${QUALITY}" \
     -F "output_format=png" \
     -F "n=1")
   echo "[${MODE}/${CATEGORY:-sheet}] attempt ${i}: HTTP ${HTTP_CODE}"
