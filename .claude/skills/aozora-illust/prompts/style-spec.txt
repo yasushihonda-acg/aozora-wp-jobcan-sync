@@ -1,7 +1,25 @@
 ILLUSTRATION STYLE (must match the reference exactly):
-- Delicate fine ink linework, thin and lithe.
-- Transparent watercolor flat wash, colors laid once.
-- Minimal shading. No glossy highlights, no oil-paint impasto, no 3D shading.
-- Warm peach skin, muted dusty palette anchored on turquoise #00c4cc.
-- Soft warm natural daylight. Pale ivory/beige walls, pale fresh green plants.
-- NOT anime-glossy, NOT heavy washi paper texture, NOT over-saturated, NOT over-bleeding watercolor blur.
+- Polished anime/manga illustrated style — completed, magazine-quality look.
+- Fine detailed linework — thin, deliberate, sharp lines. Not thick manga-outline, not sketchy.
+- Subtle thoughtful shading — soft gradients on skin, glossy highlights on hair, gentle folds on clothing. NOT flat colors, NOT heavy 3D shading.
+- Crisp clean edges — no watercolor bleed, no ink washing, no paper texture.
+- Multiple small glossy highlights scattered across the black hair (indicating light reflection).
+- Warm color temperature: warm peach skin, warm coral lips, dark black hair with brown warm highlights.
+- Background: white or very pale minimal background (light beige, soft pale blue). Complex or busy backgrounds are FORBIDDEN. The character is the focus.
+- Character composition: centered or slightly off-center portrait / half-body / 3/4 view. Occasional secondary character (elderly patient, colleague, applicant) is OK.
+- Small details rendered with care: earring, lanyard clip, scrub pocket seam, tortoiseshell frame pattern.
+
+FORBIDDEN:
+- Transparent watercolor flat-wash (this is the OLD baseline style, do not use).
+- Heavy washi / paper texture background.
+- Over-saturated colors, oil-paint impasto.
+- Anime-glossy oversized eyes with sparkles.
+- Flat vector / infographic simplification.
+- Specific artist name mimicry (e.g., Eguchi Hisashi, particular manga artists).
+- Text, logos, or brand marks in the image.
+
+NG examples to avoid:
+- 透明水彩フラット塗り (旧 baseline)
+- フラットベクター (illust-philosophy 旧版のような 3D-shape 単純化)
+- 過度な線のにじみ・ぼかし
+- キラキラ・ソフトフォーカス過剰
