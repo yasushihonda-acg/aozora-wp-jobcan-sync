@@ -38,17 +38,17 @@
 
 | ファイル | 分類 | 除外理由 |
 |---------|------|---------|
-| `staff-nakamura.jpg` | 実写 | 別レイヤー、名前付きスタッフ (中村) の実写ポートレート |
-| `staff-sasaki.jpg` | 実写 | 別レイヤー、名前付きスタッフ (佐々木) |
-| `staff-tanaka.jpg` | 実写 | 別レイヤー、名前付きスタッフ (田中) |
-| `blog-childcare-return.jpg` | 実写 | 育休復帰テーマ (キッチン、勤務表、子供の絵) |
-| `blog-mentor-program.jpg` | 実写 | メンター制度テーマ (施設廊下、看護スタッフ後ろ姿) |
-| `blog-papa-leave.jpg` | 実写 | パパ育休テーマ (父親が赤ちゃんを抱く) |
-| `hero-main.jpg` | 実写 | メインヒーロー実写 (若い介護士 + 高齢者) |
-| `category-care.jpg` | 実写 | カテゴリアイコン (食事介助シーン) |
-| `category-nurse.jpg` | 実写 | カテゴリアイコン (訪問看護シーン) |
-| `category-office.jpg` | 実写 | カテゴリアイコン (オフィスシーン) |
-| `category-it.jpg` / `cm.jpg` / `visit.jpg` | 実写 | カテゴリアイコン (未確認、実写想定) |
+| `staff-nakamura.jpg` | 実写 (🗑 2026-07-14 削除済み) | スタッフ紹介セクション廃止に伴い削除 |
+| `staff-sasaki.jpg` | 実写 (🗑 2026-07-14 削除済み) | 同上 |
+| `staff-tanaka.jpg` | 実写 (🗑 2026-07-14 削除済み) | 同上 |
+| `blog-childcare-return.jpg` | 実写 (🗑 2026-07-14 削除済み) | 育休ブログセクション廃止に伴い削除 |
+| `blog-mentor-program.jpg` | 実写 (🗑 2026-07-14 削除済み) | 同上 |
+| `blog-papa-leave.jpg` | 実写 (🗑 2026-07-14 削除済み) | 同上 |
+| `hero-main.jpg` | 実写 (🗑 2026-07-14 削除済み) | ヒーロー2カラムレイアウト廃止に伴い削除 (背景は sky-hero.jpg → SCENE #13 で刷新予定) |
+| `category-care.jpg` | 実写 (🗑 2026-07-14 削除済み) | 募集職種カードを `illust-job-care.png` へ差替のため削除 |
+| `category-nurse.jpg` | 実写 (🗑 2026-07-14 削除済み) | 募集職種カードを `illust-job-nurse.png` へ差替のため削除 |
+| `category-office.jpg` | 実写 (🗑 2026-07-14 削除済み) | 募集職種カードを `illust-job-office.png` へ差替のため削除 |
+| `category-it.jpg` / `cm.jpg` / `visit.jpg` | 実写 (🗑 2026-07-14 削除済み) | 募集職種カードをそれぞれ `illust-job-it.png` / `illust-job-consultant.png` / `illust-job-care-3.png` (暫定、SCENE #14 生成待ち) へ差替のため削除 |
 | `illust-numbers.jpg` | イラスト、人物なし | 町並みシルエット + ターコイズアクセント屋根/風車。人物なしなのでキャラ設定と競合しない。パレット追従 (turquoise → 新アンカー) は Phase A 承認後の別作業として保留 |
 
 ## アーカイブ
