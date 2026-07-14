@@ -13,7 +13,10 @@ mockup 内キャラ含みイラスト 12 枚を ChatGPT UI (gpt-image) で生成
 
 ## 共通 PREAMBLE (毎回冒頭に貼付)
 
-**併せて添付**: `.claude/memory/illustration-baseline.png` (Image #5 = 歩行介助シーン baseline) を UI 会話にアタッチして "match this character's identity exactly" と明示すると drift 最小化。
+**併せて添付**: `.claude/memory/illustration-baseline.png` (2026-07-14 版 = 決裁者指定 reference: シティポップ×無機質ポスター調、歩行付き添いシーン) を UI 会話にアタッチして "match this character's identity and this art style exactly" と明示すると drift 最小化。2026-07-14 以降は baseline が新画風そのものなので、**identity と画風の両方の参照**として使える。
+
+**運用注意**:
+- ChatGPT UI が実在作家名の指定を拒否した場合は、作家名の行を外し、続く具体的な画風記述 (細く均一な輪郭線 / フラットなセル塗り / シティポップ期ポスターイラスト等) のみで再実行する
 
 ```
 あおぞらケアグループの求人サイト・採用サイトで使うイラストを生成してください。以下の条件を最優先で守ってください。
@@ -21,33 +24,34 @@ mockup 内キャラ含みイラスト 12 枚を ChatGPT UI (gpt-image) で生成
 【目的】
 あおぞらケアグループの求人サイトで使える、統一感のあるイメージキャラクターのイラスト。介護スタッフ、相談員、看護、事務、IT、採用面談、施設紹介、理念ページなど、いろいろな場面に差し込めるキャラクター。
 
-【全体の世界観】
-・現代的でおしゃれ
-・介護求人サイトに合う清潔感
-・やさしく、親しみやすい
-・でも幼すぎず、少し大人っぽい
+【全体の世界観 (2026-07-14 決裁者指定)】
+・シティポップ、さわやか、無機質
+・ポスター的・広告的なビジュアル (採用ブランディングのキービジュアル)
+・**「医療・介護 = 温かい、ほっこり」という固定観念のイメージは一切入れない**。介護特有の生活感・福祉感を排除する
+・都会的、洗練、クール、清潔
+・幼すぎず、大人っぽい
 ・働く人の誇りや専門性が伝わる
 ・「やりがい搾取」ではなく、「ケアスタッフにやりがいと経済的豊かさを」という思想に合う
-・温かいが、古臭くない
-・かわいいだけではなく、採用ブランディングとして使える洗練感がある
 
 【イラストの方向性】
-著名な作家や特定の漫画家の画風を直接指定しないでください。方向性としては、
-「現代的でおしゃれな日本のエディトリアル系イラスト」
-「細い線、清潔感、少しレトロポップ、都会的、介護求人に合う温かさ」
-「雑誌の挿絵や採用サイトのキービジュアルに使える洗練された雰囲気」
+イラストレーター江口寿史さんの画風に寄せてください (2026-07-02 決裁者指示、2026-07-14 reference 画像で方向確定)。具体的には、
+「1980-90 年代シティポップ時代の日本の雑誌・レコードジャケット・ポスターイラストの雰囲気」
+「自信のある細く均一なクリーンな輪郭線、フラットなセル塗り、陰影は最小限」
+「コバルトブルー×白の大胆な幾何学的色面で構成された無機質でモダンな背景 + 窓外の澄んだ青空と都市のスカイライン」
+「さわやかで洗練された美人画、ポスター・広告ビジュアルのような大胆な構図」
+「クリスプな色面、白とブルーの余白を活かす」
 を目指してください。
 
 【イメージキャラクター】
 ・日本人女性
 ・20代後半〜30代前半くらい
-・親しみやすく、知的で、あたたかい雰囲気
+・知的で、洗練され、涼しげで落ち着いた雰囲気 (ほっこり感は不要)
 ・若すぎず、子どもっぽくしない
 ・流行りのメガネをかけている (べっ甲丸縁、tortoiseshell)
 ・黒髪を低い位置でゆるくまとめたシニヨン + ウィスピーバング
 ・清潔感があり、仕事ができそう
 ・介護現場にも、相談員にも、事務にも、採用広報にも使える汎用性のある女性キャラクター
-・表情はやさしい笑顔。大げさな笑顔ではなく、安心感のある自然な笑顔
+・表情は控えめな微笑〜涼しげな自然な表情。大げさな笑顔・ほっこりした演出は NG
 
 【制服 (統一)】
 ・あおぞらケアグループの制服は「黒」
@@ -71,29 +75,39 @@ mockup 内キャラ含みイラスト 12 枚を ChatGPT UI (gpt-image) で生成
   - 派手すぎる装飾は避ける
   - 仕事感とおしゃれさのバランスを取る
 
+【トーン・情感 — 2026-07-14 決裁者指定 (reference 画像で確定)】
+・シティポップ的なさわやかさと無機質なクールさ。感情演出は控えめで静か
+・澄んだ青空、ガラス張りの明るいモダンな空間、幾何学的な光と影の色面 (斜めの光のバンド等)
+・ブルーの色面×白のハイコントラストで、ポスターとして目を引くグラフィック性
+・人物の表情は控えめな微笑〜涼しげな自然な表情。ほっこり感・過剰な笑顔は不要
+・「ふとした瞬間」の candid な間は維持しつつ、演出はクールに
+・NG: 夕方の暖色ノスタルジー (2026-07-02 の旧指示、廃止)、温かさを強調した介護らしい演出、涙・ドラマチック誇張
+
 【あおぞらケアグループのコーポレートカラー】
 以下の色を意識してください。ただし、機械的なベタ塗りではなく、自然に馴染ませてください。
 ・ブルー: #00C4CC
 ・グレー: #575656
 ・ベージュ: #f8f5ee
 
-使い方の優先イメージ:
+使い方の優先イメージ (2026-07-14 更新):
 ・黒ポロシャツが主役
-・ブルー #00C4CC は差し色 (ランヤード、名札、背景アクセント、小物、施設内装の一部)
+・ブルーは差し色に限定せず、**背景の大胆な幾何学的色面・都市スカイライン・床の反射などに面で使って良い** (reference 画像のコバルトブルー×白の構成)
+・ランヤード・名札のブルーは維持
 ・グレー #575656 は文字や小物、落ち着いた影色
-・ベージュ #f8f5ee は背景や空間のやさしいベース
+・白・ベージュ #f8f5ee は色面構成の明部・余白
 
 【避けたいもの】
+・**介護特有の温かい・ほっこりした固定観念の演出** (2026-07-14 決裁者指定: 「医療介護 = 温かい」の固定観念は排除)
+・生活感のある古い介護施設の内装、福祉感の強い小道具
+・夕方の暖色ノスタルジー演出 (2026-07-02 旧指示、廃止)
 ・アニメっぽすぎる大きな目
 ・子どもっぽいキャラクター
 ・派手すぎる装飾
 ・医療ドラマ風の過剰演出
-・古い介護施設の暗い雰囲気
 ・青い制服
 ・白衣っぽすぎる表現
 ・読めない文字や不自然な日本語テキスト
 ・ロゴや文字の無理な生成
-・実在作家の画風をそのまま模倣する表現
 ・V ネックスクラブ (旧 Phase 1.5 版、廃止)
 ・ターコイズ / cyan / teal 系の制服 (最旧版、廃止)
 ・commercial anime のグロス感、透明水彩フラット、フラットベクター
@@ -157,7 +171,7 @@ JOB CATEGORY: Administrative office staff (事務スタッフ) — records, phon
 
 ACCESSORY RULE: Small hoop, small drop, or stud earring OK (subtle only, nothing dangling large). Watch OK. Small subtle rings OK.
 
-OUTFIT VARIATION: keep the black polo shirt as base, but she MAY wear a subtle beige or muted cardigan open over it (optional).
+OUTFIT VARIATION: suit style — black or charcoal tailored jacket over a white collared shirt (2026-07-02 決裁者指示: 事務/バックオフィス系はスーツ系). Blue lanyard kept.
 
 COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Bright office environment.
 
@@ -171,7 +185,7 @@ JOB CATEGORY: IT / systems staff (IT / システム) — supports the company's 
 
 ACCESSORY RULE: Small hoop, small drop, or stud earring OK. Watch OK. Simple rings OK.
 
-OUTFIT VARIATION: keep the black polo shirt as base, but she MAY wear a tailored dark-navy or charcoal blazer open over it in this professional-tech context (optional).
+OUTFIT VARIATION: black hoodie (casual tech style, 2026-07-02 決裁者指示: it は黒パーカー). Blue lanyard + ID badge kept.
 
 COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Bright work environment. No readable text on any screen (blur / silhouette only).
 
@@ -235,7 +249,7 @@ JOB CATEGORY: Administrative office staff (事務スタッフ) — same characte
 
 ACCESSORY RULE: Small hoop / drop / stud OK.
 
-OUTFIT VARIATION: cardigan-over-polo OK.
+OUTFIT VARIATION: suit style — black or charcoal tailored jacket over a white collared shirt (2026-07-02 決裁者指示: 事務/バックオフィス系はスーツ系). Blue lanyard kept.
 
 COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A distinctly different office-work scene.
 
