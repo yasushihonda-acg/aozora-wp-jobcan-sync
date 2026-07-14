@@ -295,28 +295,13 @@ Please generate one illustration.
 **併せて添付推奨**: 求人カードイラストのいずれか 1 枚 (例: `illust-job-office.png`) を "match this background's art style, especially the sky / cityscape treatment" として UI 会話に添付すると、画風の一貫性が取りやすい。PREAMBLE の【イメージキャラクター】【制服】【装飾品】の指定は適用対象外 (人物が存在しないため)。
 
 ```
-あおぞらケアグループの求人サイトで使う、人物なしの背景イラストを生成してください。
+SUBJECT: N/A — pure background / environment illustration for the recruitment website, no character. Reused as both the hero section's full-bleed background and the entry-cta section's background.
 
-【用途】
-求人サイトのトップページ、ヒーローセクションの full-bleed 背景画像。同じ画像をページ下部のエントリー CTA セクションの背景にも再利用します。
+STYLE ANCHOR: Same 1980s-90s Japanese city-pop poster illustration style as the job-card illustrations (thin clean outlines, flat cel shading, no gradient) — a bold cobalt-blue sky filling most of the frame with large flat-shaded white cumulus clouds (crisp clean edges, no photorealistic/airbrush gradient), plus a thin modern-city-skyline silhouette along the bottom edge.
 
-【世界観・画風】
-・1980〜90 年代 日本のシティポップ時代の雑誌・レコードジャケット・ポスターイラストの雰囲気 (イラストレーター江口寿史さんの画風に寄せる)
-・自信のある細く均一なクリーンな輪郭線、フラットなセル塗り、陰影は最小限、グラデーションは使わない
-・コバルトブルー主体の大胆な青空を画面の大部分に占める大きな入道雲 (積雲) で構成。雲の輪郭はシャープでクリーン、写実的なグラデーション表現は避ける
-・画面下部にごく細い帯として、モダンな都市のスカイラインのシルエットを配置
-・ポスター・広告ビジュアルのような大胆でクリスプな構図
+COMPOSITION: WIDE horizontal 16:9 or wider. Keep the left-center area relatively open/uncluttered — page text will be overlaid there. No people, no readable text, no logo, no warm sunset colors.
 
-【コンポジション】
-横長 16:9 以上のワイド構図。左側 (テキストが重なるエリア) は色面が比較的シンプルで、テキストオーバーレイに耐える余白を確保してください。
-
-【避けたいもの】
-・写真的な空、写実的な雲、エアブラシ調のグラデーション
-・夕方の暖色ノスタルジー演出
-・読めない文字、ロゴ
-・人物 (この背景イラストには人物を含めない)
-
-続けて具体的なアスペクト比などの制約があれば追加しますが、まずは上記の条件で 1 枚生成してください。
+Please generate one illustration.
 ```
 
 ## 生成後の運用
