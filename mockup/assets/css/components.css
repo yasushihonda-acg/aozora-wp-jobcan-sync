@@ -242,6 +242,7 @@
 .hero__copy {
   position: relative;
   z-index: 2;
+  max-width: 640px;
 }
 .hero__eyebrow {
   display: inline-block;
@@ -285,29 +286,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-}
-
-/* 浮かんだ写真フレーム (右側) */
-.hero__photo {
-  display: none;
-}
-@media (min-width: 960px) {
-  .hero__inner {
-    grid-template-columns: 1.05fr 0.95fr;
-    gap: var(--space-12);
-  }
-  .hero__photo {
-    display: block;
-    position: relative;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    aspect-ratio: 4 / 5;
-    box-shadow: var(--shadow-lift);
-    transform: rotate(-1.5deg);
-  }
-  .hero__photo img {
-    width: 100%; height: 100%; object-fit: cover;
-  }
 }
 
 /* =========================================================
@@ -472,84 +450,6 @@
 }
 @media (min-width: 768px) {
   .stats { grid-template-columns: repeat(4, 1fr); padding: var(--space-10) var(--space-8); }
-}
-
-/* =========================================================
- * Staff voices
- * ========================================================= */
-
-.staff-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-8);
-}
-.staff-interview-card {
-  background: #fff;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
-  display: flex;
-  flex-direction: column;
-}
-.staff-interview-card__media {
-  position: relative;
-  aspect-ratio: 4 / 5;
-  background: var(--color-bg-alt);
-  overflow: hidden;
-}
-.staff-interview-card__media img { width: 100%; height: 100%; object-fit: cover; }
-
-.staff-interview-card__body {
-  padding: var(--space-6);
-  flex: 1;
-  display: flex; flex-direction: column;
-}
-.staff-interview-card__role {
-  display: inline-block;
-  font-size: var(--text-xs);
-  color: var(--color-accent-dark);
-  background: var(--color-accent-soft);
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.06em;
-  margin-bottom: var(--space-3);
-  align-self: flex-start;
-}
-.staff-interview-card__name {
-  font-size: var(--text-xl);
-  margin: 0 0 var(--space-4);
-  color: var(--color-heading);
-}
-.staff-interview-card__quote {
-  margin: 0 0 var(--space-4);
-  padding: 0;
-  font-size: var(--text-base);
-  line-height: var(--lh-loose);
-  color: var(--color-ink);
-  font-weight: var(--weight-medium);
-  position: relative;
-  padding-left: var(--space-5);
-  flex: 1;
-}
-.staff-interview-card__quote::before {
-  content: "“";
-  position: absolute;
-  left: 0;
-  top: -8px;
-  font-family: var(--font-serif);
-  font-size: 2.5rem;
-  color: var(--color-accent);
-  line-height: 1;
-}
-.staff-interview-card__meta {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-  letter-spacing: 0.04em;
-}
-@media (min-width: 768px) {
-  .staff-grid { grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
 }
 
 /* =========================================================

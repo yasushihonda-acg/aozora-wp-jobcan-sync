@@ -1,6 +1,8 @@
 # ChatGPT UI 生成用 プロンプト集 (2026-07-02)
 
-mockup 内キャラ含みイラスト 12 枚を ChatGPT UI (gpt-image) で生成する際のコピペ用テンプレート。API `v1/images/edits` の identity 保持限界により UI 経路に統一 (empirical、本セッションで確定)。
+mockup 内キャラ含みイラスト 12 枚 + ヒーロー背景 (キャラなし) 1 枚を ChatGPT UI (gpt-image) で生成する際のコピペ用テンプレート。API `v1/images/edits` の identity 保持限界により UI 経路に統一 (empirical、本セッションで確定)。
+
+**2026-07-14 追加改訂**: 決裁者指示によりトップページのスタッフ紹介セクションを廃止し、philosophy (SCENE #11) / flow (SCENE #12) のイラストは「warm / 複数人物必須」の旧方針を撤回、求人カード群と同一の単独キャラクター・ポスタートーンに統一。併せてヒーロー背景 (SCENE #13、`sky-hero.jpg` を上書き) を新規追加し、トンマナは https://g-s.dev/ 的な大胆なポスター構図をより江口寿史風が活きる方向に寄せる。
 
 ## 使い方
 
@@ -118,11 +120,11 @@ mockup 内キャラ含みイラスト 12 枚を ChatGPT UI (gpt-image) で生成
 続けて specific SCENE を提示するので、上記条件でイラストを生成してください。
 ```
 
-## 12 枚の SCENE ブロック (最小条件版)
+## 13 枚の SCENE ブロック (最小条件版)
 
 **方針変更 (2026-07-02)**: 詳細な SCENE 指定は AI (Claude) の想定バイアスを注入するリスクあり。ChatGPT UI 側の業界知識に委ねる方が variant 多様性と自然さで優れる (実証: 本セッション 8 回試行で raw API では届かなかった品質を UI は少数回で達成)。よって **職種 + accessory rule + composition の最小条件のみ渡し**、SCENE は UI の判断に任せる。
 
-各ブロックは PREAMBLE の直後に貼る。**1 会話 = 1 illustration** で運用。
+SCENE 1〜12 (キャラクターを含むもの) は PREAMBLE の直後に貼る。**1 会話 = 1 illustration** で運用。SCENE 13 (ヒーロー背景、人物なし) のみ例外で、PREAMBLE を貼らず単独プロンプトとして新規会話で使う。
 
 ---
 
@@ -256,28 +258,48 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A distinctly di
 Please generate one illustration.
 ```
 
-### 11. `illust-philosophy.jpg` — 理念セクション用ヒーロー
+### 11. `illust-philosophy.jpg` — 理念セクション用イラスト (2026-07-14 改訂: 求人カードと同一トーンに統一)
+
+**改訂理由**: 旧版は「warm / 複数人物必須 / intergenerational connection」を指定していたが、これは 2026-07-14 決裁者指定の「ほっこり固定観念の排除」方針と矛盾する。求人カード群 (SCENE 1〜10) と同じ単独キャラクター・ポスタートーンに統一する。
 
 ```
-JOB CATEGORY: N/A — this is the corporate philosophy / mission-statement hero illustration for the recruitment website. Should evoke the company's warm eldercare mission across generations.
+JOB CATEGORY: N/A — this is the corporate philosophy / mission-statement illustration for the recruitment website. Should feel confident, professional, and share the exact same city-pop poster identity as the job-card illustrations — NOT a "warm heartwarming eldercare" scene, NOT an intergenerational group scene.
 
-ACCESSORY RULE: NO earring on the recurring character (care hygiene).
+ACCESSORY RULE: NO earring on the recurring character (care hygiene, matches [illust-job-care.png]).
 
-COMPOSITION: WIDE horizontal 16:9 environmental scene. MULTI-PERSON MANDATORY — depict at least 3 people at similar visual weight: the recurring character, an elderly resident, and one more person (another elderly resident OR a family member OR a colleague). Emphasize warm intergenerational connection.
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, the SAME single recurring character as the job-card illustrations (no second or third person). Depict her in a composed, confident pose that reads as embodying the company's professionalism and quiet pride — e.g. looking out over the city skyline through a window, or standing within the same cobalt-blue geometric interior used in the job-card scenes.
 
 Please generate one illustration.
 ```
 
-### 12. `illust-flow.jpg` — 応募フロー用
+### 12. `illust-flow.jpg` — 応募フロー用 (2026-07-14 改訂: 求人カードと同一トーンに統一)
+
+**改訂理由**: 旧版は「warm application interview conversation」の 2 人構図を指定していたが、SCENE #11 と同じ理由でトーンを撤回。求人カードと同じ単独キャラクター構図に統一する。
 
 ```
-JOB CATEGORY: HR / recruitment interview — the recurring character meeting with a job applicant. This illustration appears on the application-flow section of the recruitment website.
+JOB CATEGORY: HR / recruitment process — the recurring character in a calm, professional moment related to the application process. This illustration appears on the application-flow section of the recruitment website. Keep the exact same cool city-pop poster tone as the job-card illustrations — NOT a "warm heartwarming interview" scene.
 
-ACCESSORY RULE: Small subtle stud OK (consultant tier).
+ACCESSORY RULE: Small subtle stud earring OK (consultant tier, matches [illust-job-consultant.png]). No hoop, no drop, no dangle.
 
-OUTFIT VARIATION: cardigan-over-polo OK.
+OUTFIT VARIATION: cardigan-over-polo OK if it fits.
 
-COMPOSITION: WIDE horizontal 16:9. Two-person environmental scene — the recurring character on one side, a Japanese job applicant (casual-professional attire) on the other side, engaged in warm application interview conversation.
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, the SAME single recurring character as the job-card illustrations (no second person / no applicant character). Environmental scene suggesting the recruitment process — e.g. reviewing an application document at a desk, seated in the same modern glass-and-blue office interior used in the office job-card scenes. Composed and professional, not emotionally warm.
+
+Please generate one illustration.
+```
+
+### 13. ヒーロー背景 / エントリー CTA 背景 (2026-07-14 新規追加、`sky-hero.jpg` を上書き)
+
+**用途**: トップページ hero セクション full-bleed 背景、および entry-cta セクション背景 (同一ファイルを両方で参照)。人物は一切含めない環境イラスト。決裁者共有の江口寿史 画集参考 (青空 + 大きな入道雲、シャープなフラット色面の見開き) を配色・雲の描き方の参考にする。
+
+**併せて添付推奨**: 求人カードイラストのいずれか 1 枚 (例: `illust-job-office.png`) を "match this background's art style, especially the sky / cityscape treatment" として UI 会話に添付すると、画風の一貫性が取りやすい。PREAMBLE の【イメージキャラクター】【制服】【装飾品】の指定は適用対象外 (人物が存在しないため)。
+
+```
+SUBJECT: N/A — pure background / environment illustration for the recruitment website, no character. Reused as both the hero section's full-bleed background and the entry-cta section's background.
+
+STYLE ANCHOR: Same 1980s-90s Japanese city-pop poster illustration style as the job-card illustrations (thin clean outlines, flat cel shading, no gradient) — a bold cobalt-blue sky filling most of the frame with large flat-shaded white cumulus clouds (crisp clean edges, no photorealistic/airbrush gradient), plus a thin modern-city-skyline silhouette along the bottom edge.
+
+COMPOSITION: WIDE horizontal 16:9 or wider. Keep the left-center area relatively open/uncluttered — page text will be overlaid there. No people, no readable text, no logo, no warm sunset colors.
 
 Please generate one illustration.
 ```
@@ -289,7 +311,7 @@ Please generate one illustration.
 1. 本田様が Claude セッション (私) に画像を送信
 2. Claude が **10 項目 Pass/Fail 判定** (verification-checklist.md 準拠) を実施
 3. Pass → `mockup/assets/img/<filename>` に配置 + necessary alt テキスト調整
-4. 全 12 枚集まったら **Phase 4 feature branch → PR → code-review → 認可 → squash merge**
+4. 全 13 枚集まったら **Phase 4 feature branch → PR → code-review → 認可 → squash merge**
 5. Fail → SCENE 微調整案を提示、本田様が UI 再生成
 
 ## Fallback
