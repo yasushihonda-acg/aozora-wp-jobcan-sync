@@ -288,13 +288,15 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, the SAME single
 Please generate one illustration.
 ```
 
-### 13. ヒーロー背景 / エントリー CTA 背景 (2026-07-14 新規追加、`sky-hero.jpg` を上書き)
+### 13. ヒーロー背景 / エントリー CTA 背景 (2026-07-14 新規追加 → **採用済み**、`sky-hero.jpg` に配置済み)
 
 **用途**: トップページ hero セクション full-bleed 背景、および entry-cta セクション背景 (同一ファイルを両方で参照)。人物は一切含めない環境イラスト。決裁者共有の江口寿史 画集参考 (青空 + 大きな入道雲、シャープなフラット色面の見開き) を配色・雲の描き方の参考にする。
 
 **併せて添付推奨**: 求人カードイラストのいずれか 1 枚 (例: `illust-job-office.png`) を "match this background's art style, especially the flat cel-shaded line work — NOT a soft airbrushed anime sky" として UI 会話に添付すると、画風の一貫性が取りやすい。PREAMBLE の【イメージキャラクター】【制服】【装飾品】の指定は適用対象外 (人物が存在しないため)。
 
-**2026-07-14 1 回目生成の結果と改訂 (決裁者評価)**: 初回生成は「雲がソフトなグラデーション陰影のアニメ調」「都市スカイラインが描かれていない」の 2 点で house style と乖離。プロンプトへ明示的に反映済み (下記の CRITICAL 行)。再生成時はこの改訂版を使用する。
+**2026-07-14 1 回目生成の結果と改訂 (決裁者評価)**: 初回生成は「雲がソフトなグラデーション陰影のアニメ調」「都市スカイラインが描かれていない」の 2 点で house style と乖離。プロンプトへ CRITICAL 行を追記し、2 回目生成で両方解消を確認 → 採用。
+
+**採用記録**: 2026-07-14、2 回目生成物を Claude が評価 (フラットセル塗りの雲・都市スカイラインシルエットとも house style に合致) → 決裁者が Finder 経由でファイル実体を提供 → `mockup/assets/img/sky-hero.jpg` に配置 (hero セクション full-bleed 背景 + entry-cta 背景の両方に反映)。
 
 ```
 SUBJECT: N/A — pure background / environment illustration for the recruitment website, no character. Reused as both the hero section's full-bleed background and the entry-cta section's background.
