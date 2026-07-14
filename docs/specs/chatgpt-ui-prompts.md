@@ -292,12 +292,18 @@ Please generate one illustration.
 
 **用途**: トップページ hero セクション full-bleed 背景、および entry-cta セクション背景 (同一ファイルを両方で参照)。人物は一切含めない環境イラスト。決裁者共有の江口寿史 画集参考 (青空 + 大きな入道雲、シャープなフラット色面の見開き) を配色・雲の描き方の参考にする。
 
-**併せて添付推奨**: 求人カードイラストのいずれか 1 枚 (例: `illust-job-office.png`) を "match this background's art style, especially the sky / cityscape treatment" として UI 会話に添付すると、画風の一貫性が取りやすい。PREAMBLE の【イメージキャラクター】【制服】【装飾品】の指定は適用対象外 (人物が存在しないため)。
+**併せて添付推奨**: 求人カードイラストのいずれか 1 枚 (例: `illust-job-office.png`) を "match this background's art style, especially the flat cel-shaded line work — NOT a soft airbrushed anime sky" として UI 会話に添付すると、画風の一貫性が取りやすい。PREAMBLE の【イメージキャラクター】【制服】【装飾品】の指定は適用対象外 (人物が存在しないため)。
+
+**2026-07-14 1 回目生成の結果と改訂 (決裁者評価)**: 初回生成は「雲がソフトなグラデーション陰影のアニメ調」「都市スカイラインが描かれていない」の 2 点で house style と乖離。プロンプトへ明示的に反映済み (下記の CRITICAL 行)。再生成時はこの改訂版を使用する。
 
 ```
 SUBJECT: N/A — pure background / environment illustration for the recruitment website, no character. Reused as both the hero section's full-bleed background and the entry-cta section's background.
 
 STYLE ANCHOR: Same 1980s-90s Japanese city-pop poster illustration style as the job-card illustrations (thin clean outlines, flat cel shading, no gradient) — a bold cobalt-blue sky filling most of the frame with large flat-shaded white cumulus clouds (crisp clean edges, no photorealistic/airbrush gradient), plus a thin modern-city-skyline silhouette along the bottom edge.
+
+CRITICAL — avoid these two mistakes from a previous attempt:
+1. The clouds MUST be flat, crisp-edged cel-shaded shapes with at most 2 flat tones (white + one light gray-blue shadow tone) — NOT soft airbrushed/gradient-shaded anime clouds with painterly volume. Think screen-printed poster illustration, not a realistic sky render.
+2. A city skyline silhouette (simple flat dark silhouette of modern building shapes) MUST be visible as a thin band along the bottom edge of the frame. Do not omit it.
 
 COMPOSITION: WIDE horizontal 16:9 or wider. Keep the left-center area relatively open/uncluttered — page text will be overlaid there. No people, no readable text, no logo, no warm sunset colors.
 
