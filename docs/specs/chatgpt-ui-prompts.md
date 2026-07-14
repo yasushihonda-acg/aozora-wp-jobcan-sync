@@ -274,18 +274,22 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, the SAME single
 Please generate one illustration.
 ```
 
-### 12. `illust-flow.jpg` — 応募フロー用 (2026-07-14 改訂: 求人カードと同一トーンに統一)
+### 12. `illust-flow.jpg` — 応募フロー用 (2026-07-14 改訂 → **採用済み**)
 
 **改訂理由**: 旧版は「warm application interview conversation」の 2 人構図を指定していたが、SCENE #11 と同じ理由でトーンを撤回。求人カードと同じ単独キャラクター構図に統一する。
+
+**2026-07-15 OUTFIT VARIATION 改訂 (決裁者判断)**: 1 回目生成は「カーディガン重ね着可」の指定に対し、どちらでもない中途半端な長袖シャツになった。人事/採用担当として応募書類を確認するシーンは OL 的な事務シーンとして自然なため、`illust-job-office.png` と同じ「スーツ系 (黒/charcoal テーラードジャケット + 白襟シャツ)」へ変更。
+
+**採用記録**: 2026-07-15、2 回目生成 (スーツ系指定後) を評価 → キャラクターidentity・衣装・画風・アスペクト比とも house style に合致 → 採用、`illust-flow.jpg` に配置済み。
 
 ```
 JOB CATEGORY: HR / recruitment process — the recurring character in a calm, professional moment related to the application process. This illustration appears on the application-flow section of the recruitment website. Keep the exact same cool city-pop poster tone as the job-card illustrations — NOT a "warm heartwarming interview" scene.
 
 ACCESSORY RULE: Small subtle stud earring OK (consultant tier, matches [illust-job-consultant.png]). No hoop, no drop, no dangle.
 
-OUTFIT VARIATION: cardigan-over-polo OK if it fits.
+OUTFIT VARIATION: suit style — black or charcoal tailored jacket over a white collared shirt (matches [illust-job-office.png]). Blue lanyard kept. NOT a plain long-sleeve black shirt/blouse, NOT a cardigan.
 
-COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, the SAME single recurring character as the job-card illustrations (no second person / no applicant character). Environmental scene suggesting the recruitment process — e.g. reviewing an application document at a desk, seated in the same modern glass-and-blue office interior used in the office job-card scenes. Composed and professional, not emotionally warm.
+COMPOSITION: horizontal 3:2 or 16:9 wide (WIDE landscape, NOT a tall portrait). Main subject centered, the SAME single recurring character as the job-card illustrations (no second person / no applicant character). Environmental scene suggesting the recruitment process — e.g. reviewing an application document at a desk, seated in the same modern glass-and-blue office interior used in the office job-card scenes. Composed and professional, not emotionally warm.
 
 Please generate one illustration.
 ```
