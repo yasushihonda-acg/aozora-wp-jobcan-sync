@@ -258,9 +258,11 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A distinctly di
 Please generate one illustration.
 ```
 
-### 11. `illust-philosophy.jpg` — 理念セクション用イラスト (2026-07-14 改訂: 求人カードと同一トーンに統一)
+### 11. `illust-philosophy.jpg` — 理念セクション用イラスト (2026-07-14 改訂 → **採用済み**)
 
 **改訂理由**: 旧版は「warm / 複数人物必須 / intergenerational connection」を指定していたが、これは 2026-07-14 決裁者指定の「ほっこり固定観念の排除」方針と矛盾する。求人カード群 (SCENE 1〜10) と同じ単独キャラクター・ポスタートーンに統一する。
+
+**採用記録**: 2026-07-14、1 回目生成は縦長ポートレート構図で COMPOSITION 指定 (横長 3:2/16:9) と不一致のため再生成を依頼。2 回目生成で横長構図に修正されたことを確認 → 採用、`illust-philosophy.jpg` に配置済み。
 
 ```
 JOB CATEGORY: N/A — this is the corporate philosophy / mission-statement illustration for the recruitment website. Should feel confident, professional, and share the exact same city-pop poster identity as the job-card illustrations — NOT a "warm heartwarming eldercare" scene, NOT an intergenerational group scene.
