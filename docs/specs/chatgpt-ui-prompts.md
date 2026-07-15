@@ -304,7 +304,7 @@ Please generate one illustration.
 
 **採用記録**: 2026-07-14、2 回目生成物を Claude が評価 (フラットセル塗りの雲・都市スカイラインシルエットとも house style に合致) → 決裁者が Finder 経由でファイル実体を提供 → `mockup/assets/img/sky-hero.jpg` に配置 (hero セクション full-bleed 背景 + entry-cta 背景の両方に反映)。
 
-**2026-07-15 差し替え検討**: 決裁者からトップページ実機レビューでヒーロー文字の視認性課題を指摘され、新バリエーション候補 2 枚 (画面左〜中央に雲のない濃紺の単色空が大きく広がる構図/雲が画面全体に広がる構図) を追加提供。可読性の観点から前者を採用決定(2026-07-15)。ヒーロー側のテキスト視認性は `.hero__title em` のマーカー除去 + `.hero` へのディレクショナルスクリム追加(`mockup/assets/css/components.css`) でも別途対処済み。**ファイル実体 (`sky-hero.jpg` 上書き) は決裁者からの画像再送待ち — 一時キャッシュ切れのため未反映。次回受領時に差し替えて本記録を更新する。**
+**2026-07-15 差し替え完了**: 決裁者からトップページ実機レビューでヒーロー文字の視認性課題を指摘され、新バリエーション候補 2 枚 (画面左〜中央に雲のない濃紺の単色空が大きく広がる構図/雲が画面全体に広がる構図) を追加提供。可読性の観点から前者を採用決定し、`mockup/assets/img/sky-hero.jpg` に反映済み (entry-cta 背景も同一ファイル共用)。ヒーロー側のテキスト視認性は `.hero__title em` のマーカー除去 + `.hero` へのディレクショナルスクリム追加(`mockup/assets/css/components.css`) でも別途対処済み。Playwright 実機確認で判読性を確認済み。
 
 ```
 SUBJECT: N/A — pure background / environment illustration for the recruitment website, no character. Reused as both the hero section's full-bleed background and the entry-cta section's background.
