@@ -1569,38 +1569,74 @@
   }
 }
 
-/* Stagger — career-ladder / job categories は要素ごとに 70ms 刻みで遅延させ、
-   順番に現れる演出を追加 (親セクションの reveal と独立した transition)。 */
+/* Stagger — career-ladder / job categories / mission / stats / flow / faq は
+   要素ごとに 70ms 刻みで遅延させ、順番に現れる演出を追加
+   (親セクションの reveal と独立した transition)。 */
 .js [data-reveal] .career-ladder__step,
-.js [data-reveal] .category-card {
+.js [data-reveal] .category-card,
+.js [data-reveal] .mission-card,
+.js [data-reveal] .stat,
+.js [data-reveal] .flow__step,
+.js [data-reveal] .faq__item {
   opacity: 0;
   transform: translateY(20px);
   transition: opacity 550ms cubic-bezier(0.16, 1, 0.3, 1), transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .js [data-reveal].is-visible .career-ladder__step,
-.js [data-reveal].is-visible .category-card {
+.js [data-reveal].is-visible .category-card,
+.js [data-reveal].is-visible .mission-card,
+.js [data-reveal].is-visible .stat,
+.js [data-reveal].is-visible .flow__step,
+.js [data-reveal].is-visible .faq__item {
   opacity: 1;
   transform: none;
 }
 /* 項目数が増えても遅延なしで飛び出さないよう、最後の明示delayを引き継ぐ
-   catch-allを先に置き、個別指定を後段で上書きする (career-ladder は5番目=280ms、
-   category-card は6番目=350ms が最後の明示delayなので値が異なる点に注意)。 */
-.js [data-reveal].is-visible .career-ladder__step:nth-child(n+5) { transition-delay: 280ms; }
+   catch-allを先に置き、個別指定を後段で上書きする (career-ladder / faq__item は
+   5番目=280ms、category-card は6番目=350ms が最後の明示delayなので値が異なる点に
+   注意。mission-card / stat / flow__step は4個までのため catch-all 不要だが、
+   将来項目が増えても飛び出さないよう career-ladder と同じ 280ms の catch-all に含める)。 */
+.js [data-reveal].is-visible .career-ladder__step:nth-child(n+5),
+.js [data-reveal].is-visible .mission-card:nth-child(n+5),
+.js [data-reveal].is-visible .stat:nth-child(n+5),
+.js [data-reveal].is-visible .flow__step:nth-child(n+5),
+.js [data-reveal].is-visible .faq__item:nth-child(n+5) { transition-delay: 280ms; }
 .js [data-reveal].is-visible .category-card:nth-child(n+6) { transition-delay: 350ms; }
 .js [data-reveal].is-visible .career-ladder__step:nth-child(1),
-.js [data-reveal].is-visible .category-card:nth-child(1) { transition-delay: 0ms; }
+.js [data-reveal].is-visible .category-card:nth-child(1),
+.js [data-reveal].is-visible .mission-card:nth-child(1),
+.js [data-reveal].is-visible .stat:nth-child(1),
+.js [data-reveal].is-visible .flow__step:nth-child(1),
+.js [data-reveal].is-visible .faq__item:nth-child(1) { transition-delay: 0ms; }
 .js [data-reveal].is-visible .career-ladder__step:nth-child(2),
-.js [data-reveal].is-visible .category-card:nth-child(2) { transition-delay: 70ms; }
+.js [data-reveal].is-visible .category-card:nth-child(2),
+.js [data-reveal].is-visible .mission-card:nth-child(2),
+.js [data-reveal].is-visible .stat:nth-child(2),
+.js [data-reveal].is-visible .flow__step:nth-child(2),
+.js [data-reveal].is-visible .faq__item:nth-child(2) { transition-delay: 70ms; }
 .js [data-reveal].is-visible .career-ladder__step:nth-child(3),
-.js [data-reveal].is-visible .category-card:nth-child(3) { transition-delay: 140ms; }
+.js [data-reveal].is-visible .category-card:nth-child(3),
+.js [data-reveal].is-visible .mission-card:nth-child(3),
+.js [data-reveal].is-visible .stat:nth-child(3),
+.js [data-reveal].is-visible .flow__step:nth-child(3),
+.js [data-reveal].is-visible .faq__item:nth-child(3) { transition-delay: 140ms; }
 .js [data-reveal].is-visible .career-ladder__step:nth-child(4),
-.js [data-reveal].is-visible .category-card:nth-child(4) { transition-delay: 210ms; }
+.js [data-reveal].is-visible .category-card:nth-child(4),
+.js [data-reveal].is-visible .mission-card:nth-child(4),
+.js [data-reveal].is-visible .stat:nth-child(4),
+.js [data-reveal].is-visible .flow__step:nth-child(4),
+.js [data-reveal].is-visible .faq__item:nth-child(4) { transition-delay: 210ms; }
 .js [data-reveal].is-visible .career-ladder__step:nth-child(5),
-.js [data-reveal].is-visible .category-card:nth-child(5) { transition-delay: 280ms; }
+.js [data-reveal].is-visible .category-card:nth-child(5),
+.js [data-reveal].is-visible .faq__item:nth-child(5) { transition-delay: 280ms; }
 .js [data-reveal].is-visible .category-card:nth-child(6) { transition-delay: 350ms; }
 @media (prefers-reduced-motion: reduce) {
   .js [data-reveal] .career-ladder__step,
-  .js [data-reveal] .category-card {
+  .js [data-reveal] .category-card,
+  .js [data-reveal] .mission-card,
+  .js [data-reveal] .stat,
+  .js [data-reveal] .flow__step,
+  .js [data-reveal] .faq__item {
     opacity: 1;
     transform: none;
     transition: none;
