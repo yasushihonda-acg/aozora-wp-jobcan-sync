@@ -491,15 +491,17 @@
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--color-ink);
   background: var(--color-accent-light);
 }
-/* 役職ごとの配色は DOM 順序 (:nth-child) ではなく modifier class に紐付け、並び替え・追加時の色ズレを防ぐ */
-.career-ladder__step--level-1 { background: var(--color-accent-light); color: var(--color-heading); }
-.career-ladder__step--level-2 { background: var(--color-accent); }
-.career-ladder__step--level-3 { background: var(--color-accent-dark); }
-.career-ladder__step--level-4 { background: var(--color-accent-deep); }
-.career-ladder__step--level-5 { background: var(--color-heading); }
+/* 役職ごとの配色は DOM 順序 (:nth-child) ではなく modifier class に紐付け、並び替え・追加時の色ズレを防ぐ。
+   文字色は各背景に対し WCAG AA (4.5:1) 以上を確保できる方 (濃色 ink / 白) を選択:
+   level-1〜3 は背景が明るいため濃色文字、level-4〜5 は背景が暗いため白文字。 */
+.career-ladder__step--level-1 { background: var(--color-accent-light); color: var(--color-ink); }
+.career-ladder__step--level-2 { background: var(--color-accent); color: var(--color-ink); }
+.career-ladder__step--level-3 { background: var(--color-accent-dark); color: var(--color-ink); }
+.career-ladder__step--level-4 { background: var(--color-accent-deep); color: #fff; }
+.career-ladder__step--level-5 { background: var(--color-heading); color: #fff; }
 
 .career-ladder__num {
   flex: none;
@@ -517,7 +519,10 @@
   line-height: 1;
   font-feature-settings: "tnum";
 }
-.career-ladder__step--level-1 .career-ladder__num { background: rgba(0, 0, 0, 0.08); }
+/* level-1〜3 (濃色文字) は薄い黒アンダーレイでバッジの輪郭を保つ。level-4〜5 (白文字) は逆に薄い黒アンダーレイで白文字とのコントラストを確保 */
+.career-ladder__step--level-1 .career-ladder__num,
+.career-ladder__step--level-4 .career-ladder__num,
+.career-ladder__step--level-5 .career-ladder__num { background: rgba(0, 0, 0, 0.15); }
 .career-ladder__body { min-width: 0; flex: 1; }
 .career-ladder__head {
   display: flex;
@@ -537,7 +542,9 @@
   padding: 2px 12px;
   border-radius: 999px;
 }
-.career-ladder__step--level-1 .career-ladder__years { background: rgba(0,0,0,0.08); }
+.career-ladder__step--level-1 .career-ladder__years,
+.career-ladder__step--level-4 .career-ladder__years,
+.career-ladder__step--level-5 .career-ladder__years { background: rgba(0,0,0,0.15); }
 .career-ladder__salary {
   font-size: var(--text-sm);
   opacity: 0.85;
@@ -557,7 +564,9 @@
   padding: 3px 10px;
   border-radius: 999px;
 }
-.career-ladder__step--level-1 .career-ladder__skills li { background: rgba(0,0,0,0.06); }
+.career-ladder__step--level-1 .career-ladder__skills li,
+.career-ladder__step--level-4 .career-ladder__skills li,
+.career-ladder__step--level-5 .career-ladder__skills li { background: rgba(0,0,0,0.15); }
 .career-ladder__note {
   text-align: center;
   font-size: var(--text-xs);
