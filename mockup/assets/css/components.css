@@ -1665,7 +1665,11 @@
     transition: none;
     animation: section-item-view-reveal 1s linear both;
     animation-timeline: view();
-    animation-range: entry 0% entry 60%;
+    /* entry (要素の高さ基準) だと faq__item のような薄い要素で一瞬で完了し
+       「速すぎる」と感じられたため、cover (ビューポート高さ+要素高さ基準) に
+       変更。要素の高さのばらつきに関わらず、安定して長めのスクロール距離
+       (実測: career-ladder__step 780px, faq__item 660px) でゆっくり進行する。 */
+    animation-range: cover 0% cover 45%;
   }
 }
 @keyframes section-item-view-reveal {
