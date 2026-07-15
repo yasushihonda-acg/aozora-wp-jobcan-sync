@@ -9,7 +9,7 @@ updated: 2026-07-15
 決裁者が公開モックを実機確認し、①ヒーロー見出し/リード文が背景と同化して読めない箇所がある ②「数字で見る、あおぞら」の `illust-numbers.jpg` だけ旧スタイルで浮いている ③ヒーロー背景を新候補画像(Image #2)に差し替えたい ④ tcy.co.jp/recruit のような動き・g-s.dev のような洗練度が欲しい ⑤ kamakura-kdi.com/recruit-business.html のような「入社からのキャリアアップモデル」を追加したい、とフィードバック。`/impl-plan` フルモードで計画済み・承認済み(2026-07-15)。
 
 ## 完了の定義
-- [ ] `mockup/assets/img/sky-hero.jpg` が Image #2 由来の新イラストに置き換わっている（証明: `file mockup/assets/img/sky-hero.jpg` のバイト内容が旧版と異なる）— **未完了、決裁者からの画像再送待ち（一時キャッシュ切れで取得不能）**
+- [x] `mockup/assets/img/sky-hero.jpg` が Image #2 由来の新イラストに置き換わっている（証明: `file mockup/assets/img/sky-hero.jpg` のバイト内容が旧版と異なる。2026-07-15 決裁者が画像再送、反映・実機確認済み）
 - [x] `.hero__title em` のマーカー背景が除去され、ヒーロー文字が判読できる（証明: `grep -c "background: linear-gradient(transparent 60%" mockup/assets/css/components.css` が 0）
 - [x] `illust-numbers.jpg` への参照が index.html から消えている（証明: `grep -c illust-numbers mockup/index.html` が 0）
 - [x] 「入社からのキャリアアップモデル」セクションが index.html に存在する（証明: `grep -c "career-ladder" mockup/index.html` が 1 以上）
@@ -18,7 +18,7 @@ updated: 2026-07-15
 - [x] `docs/specs/chatgpt-ui-prompts.md` と `CLAUDE.md` の記述が実装内容と整合（証明: 目視レビュー済み）
 
 ## 進行中のtasks
-- [ ] タスク1: `sky-hero.jpg` を Image #2 で上書き — **決裁者からの画像再送待ち**
+- [x] タスク1: `sky-hero.jpg` を Image #2 で上書き
 - [x] タスク2: hero 視認性修正（マーカー除去 + スクリム強化）
 - [x] タスク3: Numbers セクションからイラスト除去 + レイアウト再構成
 - [x] タスク4: `.career-ladder` コンポーネント新規実装（ダミーデータ明記）
