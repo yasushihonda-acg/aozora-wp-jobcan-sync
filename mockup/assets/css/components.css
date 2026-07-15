@@ -240,13 +240,30 @@
 .hero__bg {
   position: absolute;
   inset: 0;
+  overflow: hidden; /* Ken Burns ズームで hero__bg-image が拡大した分をクロップする */
+  z-index: 0;
+}
+/* Ken Burns 風のゆるやかな自動ズーム。hero__bg (JS がスクロール連動 translate3d/
+   top/bottom を操作する対象) とは別要素にすることで、JS の transform 制御と
+   このアニメーションの transform: scale() が競合しないようにしている。 */
+.hero__bg-image {
+  position: absolute;
+  inset: 0;
   background-image:
     linear-gradient(100deg, rgba(0, 40, 70, 0.58) 0%, rgba(0, 40, 70, 0.34) 38%, rgba(0, 40, 70, 0.08) 62%, rgba(0, 40, 70, 0) 80%),
     linear-gradient(0deg, rgba(0, 40, 70, 0.30) 0%, rgba(0, 40, 70, 0) 32%),
     url("../img/sky-hero.jpg");
   background-size: cover;
   background-position: center bottom; /* 画像下端の都市スカイラインが cover クロップで切れないよう下寄せ */
-  z-index: 0;
+  transform-origin: center bottom;
+  animation: hero-kenburns 26s ease-in-out infinite alternate;
+}
+@keyframes hero-kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero__bg-image { animation: none; }
 }
 .hero__inner {
   position: relative;
