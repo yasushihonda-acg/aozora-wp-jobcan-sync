@@ -27,6 +27,20 @@ updated: 2026-07-15
 - **2段目 (同、修正後の再レビュー)**: 固定pxオフセット + `@media (min-width:1200px)` に変更するも、1200-1390px帯(1280px/1366pxなど主要ノートPC解像度を含む)で同じ不具合が再発すると判明。`assets/js/site.js` が実行時に `sky-hero.jpg` の自然サイズと hero の実測寸法を読み込み、余白(60px)を加えても `cover` が幅基準のままであることを確認できた場合のみ視差を有効化する方式に変更(固定ブレークポイント非依存)。sky-hero.jpg は過去に複数回差し替えられており画像アスペクト比依存の実測方式が必須と判断。同時に `will-change` の常時付与→IntersectionObserverでのbind/unbind連動化、`category-card` の項目数超過時catch-all遅延値の不一致(280ms→350ms)、負の`scrollY`(iOS rubber-band)未クランプも修正
 - **3段目 (PR #65作成後、4エージェント独立レビュー×3が一致指摘)**: 2段目の実測方式は画像読み込み時に安全性判定を一度だけ実行しており、有効化後にウィンドウをリサイズして危険な比率へ転じても再判定されず、まさに1段目のズームバグが再発する経路が残っていた。`resize`イベント(200msデバウンス)で安全性判定を再実行するよう修正し、実機で1440px(有効)→1280px(危険帯、自動無効化)→1440px(再有効化)の往復動作を確認。あわせて非同期コールバック(probe.onload/resize後の再判定)がtry/catchで保護されていなかった構造的ギャップも解消
 
+## Stage 2 追加改善 (2026-07-15 決裁者フィードバック対応、PR #67〜#70・全完了・本番確認済み)
+Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4件を受け、同日中に段階的に実装・検証・マージ:
+1. 「ヒーローセクションにもっとダイナミックな動画的な動きが欲しい」→ Remotion(企業向け有償ライセンス要)・AI動画生成(未導入ツール要)は不採用と判断、追加コストゼロの CSS Ken Burns ズーム(26秒ループ、scale 1→1.06)を追加 (PR #67)
+2. 「トップページ全体でスクロールしたら各セクションもそれぞれ動くように」→ career-ladder/category-card のみだった70ms刻みstaggerを mission-card(Philosophy)/stat(数字)/flow__step(選考フロー)/faq__item(FAQ) にも拡張 (PR #68)
+3. 「全然動きません、固定のまま。わからないならWebでベストプラクティスを調べて」→ WebSearchで2026年時点のベストプラクティスを調査、`animation-timeline: view()` (CSS Scroll-driven Animations、Chrome/Edge/Safari対応・Firefox安定版は2026-07時点で未対応のため `@supports` でIntersectionObserver版をfallback維持) に刷新。スクロール位置そのものに要素のopacity/scale/位置がリアルタイム連動するよう変更 (PR #69)
+4. 「動くタイミングが速すぎる」→ `animation-range` を `entry`(要素自身の高さ基準、薄い要素で一瞬終わる欠陥)から `cover`(ビューポート高さ基準、要素の高さに関わらず安定して長め)に変更、進行速度を緩和 (PR #70)
+
+- [x] タスクE: ヒーロー背景 Ken Burns ズームループ追加、既存パララックスと別要素に分離し競合回避 (PR #67)
+- [x] タスクF: 全セクション要素(mission-card/stat/flow__step/faq__item)へのstagger演出拡張 (PR #68)
+- [x] タスクG: `animation-timeline: view()` によるスクロール連動アニメーション化、非対応ブラウザへの `@supports` fallback (PR #69)
+- [x] タスクH: `animation-range` を entry→cover に変更しスクロール連動の進行速度を緩和 (PR #70、実測: career-ladder__step 780px / faq__item 660px でゆっくり完了)
+
+いずれも Playwright 実機検証(通常スクロール・`prefers-reduced-motion: reduce`・本番 GitHub Pages)を実施し、決裁者のフィードバックを受けて次PRへ反映するサイクルで進めた。次に決裁者が実機で確認し、体感速度・強度が適切か追加フィードバックを待つ状態(2026-07-15時点で最新フィードバック未着)。
+
 ## Stage 1 (完了・2026-07-15 PR #64) 履歴
 配色システムの再定義(tokens.css/components.css新パレット、career-ladderコントラスト調整、CLAUDE.md更新)完了・本番確認済み。詳細diffは PR #64 参照。
 
