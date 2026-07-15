@@ -16,6 +16,8 @@
   --color-accent-dark:   #00a8b0;
   --color-accent-light:  #d6f5f7;
   --color-accent-soft:   #ebfafb;
+  --color-accent-deep:   #007a80;   /* accent をさらに濃くした色 (白文字と WCAG AA 4.5:1 以上を確保) */
+  --color-accent-ink:    #003d40;   /* --color-accent-deep よりさらに濃い、帯セクション用の締め色 */
 
   /* 補助 (本家で背景に出る色) */
   --color-sub-blue:      #408bd1;
