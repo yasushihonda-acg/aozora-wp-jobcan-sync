@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <script>document.documentElement.classList.add('js');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>採用情報 | あおぞらケアグループ ACG</title>
@@ -32,6 +33,7 @@
         <ul class="site-nav__list">
           <li><a class="site-nav__link" href="index.html" aria-current="page">採用トップ</a></li>
           <li><a class="site-nav__link" href="jobs.html">募集職種</a></li>
+          <li><a class="site-nav__link" href="#career">キャリアパス</a></li>
           <li><a class="site-nav__link" href="#flow">選考フロー</a></li>
           <li><a class="site-nav__link" href="#faq">よくある質問</a></li>
         </ul>
@@ -61,7 +63,7 @@
     </section>
 
     <!-- PHILOSOPHY (本家の Philosophy セクションと同じ位置に) -->
-    <section class="section">
+    <section class="section" data-reveal>
       <div class="container">
         <div class="section__head">
           <span class="section__en">Philosophy</span>
@@ -108,7 +110,7 @@
     </section>
 
     <!-- BUSINESS (募集職種) -->
-    <section class="section section--alt">
+    <section class="section section--alt" data-reveal>
       <div class="container">
         <div class="section__head">
           <span class="section__en">Job Categories</span>
@@ -185,18 +187,100 @@
       </div>
     </section>
 
+    <!-- CAREER LADDER (入社からのキャリアアップモデル) -->
+    <!-- Phase A ダミーデータ: 役職名・年数・年収帯は仮の目安値。実データ確定後に決裁者確認のうえ差し替え -->
+    <section class="section" id="career" data-reveal>
+      <div class="container">
+        <div class="section__head">
+          <span class="section__en">Career Model</span>
+          <h2 class="section__title">入社からのキャリアアップモデル</h2>
+          <p class="section__lead">未経験からでも、着実にキャリアを積み重ねられるしくみがあります。<br>年功ではなく、実践と学びの積み重ねでステップアップします。</p>
+        </div>
+
+        <ol class="career-ladder">
+          <li class="career-ladder__step career-ladder__step--level-1">
+            <span class="career-ladder__num">01</span>
+            <div class="career-ladder__body">
+              <div class="career-ladder__head">
+                <h3 class="career-ladder__role">入職 (未経験・初任者研修中)</h3>
+                <span class="career-ladder__years">目安 〜1年目</span>
+              </div>
+              <p class="career-ladder__salary">想定年収帯 280万円〜</p>
+              <ul class="career-ladder__skills">
+                <li>基本の介護技術</li>
+                <li>チームでの動き方</li>
+              </ul>
+            </div>
+          </li>
+          <li class="career-ladder__step career-ladder__step--level-2">
+            <span class="career-ladder__num">02</span>
+            <div class="career-ladder__body">
+              <div class="career-ladder__head">
+                <h3 class="career-ladder__role">実務者研修修了・現場リーダー</h3>
+                <span class="career-ladder__years">目安 2〜3年目</span>
+              </div>
+              <p class="career-ladder__salary">想定年収帯 320万円〜</p>
+              <ul class="career-ladder__skills">
+                <li>実践的なケア技術</li>
+                <li>新人のOJT指導</li>
+              </ul>
+            </div>
+          </li>
+          <li class="career-ladder__step career-ladder__step--level-3">
+            <span class="career-ladder__num">03</span>
+            <div class="career-ladder__body">
+              <div class="career-ladder__head">
+                <h3 class="career-ladder__role">介護福祉士・主任</h3>
+                <span class="career-ladder__years">目安 4〜6年目</span>
+              </div>
+              <p class="career-ladder__salary">想定年収帯 360万円〜</p>
+              <ul class="career-ladder__skills">
+                <li>個別ケアプランの理解</li>
+                <li>後輩育成</li>
+              </ul>
+            </div>
+          </li>
+          <li class="career-ladder__step career-ladder__step--level-4">
+            <span class="career-ladder__num">04</span>
+            <div class="career-ladder__body">
+              <div class="career-ladder__head">
+                <h3 class="career-ladder__role">エリアリーダー候補・ケアマネジャー</h3>
+                <span class="career-ladder__years">目安 7〜9年目</span>
+              </div>
+              <p class="career-ladder__salary">想定年収帯 400万円〜</p>
+              <ul class="career-ladder__skills">
+                <li>多職種連携</li>
+                <li>シフト・労務管理</li>
+              </ul>
+            </div>
+          </li>
+          <li class="career-ladder__step career-ladder__step--level-5">
+            <span class="career-ladder__num">05</span>
+            <div class="career-ladder__body">
+              <div class="career-ladder__head">
+                <h3 class="career-ladder__role">施設長・マネージャー</h3>
+                <span class="career-ladder__years">目安 10年目〜</span>
+              </div>
+              <p class="career-ladder__salary">想定年収帯 450万円〜</p>
+              <ul class="career-ladder__skills">
+                <li>拠点運営</li>
+                <li>経営視点でのマネジメント</li>
+              </ul>
+            </div>
+          </li>
+        </ol>
+        <p class="career-ladder__note">※ 年数・年収帯は目安イメージです。経験・資格・配属先により異なります。</p>
+      </div>
+    </section>
+
     <!-- NUMBERS -->
-    <section class="section">
+    <section class="section section--band" data-reveal>
       <div class="container">
         <div class="section__head">
           <span class="section__en">Aozora in Numbers</span>
           <h2 class="section__title">数字で見る、あおぞら</h2>
           <p class="section__lead">長く働ける、無理しすぎない。そんな現場を、数字でもお伝えします。</p>
         </div>
-
-        <figure class="section__illust">
-          <img src="assets/img/illust-numbers.jpg" alt="町並みと時計塔、風車、雲が浮かぶ田園風景のフラットイラスト" loading="lazy">
-        </figure>
 
         <div class="stats">
           <div class="stat">
@@ -220,7 +304,7 @@
     </section>
 
     <!-- SELECTION FLOW -->
-    <section class="section section--alt" id="flow">
+    <section class="section section--alt" id="flow" data-reveal>
       <div class="container">
         <div class="section__head">
           <span class="section__en">Selection Flow</span>
@@ -255,7 +339,7 @@
     </section>
 
     <!-- FAQ -->
-    <section class="section" id="faq">
+    <section class="section" id="faq" data-reveal>
       <div class="container">
         <div class="section__head">
           <span class="section__en">FAQ</span>
@@ -288,7 +372,7 @@
     </section>
 
     <!-- ENTRY CTA -->
-    <section class="section section--alt">
+    <section class="section section--alt" data-reveal>
       <div class="container">
         <div class="entry-cta">
           <div>
@@ -337,5 +421,6 @@
     <a class="btn btn--primary" href="jobs.html">求人を見る</a>
   </div>
 
+  <script src="assets/js/site.js" defer onerror="document.querySelectorAll('[data-reveal]').forEach(function(el){el.classList.add('is-visible')})"></script>
 </body>
 </html>
