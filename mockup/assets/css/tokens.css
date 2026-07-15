@@ -1,7 +1,9 @@
 /* =========================================================
- * Design Tokens (v0.3 — aozora-cg.com 実物の computed style に整合)
+ * Design Tokens (v0.4 — リクルートページ独自トンマナ、2026-07-15 決裁者指示で刷新)
  *
- *   Primary accent  #00c4cc   (本家サイトの唯一のブランド色、リンク・装飾)
+ *   Primary accent  #0a52b8   (コーポレートカラー #00c4cc をあえて外し、
+ *                              江口寿史風イラスト group から実測したコバルトブルーに統一。
+ *                              意図的にコーポレートサイトの本家トンマナから差別化する)
  *   Heading         #333333
  *   Body text       #020201
  *   Footer / dark   #323232
@@ -11,13 +13,13 @@
  * ========================================================= */
 
 :root {
-  /* --- Brand --- */
-  --color-accent:        #00c4cc;
-  --color-accent-dark:   #00a8b0;
-  --color-accent-light:  #d6f5f7;
-  --color-accent-soft:   #ebfafb;
-  --color-accent-deep:   #007a80;   /* accent をさらに濃くした色 (白文字と WCAG AA 4.5:1 以上を確保) */
-  --color-accent-ink:    #003d40;   /* --color-accent-deep よりさらに濃い、帯セクション用の締め色 */
+  /* --- Brand (2026-07-15 コバルトブルー系に刷新、旧 #00c4cc 系コーポレートカラーから意図的に離脱) --- */
+  --color-accent:        #0a52b8;
+  --color-accent-dark:   #063c89;
+  --color-accent-light:  #d9e8fd;
+  --color-accent-soft:   #ecf3fe;
+  --color-accent-deep:   #02275a;   /* accent をさらに濃くした色 (白文字と WCAG AA 4.5:1 以上を確保) */
+  --color-accent-ink:    #021127;   /* --color-accent-deep よりさらに濃い、帯セクション用の締め色 */
 
   /* 補助 (本家で背景に出る色) */
   --color-sub-blue:      #408bd1;
