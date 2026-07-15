@@ -222,19 +222,35 @@
 .hero {
   position: relative;
   min-height: clamp(420px, 75vw, 640px);
-  background-image:
-    linear-gradient(100deg, rgba(0, 40, 70, 0.58) 0%, rgba(0, 40, 70, 0.34) 38%, rgba(0, 40, 70, 0.08) 62%, rgba(0, 40, 70, 0) 80%),
-    linear-gradient(0deg, rgba(0, 40, 70, 0.30) 0%, rgba(0, 40, 70, 0) 32%),
-    url("../img/sky-hero.jpg");
-  background-size: cover;
-  background-position: center bottom; /* 画像下端の都市スカイラインが cover クロップで切れないよう下寄せ */
   display: flex;
   align-items: center;
   padding-block: var(--space-12);
   color: #fff;
   overflow: hidden;
 }
+/* 視差スクロール用の背景レイヤー (assets/js/site.js が scroll 連動で transform を付与)。
+   inset は 0 (.hero と完全同一サイズ) 固定。background-size:cover の計算基準
+   (幅基準/高さ基準の自動判定) を変えないためで、CSS の固定ブレークポイントで
+   上下だけ拡張するとボックスの縦横比が変わり cover の基準軸が反転し画像が意図せず
+   拡大される (実機検証で発覚。かつ安全な viewport 幅は画像のアスペクト比・hero の
+   実高さ依存で動的に変わり、固定ブレークポイントでは安全域を保証できないと判明
+   — sky-hero.jpg はこのプロジェクトで過去に複数回差し替えられており固定値は危険)。
+   視差移動用の余白は assets/js/site.js が実際の画像サイズ・hero 寸法を実測したうえで
+   安全な場合のみ inline style で top/bottom を追加する。 */
+.hero__bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(100deg, rgba(0, 40, 70, 0.58) 0%, rgba(0, 40, 70, 0.34) 38%, rgba(0, 40, 70, 0.08) 62%, rgba(0, 40, 70, 0) 80%),
+    linear-gradient(0deg, rgba(0, 40, 70, 0.30) 0%, rgba(0, 40, 70, 0) 32%),
+    url("../img/sky-hero.jpg");
+  background-size: cover;
+  background-position: center bottom; /* 画像下端の都市スカイラインが cover クロップで切れないよう下寄せ */
+  z-index: 0;
+}
 .hero__inner {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-8);
@@ -1530,6 +1546,44 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .js [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Stagger — career-ladder / job categories は要素ごとに 70ms 刻みで遅延させ、
+   順番に現れる演出を追加 (親セクションの reveal と独立した transition)。 */
+.js [data-reveal] .career-ladder__step,
+.js [data-reveal] .category-card {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 550ms cubic-bezier(0.16, 1, 0.3, 1), transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.js [data-reveal].is-visible .career-ladder__step,
+.js [data-reveal].is-visible .category-card {
+  opacity: 1;
+  transform: none;
+}
+/* 項目数が増えても遅延なしで飛び出さないよう、最後の明示delayを引き継ぐ
+   catch-allを先に置き、個別指定を後段で上書きする (career-ladder は5番目=280ms、
+   category-card は6番目=350ms が最後の明示delayなので値が異なる点に注意)。 */
+.js [data-reveal].is-visible .career-ladder__step:nth-child(n+5) { transition-delay: 280ms; }
+.js [data-reveal].is-visible .category-card:nth-child(n+6) { transition-delay: 350ms; }
+.js [data-reveal].is-visible .career-ladder__step:nth-child(1),
+.js [data-reveal].is-visible .category-card:nth-child(1) { transition-delay: 0ms; }
+.js [data-reveal].is-visible .career-ladder__step:nth-child(2),
+.js [data-reveal].is-visible .category-card:nth-child(2) { transition-delay: 70ms; }
+.js [data-reveal].is-visible .career-ladder__step:nth-child(3),
+.js [data-reveal].is-visible .category-card:nth-child(3) { transition-delay: 140ms; }
+.js [data-reveal].is-visible .career-ladder__step:nth-child(4),
+.js [data-reveal].is-visible .category-card:nth-child(4) { transition-delay: 210ms; }
+.js [data-reveal].is-visible .career-ladder__step:nth-child(5),
+.js [data-reveal].is-visible .category-card:nth-child(5) { transition-delay: 280ms; }
+.js [data-reveal].is-visible .category-card:nth-child(6) { transition-delay: 350ms; }
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] .career-ladder__step,
+  .js [data-reveal] .category-card {
     opacity: 1;
     transform: none;
     transition: none;

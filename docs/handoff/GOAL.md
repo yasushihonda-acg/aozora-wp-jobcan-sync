@@ -6,29 +6,36 @@ updated: 2026-07-15
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
 
 ## 背景・why
-決裁者から「ページ全体をみて今の色合いに変えましょう。コーポレートカラーをあえて外してリクルートページを際立たせます。もっと視差効果というか参考で渡したwebページ(tcy.co.jp/recruit, g-s.dev)のようにスクロール時にアクションやアニメーションが動くような感じにしたほうが良い。全体をもうちょっとAI臭い感じを払拭してより洗練された今のイメージによく合うものにアップデートすべき」との方針転換指示(2026-07-15)。`/impl-plan` フルモードで Stage 1 を計画・承認済み。
+決裁者から「ページ全体をみて今の色合いに変えましょう。コーポレートカラーをあえて外してリクルートページを際立たせます。もっと視差効果というか参考で渡したwebページ(tcy.co.jp/recruit, g-s.dev)のようにスクロール時にアクションやアニメーションが動くような感じにしたほうが良い。全体をもうちょっとAI臭い感じを払拭してより洗練された今のイメージによく合うものにアップデートすべき」との方針転換指示(2026-07-15)。`/impl-plan` フルモードで Stage 1(完了・PR #64)に続き、Stage 2(スクロール演出・視差効果の強化)を計画・承認済み(2026-07-15、決裁者「すすめて」で明示承認)。演出パターンは「ヒーローパララックス＋stagger強化の組合せ」・強度は「控えめ・上品」を決裁者選択。
 
-## 完了の定義 (Stage 1: 配色システムの再定義) — 2026-07-15 実装完了・PR #64
-- [x] `mockup/assets/css/tokens.css` の `--color-accent` 系6トークンが新コバルトブルーパレットに更新されている（証明: `:root` 内のトークン宣言値は新パレット。ヘッダーコメントは経緯記録のため意図的に旧 `#00c4cc` の文字列を保持しており、単純な `grep -c` は誤検知するので `grep -A8 ':root {' tokens.css` 等で宣言行のみ確認すること）
-- [x] career-ladder level-2/3/5 の文字色・背景がWCAG AA (4.5:1以上)を満たしている（証明: Node.jsでのコントラスト再計算 + Playwright実機確認、実施済み）
-- [x] `CLAUDE.md` の「Primary accent: #00c4cc」記載が更新されている（line 60。ただし line 44 のイラスト生成向け記載は別途要更新、後述）
-- [x] Playwrightでindex.htmlをフルページ確認し、旧シアンが残っていないこと・console エラー0件を確認済み（ブラウザHTTPキャッシュの誤検知に一度遭遇、cache-bustで解消し実際のサーブ内容は新パレットと確認）
-- [x] 他ページ(jobs.html)でconsoleエラーが出ないこと(トークン共有によるサイト全体反映の影響確認、実施済み)
+## 完了の定義 (Stage 2: スクロール演出・視差効果の強化) — 2026-07-15 実装完了
+- [x] スクロール時、ヒーロー背景がコンテンツより低速で移動する(視差比率 0.2、最大55px)（証明: Playwright `scrollTo(0,300)`/`scrollTo(0,2000)` で背景transform値の変化・上限クランプを確認）
+- [x] career-ladder等の複数要素セクションで、各ステップが70ms刻みの遅延差で順次フェードインする（証明: Playwrightで各要素の `transition-delay` 実測。項目数が増えた場合のcatch-all delayも検証）
+- [x] `prefers-reduced-motion: reduce` 環境でパララックス・staggerが無効化され、即時全表示される（証明: Playwright `page.emulateMedia({reducedMotion:'reduce'})`）
+- [x] site.js読み込み失敗を模したケースで、全 `[data-reveal]` 要素が `is-visible` となり非表示のまま残らない(既存フォールバックの回帰なし、確認済み)
+- [x] モバイル幅(375px)でレイアウト崩れ・横スクロールが発生しない（証明: Playwright 375pxフルページスクリーンショット、横スクロール0を確認）
+- [x] 本番相当の環境でconsoleエラー0件、体感スクロールジャンクなし(目視確認済み)
 
-## 進行中のtasks (Stage 1) — 全完了
-- [x] タスクA: `tokens.css` の6トークン値更新 + ヘッダーコメント修正
-- [x] タスクB: career-ladder level-2/3/5 の文字色・背景・バッジ underlay 調整(Aに依存)
-- [x] タスクC: `CLAUDE.md` のコーポレートカラー記載更新（line 60。line 44 は別記載として残存、下記フォローアップ参照）
-- [x] タスクD: 本ファイル(GOAL.md)のStage 1完了後の更新
-- [x] Playwright実機確認 + `/code-review medium`（3エージェント並列、findings 精査済み）
+## 進行中のtasks (Stage 2) — 全完了
+- [x] タスクA: ヒーロー背景パララックス実装 (site.js + components.css)
+- [x] タスクB: career-ladder / job categories にstagger遅延強化 (70ms刻み、catch-all含む)
+- [x] タスクC: prefers-reduced-motion / JS失敗フォールバックの回帰確認・修正
+- [x] タスクD: Playwright実機検証(通常/reduced-motion/JS失敗/複数viewport幅) + `/code-review medium`(2エージェント×2ラウンド)
 
-## フォローアップ (Stage 1 スコープ外、decision-maker 確認後に着手)
+### 実装メモ (2エージェント×2ラウンドのcode-reviewで発見・修正した実害バグ)
+- 初回実装は `.hero__bg` に `inset:-18%` の固定%拡張で視差余白を確保していたが、`background-size:cover` の基準軸(幅基準/高さ基準)がボックスの縦横比に依存するため、拡張により基準軸が反転し画像が意図せずズームされる実害バグを実機スクリーンショット比較で発見(スカイラインがほぼ見切れる状態)。固定pxオフセット + `@media (min-width:1200px)` に変更するも、1200-1390px帯(1280px/1366pxなど主要ノートPC解像度を含む)で同じ不具合が再発することが2巡目のcode-reviewで判明
+- 最終実装: `assets/js/site.js` が実行時に `sky-hero.jpg` の自然サイズと hero の実測寸法を読み込み、余白(60px)を加えても `cover` が幅基準のままであることを確認できた場合のみ視差を有効化する方式に変更(固定ブレークポイントに依存しない)。sky-hero.jpg はこのプロジェクトで過去に複数回差し替えられており、画像アスペクト比に応じて安全域が変わるため実測方式が必須と判断
+- 副次的に見つかった軽微な問題も修正: `will-change` の常時付与→IntersectionObserverでのbind/unbind連動化、`category-card` の項目数超過時catch-all遅延値の不一致(280ms→350ms)、負の`scrollY`(iOS rubber-band)未クランプ
+
+## Stage 1 (完了・2026-07-15 PR #64) 履歴
+配色システムの再定義(tokens.css/components.css新パレット、career-ladderコントラスト調整、CLAUDE.md更新)完了・本番確認済み。詳細diffは PR #64 参照。
+
+### フォローアップ (Stage 1 スコープ外、decision-maker 確認後に着手)
 - `mockup/jobs/*.html`(33ファイル)+カテゴリページの `<meta name="theme-color">` が旧 `#00c4cc` のまま。Stage 1 は「トップページのみ」の承認スコープのため意図的に対象外。横展開時に一括更新
 - `CLAUDE.md` line 44「コーポレートカラー: ブルー #00C4CC」(メインキャラクター画像生成セクション)と `docs/specs/chatgpt-ui-prompts.md` のイラスト生成プリアンブルが、実際に採用済みのイラスト実測配色(コバルトブルー系, sky-hero.jpg 等)と乖離。イラスト生成は decision-maker 領分のクリエイティブ仕様のため、更新要否は decision-maker 判断待ち
 - career-ladder level-4/5 の背景色コントラストが低い(実測 1.3:1、ほぼ同系統の濃紺)。高さの階段状レイアウトで序列は視覚的に伝わっているため非ブロッキングだが、Stage 3(コンポーネントリデザイン)で改善余地あり
 
-## ロードマップ (Stage 2・3、Stage 1決裁者確認後に個別 impl-plan で仕切り直し)
-- **Stage 2: スクロール演出・視差効果の強化** — 既存 `site.js` の IntersectionObserver フェードインを拡張し、tcy.co.jp/recruit 的な視差(背景/前景の異速度スクロール)、g-s.dev 的なセクション単位の動的表現を追加。スコープ: 主に `site.js` + `components.css`
+## ロードマップ (Stage 3、Stage 2決裁者確認後に個別 impl-plan で仕切り直し)
 - **Stage 3: コンポーネント単位のリデザイン(AI臭さの払拭)** — 最も主観的な要素のため、Stage 1・2の結果を決裁者に見せ、具体的な指摘(角丸・ソフトシャドウ・pill型ボタン等のSaaS的表現をポスター的・シャープな表現へ、等)を得てから着手。スコープ未確定
 
 ## 🔄 中断点（in-flight）
