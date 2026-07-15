@@ -1579,8 +1579,8 @@
 .js [data-reveal] .flow__step,
 .js [data-reveal] .faq__item {
   opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 550ms cubic-bezier(0.16, 1, 0.3, 1), transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(40px) scale(0.96);
+  transition: opacity 650ms cubic-bezier(0.16, 1, 0.3, 1), transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .js [data-reveal].is-visible .career-ladder__step,
 .js [data-reveal].is-visible .category-card,
@@ -1640,5 +1640,49 @@
     opacity: 1;
     transform: none;
     transition: none;
+  }
+}
+
+/* =========================================================
+ * Scroll-driven view animation (対応ブラウザのみ、progressive enhancement)
+ * 上記の IntersectionObserver 版は「一度だけ・時間ベース」の reveal だが、
+ * animation-timeline: view() 対応ブラウザ (Chrome/Edge/Safari) では
+ * スクロール位置そのものを進捗として使い、要素がビューポートへ入ってくる
+ * 過程にリアルタイムで追従して変形させる (スクロールを戻せば逆再生もされる)。
+ * @supports が false の環境 (2026-07 時点の Firefox 安定版など) では
+ * このブロックが丸ごと無視され、上記の IntersectionObserver 版が
+ * そのままフォールバックとして機能する。
+ * ========================================================= */
+@supports (animation-timeline: view()) {
+  .js [data-reveal] .career-ladder__step,
+  .js [data-reveal] .category-card,
+  .js [data-reveal] .mission-card,
+  .js [data-reveal] .stat,
+  .js [data-reveal] .flow__step,
+  .js [data-reveal] .faq__item {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: section-item-view-reveal 1s linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+}
+@keyframes section-item-view-reveal {
+  from { opacity: 0; transform: translateY(56px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @supports (animation-timeline: view()) {
+    .js [data-reveal] .career-ladder__step,
+    .js [data-reveal] .category-card,
+    .js [data-reveal] .mission-card,
+    .js [data-reveal] .stat,
+    .js [data-reveal] .flow__step,
+    .js [data-reveal] .faq__item {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
   }
 }
