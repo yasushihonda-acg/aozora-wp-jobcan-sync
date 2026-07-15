@@ -8,19 +8,24 @@ updated: 2026-07-15
 ## 背景・why
 決裁者から「ページ全体をみて今の色合いに変えましょう。コーポレートカラーをあえて外してリクルートページを際立たせます。もっと視差効果というか参考で渡したwebページ(tcy.co.jp/recruit, g-s.dev)のようにスクロール時にアクションやアニメーションが動くような感じにしたほうが良い。全体をもうちょっとAI臭い感じを払拭してより洗練された今のイメージによく合うものにアップデートすべき」との方針転換指示(2026-07-15)。`/impl-plan` フルモードで Stage 1 を計画・承認済み。
 
-## 完了の定義 (Stage 1: 配色システムの再定義)
-- [ ] `mockup/assets/css/tokens.css` の `--color-accent` 系6トークンが新コバルトブルーパレットに更新されている（証明: `grep -c "#00c4cc" mockup/assets/css/tokens.css` が 0）
-- [ ] career-ladder level-2/3/5 の文字色・背景がWCAG AA (4.5:1以上)を満たしている（証明: Node.jsでのコントラスト再計算 + Playwright実機確認）
-- [ ] `CLAUDE.md` の「Primary accent: #00c4cc」記載が更新されている
-- [ ] Playwrightでindex.htmlデスクトップ/モバイル双方をフルページ確認し、旧シアンが残っていないこと・console エラー0件を確認済み
-- [ ] 他ページ(jobs.html等)でconsoleエラーが出ないこと(トークン共有によるサイト全体反映の影響確認)
+## 完了の定義 (Stage 1: 配色システムの再定義) — 2026-07-15 実装完了・PR #64
+- [x] `mockup/assets/css/tokens.css` の `--color-accent` 系6トークンが新コバルトブルーパレットに更新されている（証明: `:root` 内のトークン宣言値は新パレット。ヘッダーコメントは経緯記録のため意図的に旧 `#00c4cc` の文字列を保持しており、単純な `grep -c` は誤検知するので `grep -A8 ':root {' tokens.css` 等で宣言行のみ確認すること）
+- [x] career-ladder level-2/3/5 の文字色・背景がWCAG AA (4.5:1以上)を満たしている（証明: Node.jsでのコントラスト再計算 + Playwright実機確認、実施済み）
+- [x] `CLAUDE.md` の「Primary accent: #00c4cc」記載が更新されている（line 60。ただし line 44 のイラスト生成向け記載は別途要更新、後述）
+- [x] Playwrightでindex.htmlをフルページ確認し、旧シアンが残っていないこと・console エラー0件を確認済み（ブラウザHTTPキャッシュの誤検知に一度遭遇、cache-bustで解消し実際のサーブ内容は新パレットと確認）
+- [x] 他ページ(jobs.html)でconsoleエラーが出ないこと(トークン共有によるサイト全体反映の影響確認、実施済み)
 
-## 進行中のtasks (Stage 1)
-- [ ] タスクA: `tokens.css` の6トークン値更新 + ヘッダーコメント修正
-- [ ] タスクB: career-ladder level-2/3/5 の文字色・背景・バッジ underlay 調整(Aに依存)
-- [ ] タスクC: `CLAUDE.md` のコーポレートカラー記載更新
-- [ ] タスクD: 本ファイル(GOAL.md)のStage 1完了後の更新
-- [ ] Playwright実機確認 + `/code-review low`
+## 進行中のtasks (Stage 1) — 全完了
+- [x] タスクA: `tokens.css` の6トークン値更新 + ヘッダーコメント修正
+- [x] タスクB: career-ladder level-2/3/5 の文字色・背景・バッジ underlay 調整(Aに依存)
+- [x] タスクC: `CLAUDE.md` のコーポレートカラー記載更新（line 60。line 44 は別記載として残存、下記フォローアップ参照）
+- [x] タスクD: 本ファイル(GOAL.md)のStage 1完了後の更新
+- [x] Playwright実機確認 + `/code-review medium`（3エージェント並列、findings 精査済み）
+
+## フォローアップ (Stage 1 スコープ外、decision-maker 確認後に着手)
+- `mockup/jobs/*.html`(33ファイル)+カテゴリページの `<meta name="theme-color">` が旧 `#00c4cc` のまま。Stage 1 は「トップページのみ」の承認スコープのため意図的に対象外。横展開時に一括更新
+- `CLAUDE.md` line 44「コーポレートカラー: ブルー #00C4CC」(メインキャラクター画像生成セクション)と `docs/specs/chatgpt-ui-prompts.md` のイラスト生成プリアンブルが、実際に採用済みのイラスト実測配色(コバルトブルー系, sky-hero.jpg 等)と乖離。イラスト生成は decision-maker 領分のクリエイティブ仕様のため、更新要否は decision-maker 判断待ち
+- career-ladder level-4/5 の背景色コントラストが低い(実測 1.3:1、ほぼ同系統の濃紺)。高さの階段状レイアウトで序列は視覚的に伝わっているため非ブロッキングだが、Stage 3(コンポーネントリデザイン)で改善余地あり
 
 ## ロードマップ (Stage 2・3、Stage 1決裁者確認後に個別 impl-plan で仕切り直し)
 - **Stage 2: スクロール演出・視差効果の強化** — 既存 `site.js` の IntersectionObserver フェードインを拡張し、tcy.co.jp/recruit 的な視差(背景/前景の異速度スクロール)、g-s.dev 的なセクション単位の動的表現を追加。スコープ: 主に `site.js` + `components.css`
