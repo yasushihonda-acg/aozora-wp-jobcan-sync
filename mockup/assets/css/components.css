@@ -227,7 +227,7 @@
     linear-gradient(0deg, rgba(0, 40, 70, 0.30) 0%, rgba(0, 40, 70, 0) 32%),
     url("../img/sky-hero.jpg");
   background-size: cover;
-  background-position: center;
+  background-position: center bottom; /* 画像下端の都市スカイラインが cover クロップで切れないよう下寄せ */
   display: flex;
   align-items: center;
   padding-block: var(--space-12);
@@ -713,7 +713,7 @@
     linear-gradient(135deg, rgba(0, 196, 204, 0.85) 0%, rgba(0, 168, 176, 0.92) 100%),
     url("../img/sky-hero.jpg");
   background-size: cover;
-  background-position: center;
+  background-position: center bottom; /* 画像下端の都市スカイラインが cover クロップで切れないよう下寄せ */
   color: #fff;
   padding: var(--space-12) var(--space-6);
   border-radius: var(--radius-lg);
