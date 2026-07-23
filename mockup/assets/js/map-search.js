@@ -5,9 +5,8 @@
   if (!root) return;
 
   var panel = document.getElementById('job-search-panel');
-  var layout = document.getElementById('job-search-layout');
   var mapWrap = document.getElementById('job-map-wrap');
-  var mapEl = document.getElementById('job-map');
+  var diagramEl = document.getElementById('job-map-diagram');
   var listCol = document.getElementById('job-search-list-col');
   var countEl = document.getElementById('job-search-count');
   var freewordEl = document.getElementById('job-search-freeword');
@@ -19,7 +18,7 @@
   var facilityFilterClear = document.getElementById('job-search-facility-filter-clear');
   var emptyMessage = document.getElementById('job-search-empty');
 
-  if (!panel || !layout || !mapWrap || !mapEl || !listCol || !countEl) return;
+  if (!panel || !mapWrap || !diagramEl || !listCol || !countEl) return;
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -116,6 +115,9 @@
         restoreOriginalOrder();
         setFacilityFilter(null);
         clearHighlight();
+        diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
+          p.classList.remove('is-nearest');
+        });
         applyFilters();
       });
     }
@@ -220,94 +222,125 @@
 
       countEl.textContent = visibleCount + ' 件を表示中';
       if (emptyMessage) emptyMessage.hidden = visibleCount !== 0;
-      updateMarkers(visibleFacilityKeys);
+      updatePins(visibleFacilityKeys);
     }
 
-    // --- 地図(Leaflet) ---
-    var markersByFacility = {};
-    var mapInstance = null;
+    // --- エリアダイアグラム(実地図の代わりの自作イラスト風図、2026-07-23決裁者フィードバック対応) ---
+    // Leaflet + 地理院タイルは彩度・タイル種別をどう調整しても「実際の地図画像」である
+    // ため、サイトのポスター調イラストのトンマナと質感が合わないという指摘を受け、
+    // 実地図を完全に廃止。福岡(北)/鹿児島(南)の相対位置関係だけを保持した抽象的な
+    // 「ブロブ状の2エリア + ピンのクラスタ」図に置き換えた。GPS距離計算自体は
+    // 実緯度経度のHaversine計算のままで、可視化だけを分離している。
+    var AREA_ORDER = ['fukuoka', 'kagoshima']; // 北→南、実際の地理的位置関係を反映
+    var AREA_LABEL = { fukuoka: '福岡エリア', kagoshima: '鹿児島エリア' };
+    var popupEl = null;
 
     function categoryClass(cats) {
-      if (!cats || !cats.length) return 'job-map-marker--mixed';
-      if (cats.length > 1) return 'job-map-marker--mixed';
-      return 'job-map-marker--' + cats[0];
+      if (!cats || cats.length !== 1) return 'job-map-pin--mixed';
+      return 'job-map-pin--' + cats[0];
     }
 
-    function updateMarkers(visibleFacilityKeys) {
-      Object.keys(markersByFacility).forEach(function (key) {
-        var marker = markersByFacility[key];
-        var visible = !!visibleFacilityKeys[key];
-        var el = marker.getElement && marker.getElement();
-        if (el) el.style.opacity = visible ? '1' : '0.25';
+    function updatePins(visibleFacilityKeys) {
+      diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
+        var key = pin.getAttribute('data-facility-key');
+        pin.classList.toggle('is-dimmed', !visibleFacilityKeys[key]);
       });
     }
 
-    function initMap() {
-      if (typeof window.L === 'undefined') {
-        mapWrap.classList.add('job-map--fallback');
-        mapWrap.hidden = false;
-        return;
+    function closePopup() {
+      if (popupEl) {
+        popupEl.remove();
+        popupEl = null;
       }
-      // Leaflet はコンテナの現在サイズを初期化時に測定するため、hidden 解除
-      // (＝レイアウト確定) を map インスタンス生成より先に行う必要がある。
-      // 順序を誤ると非表示(0サイズ)状態のまま初期化され、fitBounds が不正なズームで
-      // 確定してしまう(実機検証で発覚)。
-      mapWrap.hidden = false;
-      layout.classList.add('job-search-layout--active');
+    }
 
+    function showPopup(key, pinEl) {
+      closePopup();
+      var f = facilities[key];
+      if (!f) return;
+      var diagramRect = diagramEl.getBoundingClientRect();
+      var pinRect = pinEl.getBoundingClientRect();
+
+      popupEl = document.createElement('div');
+      popupEl.className = 'job-map-popup';
+      popupEl.innerHTML =
+        '<button type="button" class="job-map-popup__close" aria-label="閉じる">×</button>' +
+        '<p class="job-map-popup__title">' + escapeHtml(f.name) + '</p>' +
+        '<p class="job-map-popup__count">' + f.jobCount + ' 件の求人 ／ ' + escapeHtml(f.city) + '</p>' +
+        '<button type="button" class="job-map-popup__link" data-facility-key="' + key + '">この拠点の求人だけ表示</button>';
+      diagramEl.appendChild(popupEl);
+
+      var left = pinRect.left - diagramRect.left + pinRect.width / 2 - popupEl.offsetWidth / 2;
+      var maxLeft = diagramRect.width - popupEl.offsetWidth - 8;
+      popupEl.style.left = Math.max(8, Math.min(left, maxLeft)) + 'px';
+
+      // 下段(鹿児島エリア等)のピンでは pin の下に表示すると .job-map-wrap の
+      // overflow:hidden で吹き出しが切れて見えなくなるため、下に十分な余白が
+      // ない場合は pin の上側に表示する(実機検証で発覚)。
+      var top = pinRect.top - diagramRect.top + pinRect.height + 8;
+      var popupHeight = popupEl.offsetHeight;
+      if (top + popupHeight > diagramRect.height - 8) {
+        top = Math.max(8, pinRect.top - diagramRect.top - popupHeight - 8);
+      }
+      popupEl.style.top = top + 'px';
+
+      popupEl.querySelector('.job-map-popup__close').addEventListener('click', closePopup);
+      popupEl.querySelector('.job-map-popup__link').addEventListener('click', function () {
+        state.facility = key;
+        setFacilityFilter(key);
+        applyFilters();
+        highlightFacility(key);
+        closePopup();
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      if (!popupEl) return;
+      if (popupEl.contains(e.target) || e.target.closest('.job-map-pin')) return;
+      closePopup();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closePopup();
+    });
+
+    function initDiagram() {
       try {
-        mapInstance = window.L.map(mapEl, {
-          scrollWheelZoom: false,
-        });
-        window.L
-          .tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
-            attribution:
-              '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>',
-            maxZoom: 18,
-          })
-          .addTo(mapInstance);
+        // 空エリア(拠点0件)はそもそも描画しないため、連結線もレンダリング対象の
+        // エリア間にのみ挿入する(末尾に空エリアが来ても線がぶら下がらないようにする)。
+        var regionsHtml = AREA_ORDER.map(function (area) {
+          var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
+          if (!keys.length) return null;
+          var jobCount = keys.reduce(function (sum, k) { return sum + facilities[k].jobCount; }, 0);
 
-        var bounds = [];
-        Object.keys(facilities).forEach(function (key) {
-          var f = facilities[key];
-          var icon = window.L.divIcon({
-            className: 'job-map-marker ' + categoryClass(f.categories),
-            iconSize: [26, 26],
+          var html = '<div class="job-map-region" data-area="' + area + '">';
+          html += '<div class="job-map-region__head">';
+          html += '<span class="job-map-region__name">' + AREA_LABEL[area] + '</span>';
+          html += '<span class="job-map-region__count">' + keys.length + '拠点・' + jobCount + '件</span>';
+          html += '</div><div class="job-map-region__pins">';
+          keys.forEach(function (key) {
+            var f = facilities[key];
+            html +=
+              '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
+              'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
           });
-          var marker = window.L.marker([f.lat, f.lng], { icon: icon }).addTo(mapInstance);
-          marker.bindPopup(
-            '<div class="job-map-popup">' +
-              '<p class="job-map-popup__title">' + escapeHtml(f.name) + '</p>' +
-              '<p class="job-map-popup__count">' + f.jobCount + ' 件の求人 ／ ' + escapeHtml(f.city) + '</p>' +
-              '<button type="button" class="job-map-popup__link" data-facility-key="' + key + '">この拠点の求人だけ表示</button>' +
-              '</div>'
-          );
-          marker.on('popupopen', function (e) {
-            var btn = e.popup.getElement().querySelector('[data-facility-key]');
-            if (btn) {
-              btn.addEventListener('click', function () {
-                state.facility = key;
-                setFacilityFilter(key);
-                applyFilters();
-                highlightFacility(key);
-              });
-            }
-          });
-          marker.on('click', function () {
+          html += '</div></div>';
+          return html;
+        }).filter(Boolean);
+
+        var connectorHtml = '<div class="job-map-connector"><span class="job-map-connector__label">約220km</span></div>';
+        diagramEl.innerHTML = regionsHtml.join(connectorHtml);
+        diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
+          pin.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var key = pin.getAttribute('data-facility-key');
+            showPopup(key, pin);
             highlightFacility(key);
           });
-          markersByFacility[key] = marker;
-          bounds.push([f.lat, f.lng]);
         });
 
-        if (bounds.length) mapInstance.fitBounds(bounds, { padding: [24, 24] });
-      } catch (e) {
-        // マーカー/fitBounds 等が途中で失敗した場合、既に有効化した2カラムレイアウトを
-        // 解除しないと「地図の代わりに表示不可文言だけが sticky な狭い列に残る」という
-        // 見た目のほうがフォールバック無しの単一カラムより悪化する。
-        layout.classList.remove('job-search-layout--active');
-        mapWrap.classList.add('job-map--fallback');
         mapWrap.hidden = false;
+      } catch (e) {
+        // 描画に失敗した場合は非表示のまま(フィルタ・求人一覧は影響を受けない)。
       }
     }
 
@@ -356,14 +389,15 @@
             setGpsStatus('現在地から近い順に並び替えました。');
             gpsBtn.disabled = false;
 
-            if (mapInstance && window.L) {
-              var nearestKey = Object.keys(distances).sort(function (a, b) {
-                return distances[a] - distances[b];
-              })[0];
-              if (nearestKey) {
-                var f = facilities[nearestKey];
-                mapInstance.setView([f.lat, f.lng], 12, { animate: !reduceMotion });
-              }
+            diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
+              p.classList.remove('is-nearest');
+            });
+            var nearestKey = Object.keys(distances).sort(function (a, b) {
+              return distances[a] - distances[b];
+            })[0];
+            if (nearestKey) {
+              var nearestPin = diagramEl.querySelector('[data-facility-key="' + nearestKey + '"]');
+              if (nearestPin) nearestPin.classList.add('is-nearest');
             }
             applyFilters();
           },
@@ -382,7 +416,7 @@
       });
     }
 
-    initMap();
+    initDiagram();
     applyFilters();
   }
 })();

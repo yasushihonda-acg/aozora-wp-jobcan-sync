@@ -2,7 +2,7 @@
  *
  * Phase A モック専用。sync-job-list.css と異なり Phase B (`sync/src/sync/templates/`)
  * からは参照されないため sync-* 命名にしない。tokens.css の var(--*) のみ参照。
- * JS 未実行 / Leaflet CDN 障害時のフォールバックは `.job-search` 自体ではなく
+ * JS 未実行時のフォールバックは `.job-search` 自体ではなく
  * `#job-search-panel` / `#job-map-wrap` / `#job-search-facility-filter` の
  * 個々の `hidden` 属性で成立させている(既存34カードの `<ul class="job-list__cards">` は
  * それらの外側にあり、常に表示されたまま)。map-search.js が初期化に成功した要素だけ
@@ -152,65 +152,139 @@
   .job-search-panel__label { padding-top: var(--space-2); }
 }
 
-/* --- 地図 + 結果リストの2カラムレイアウト ---
- * `--active` (地図初期化成功時に map-search.js が付与) が無い間は素の1カラムのまま
- * (JS未実行 / Leaflet CDN障害時、.job-map-wrap は hidden で grid から除外されるため、
- * ここで grid-template-columns を常時適用すると唯一の可視要素である list-col が
- * 誤って狭い1列目に配置されてしまう。実機検証で発覚)。
+/* --- 地図(全幅バナー) + 結果リスト ---
+ * 左右2カラムの地図+リスト分割(不動産・求人検索サイトによくある「SaaS的」split-view)は
+ * このサイトが目指すポスター調・イラスト訴求のトンマナと質感が合わないという決裁者
+ * フィードバック(2026-07-23)を受け、地図は他のセクションイラスト同様「横長の全幅バナー」
+ * としてリストの上に配置する(常に縦積み、サイドバー化しない)。
  */
 .job-search-layout {
-  display: grid;
-  gap: var(--space-6);
-  align-items: start;
-}
-
-@media (min-width: 1024px) {
-  .job-search-layout--active {
-    grid-template-columns: minmax(320px, 400px) 1fr;
-  }
-  .job-search-layout--active .job-map-wrap {
-    position: sticky;
-    top: var(--space-5);
-  }
+  display: block;
 }
 
 .job-map-wrap {
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-soft);
-  background: var(--color-bg-alt);
+  background: linear-gradient(160deg, var(--color-accent-soft) 0%, var(--color-bg-alt) 100%);
+  margin-bottom: var(--space-6);
 }
 
-.job-map {
-  width: 100%;
-  height: 360px;
-}
-
-@media (min-width: 1024px) {
-  .job-map { height: 520px; }
-}
-
-.job-map__fallback {
-  display: none;
+/* --- 自作エリアダイアグラム(実地図タイルの代わり、2026-07-23 決裁者フィードバック対応) ---
+ * Leaflet + 国土地理院タイルは「実際の地図画像」であるため、彩度・タイルスタイルを
+ * どう調整してもポスター調イラストのトンマナと質感が合わないという指摘を受け、
+ * 実地図を完全に廃止。福岡(北)/鹿児島(南)の相対位置関係だけを保持した抽象的な
+ * 「ブロブ状の2エリア + ピンのクラスタ」図に置き換えた。GPS距離計算自体は
+ * 実緯度経度のHaversine計算のままで、可視化だけを分離している。
+ */
+.job-map-diagram {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: var(--space-6);
-  text-align: center;
-  color: var(--color-muted);
-  font-size: var(--text-sm);
 }
-.job-map--fallback .job-map { display: none; }
-.job-map--fallback .job-map__fallback { display: block; }
 
-/* Leaflet ポップアップの最小限の見た目調整 (tokens.css のトークンに合わせる) */
+.job-map-connector {
+  position: relative;
+  width: 2px;
+  height: var(--space-8);
+  background: repeating-linear-gradient(to bottom, var(--color-accent) 0 4px, transparent 4px 9px);
+}
+.job-map-connector__label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  background: var(--color-bg-alt);
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+}
+
+.job-map-region {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  padding: var(--space-5) var(--space-6);
+  background: #fff;
+  border: 1.5px solid var(--color-accent-light);
+  border-radius: 46% 54% 42% 58% / 58% 46% 54% 42%;
+  box-shadow: var(--shadow-soft);
+}
+
+.job-map-region__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.job-map-region__name {
+  font-weight: var(--weight-bold);
+  color: var(--color-heading);
+  font-size: var(--text-lg);
+}
+.job-map-region__count {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+.job-map-region__pins {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3) var(--space-2);
+}
+
+.job-map-pin {
+  border: 0;
+  padding: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--transition), box-shadow var(--transition);
+  opacity: 1;
+}
+.job-map-pin:hover,
+.job-map-pin:focus-visible {
+  transform: rotate(-45deg) scale(1.15);
+}
+.job-map-pin.is-dimmed { opacity: 0.3; }
+.job-map-pin.is-nearest {
+  box-shadow: 0 0 0 4px var(--color-accent-light), var(--shadow-soft);
+}
+.job-map-pin--care   { background: var(--job-care); }
+.job-map-pin--nurse  { background: var(--job-nurse); }
+.job-map-pin--office { background: var(--job-office); }
+.job-map-pin--it     { background: var(--job-it); }
+.job-map-pin--mixed  { background: var(--color-muted); }
+
+/* 地図ピンクリックで表示する吹き出し */
 .job-map-popup {
+  position: absolute;
+  z-index: 5;
+  min-width: 220px;
+  max-width: 260px;
+  background: #fff;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lift);
+  padding: var(--space-4);
   font-family: var(--font-sans);
 }
 .job-map-popup__title {
   font-weight: var(--weight-bold);
   color: var(--color-heading);
   margin: 0 0 var(--space-2);
+  padding-right: var(--space-6);
+  font-size: var(--text-sm);
 }
 .job-map-popup__count {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--color-muted);
   margin: 0 0 var(--space-3);
 }
@@ -219,22 +293,23 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   color: var(--color-accent);
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
 }
-
-/* 職種主系統色のマーカー (L.divIcon、PNG不要) */
-.job-map-marker {
-  width: 26px;
-  height: 26px;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  border: 2px solid #fff;
-  box-shadow: var(--shadow-soft);
+.job-map-popup__close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--text-base);
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--space-1);
 }
-.job-map-marker--care   { background: var(--job-care); }
-.job-map-marker--nurse  { background: var(--job-nurse); }
-.job-map-marker--office { background: var(--job-office); }
-.job-map-marker--it     { background: var(--job-it); }
-.job-map-marker--mixed  { background: var(--color-muted); }
 
 .job-search-empty {
   padding: var(--space-8) var(--space-5);

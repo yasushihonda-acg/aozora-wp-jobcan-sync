@@ -9,7 +9,6 @@
 <link href="assets/css/tokens.css" rel="stylesheet"/>
 <link href="assets/css/sync-job-list.css" rel="stylesheet"/>
 <link href="assets/css/map-search.css" rel="stylesheet"/>
-<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" rel="stylesheet"/>
 </head>
 <body>
 <main class="job-list">
@@ -66,8 +65,7 @@
 </div>
 <div class="job-search-layout" id="job-search-layout">
 <div class="job-map-wrap" hidden="" id="job-map-wrap">
-<div class="job-map" id="job-map"></div>
-<p class="job-map__fallback">地図を表示できませんでした。下記の一覧からお探しください。</p>
+<div class="job-map-diagram" id="job-map-diagram"></div>
 </div>
 <div class="job-search-list-col" id="job-search-list-col">
 <div class="job-search-facility-filter" hidden="" id="job-search-facility-filter">
@@ -740,7 +738,6 @@
   </p>
 </footer>
 </main>
-<script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="assets/js/map-search.js"></script>
 </body>
 </html>
