@@ -225,14 +225,19 @@
       updatePins(visibleFacilityKeys);
     }
 
-    // --- エリアダイアグラム(実地図の代わりの自作イラスト風図、2026-07-23決裁者フィードバック対応) ---
-    // Leaflet + 地理院タイルは彩度・タイル種別をどう調整しても「実際の地図画像」である
-    // ため、サイトのポスター調イラストのトンマナと質感が合わないという指摘を受け、
-    // 実地図を完全に廃止。福岡(北)/鹿児島(南)の相対位置関係だけを保持した抽象的な
-    // 「ブロブ状の2エリア + ピンのクラスタ」図に置き換えた。GPS距離計算自体は
-    // 実緯度経度のHaversine計算のままで、可視化だけを分離している。
-    var AREA_ORDER = ['fukuoka', 'kagoshima']; // 北→南、実際の地理的位置関係を反映
-    var AREA_LABEL = { fukuoka: '福岡エリア', kagoshima: '鹿児島エリア' };
+    // --- 九州シルエット地図(2026-07-23決裁者フィードバック対応) ---
+    // 第1弾(Leaflet+地理院タイル→白地図)でも「実地図画像である限りスタイリッシュな
+    // トンマナと合わない」との指摘を受け、実地図を完全に廃止。assets/img/kyushu-map.svg
+    // (geolonia/japanese-prefectures 由来、九州7県のみ抽出した簡略化シルエット)を
+    // フラット単色の背景として使い、ピンは該当県(福岡=40/鹿児島=46)の重心座標
+    // (SVG の viewBox に対するパーセント位置、ビルド時に一度だけ算出)にクラスタ表示する。
+    // GPS距離計算自体は実緯度経度のHaversine計算のままで、可視化だけを分離している。
+    var AREA_ORDER = ['fukuoka', 'kagoshima'];
+    // 各エリアの代表県重心 (kyushu-map.svg の viewBox 内でのパーセント位置)
+    var AREA_ANCHOR = {
+      fukuoka: { left: 58.5, top: 29.9 },
+      kagoshima: { left: 50.0, top: 75.7 },
+    };
     var popupEl = null;
 
     function categoryClass(cats) {
@@ -303,45 +308,53 @@
       if (e.key === 'Escape') closePopup();
     });
 
-    function initDiagram() {
-      try {
-        // 空エリア(拠点0件)はそもそも描画しないため、連結線もレンダリング対象の
-        // エリア間にのみ挿入する(末尾に空エリアが来ても線がぶら下がらないようにする)。
-        var regionsHtml = AREA_ORDER.map(function (area) {
-          var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
-          if (!keys.length) return null;
-          var jobCount = keys.reduce(function (sum, k) { return sum + facilities[k].jobCount; }, 0);
-
-          var html = '<div class="job-map-region" data-area="' + area + '">';
-          html += '<div class="job-map-region__head">';
-          html += '<span class="job-map-region__name">' + AREA_LABEL[area] + '</span>';
-          html += '<span class="job-map-region__count">' + keys.length + '拠点・' + jobCount + '件</span>';
-          html += '</div><div class="job-map-region__pins">';
-          keys.forEach(function (key) {
-            var f = facilities[key];
-            html +=
-              '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
-              'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
-          });
-          html += '</div></div>';
-          return html;
-        }).filter(Boolean);
-
-        var connectorHtml = '<div class="job-map-connector"><span class="job-map-connector__label">約220km</span></div>';
-        diagramEl.innerHTML = regionsHtml.join(connectorHtml);
-        diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
-          pin.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var key = pin.getAttribute('data-facility-key');
-            showPopup(key, pin);
-            highlightFacility(key);
-          });
+    function buildPinClusters() {
+      // 空エリア(拠点0件)はクラスタごと描画しない。
+      var clustersHtml = AREA_ORDER.map(function (area) {
+        var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
+        if (!keys.length) return '';
+        var anchor = AREA_ANCHOR[area];
+        var html = '<div class="job-map-pin-cluster" data-area="' + area + '" style="left:' + anchor.left + '%;top:' + anchor.top + '%">';
+        keys.forEach(function (key) {
+          var f = facilities[key];
+          html +=
+            '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
+            'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
         });
+        html += '</div>';
+        return html;
+      }).join('');
 
-        mapWrap.hidden = false;
-      } catch (e) {
-        // 描画に失敗した場合は非表示のまま(フィルタ・求人一覧は影響を受けない)。
-      }
+      var wrap = document.createElement('div');
+      wrap.innerHTML = clustersHtml;
+      Array.prototype.slice.call(wrap.children).forEach(function (cluster) {
+        diagramEl.appendChild(cluster);
+      });
+
+      diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
+        pin.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var key = pin.getAttribute('data-facility-key');
+          showPopup(key, pin);
+          highlightFacility(key);
+        });
+      });
+    }
+
+    function initDiagram() {
+      fetch('assets/img/kyushu-map.svg')
+        .then(function (res) {
+          if (!res.ok) throw new Error('kyushu-map.svg fetch failed: ' + res.status);
+          return res.text();
+        })
+        .then(function (svgText) {
+          diagramEl.innerHTML = svgText;
+          buildPinClusters();
+          mapWrap.hidden = false;
+        })
+        .catch(function () {
+          // 地図画像の取得・描画に失敗した場合は非表示のまま(フィルタ・求人一覧は影響を受けない)。
+        });
     }
 
     function highlightFacility(key) {
