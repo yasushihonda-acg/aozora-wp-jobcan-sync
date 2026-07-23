@@ -1,0 +1,465 @@
+{
+  "facilities": {
+    "facility-博多": {
+      "name": "あおぞらケアグループ博多（デイ・有料）",
+      "city": "福岡市博多区",
+      "area": "fukuoka",
+      "lat": 33.598984,
+      "lng": 130.43248,
+      "jobCount": 1,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-四箇": {
+      "name": "あおぞらケアグループ四箇（デイ・有料）",
+      "city": "福岡市早良区",
+      "area": "fukuoka",
+      "lat": 33.531143,
+      "lng": 130.32782,
+      "jobCount": 5,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-田村": {
+      "name": "あおぞらケアグループ田村（デイ・有料）",
+      "city": "福岡市早良区",
+      "area": "fukuoka",
+      "lat": 33.534451,
+      "lng": 130.322891,
+      "jobCount": 5,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-下荒田": {
+      "name": "あおぞらケアグループ下荒田（デイ・有料・GH）",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.573156,
+      "lng": 130.558838,
+      "jobCount": 1,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-油山": {
+      "name": "あおぞらケアグループ油山（デイ・有料）",
+      "city": "那珂川市",
+      "area": "fukuoka",
+      "lat": 33.488441,
+      "lng": 130.3909,
+      "jobCount": 4,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-小松原": {
+      "name": "あおぞらケアグループ小松原（相談支援・就労・GH）",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.528824,
+      "lng": 130.52269,
+      "jobCount": 1,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-南栄": {
+      "name": "あおぞらケアグループ南栄（デイ・有料・GH）",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.506332,
+      "lng": 130.516617,
+      "jobCount": 1,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-永吉": {
+      "name": "あおぞらケアグループ永吉（デイ・有料）",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.602989,
+      "lng": 130.53299,
+      "jobCount": 1,
+      "categories": [
+        "care"
+      ]
+    },
+    "facility-梅ヶ丘": {
+      "name": "あおぞらケアグループ梅ヶ丘（特養）",
+      "city": "太宰府市",
+      "area": "fukuoka",
+      "lat": 33.495445,
+      "lng": 130.545227,
+      "jobCount": 1,
+      "categories": [
+        "care"
+      ]
+    },
+    "kagoshima-hq": {
+      "name": "本社",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.572187,
+      "lng": 130.552887,
+      "jobCount": 4,
+      "categories": [
+        "it",
+        "office"
+      ]
+    },
+    "fukuoka-branch": {
+      "name": "福岡支店",
+      "city": "福岡市博多区",
+      "area": "fukuoka",
+      "lat": 33.575733,
+      "lng": 130.429916,
+      "jobCount": 4,
+      "categories": [
+        "it",
+        "office"
+      ]
+    },
+    "facility-鹿児島北": {
+      "name": "あおぞらケアグループ鹿児島北（訪問介護）",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.611486,
+      "lng": 130.520584,
+      "jobCount": 3,
+      "categories": [
+        "office"
+      ]
+    },
+    "facility-鹿児島南": {
+      "name": "あおぞらケアグループ鹿児島南（訪問介護）",
+      "city": "鹿児島市",
+      "area": "kagoshima",
+      "lat": 31.564461,
+      "lng": 130.501053,
+      "jobCount": 3,
+      "categories": [
+        "office"
+      ]
+    }
+  },
+  "jobs": [
+    {
+      "id": "1777023",
+      "facilityKey": "facility-博多",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2264134",
+      "facilityKey": "facility-四箇",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2264135",
+      "facilityKey": "facility-四箇",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2264205",
+      "facilityKey": "facility-四箇",
+      "category": "care",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2199420",
+      "facilityKey": "facility-田村",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2199421",
+      "facilityKey": "facility-田村",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2199422",
+      "facilityKey": "facility-田村",
+      "category": "care",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2103102",
+      "facilityKey": "facility-下荒田",
+      "category": "care",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2174386",
+      "facilityKey": "facility-油山",
+      "category": "care",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2174595",
+      "facilityKey": "facility-油山",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2174628",
+      "facilityKey": "facility-油山",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "90447",
+      "facilityKey": "facility-小松原",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2264252",
+      "facilityKey": "facility-四箇",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2264253",
+      "facilityKey": "facility-四箇",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2199434",
+      "facilityKey": "facility-田村",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2199435",
+      "facilityKey": "facility-田村",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2091005",
+      "facilityKey": "facility-南栄",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "1668696",
+      "facilityKey": "facility-永吉",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2174627",
+      "facilityKey": "facility-油山",
+      "category": "care",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "1891471",
+      "facilityKey": "facility-梅ヶ丘",
+      "category": "care",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "452341",
+      "facilityKey": "kagoshima-hq",
+      "category": "it",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "1690435",
+      "facilityKey": "fukuoka-branch",
+      "category": "it",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "1801181",
+      "facilityKey": "fukuoka-branch",
+      "category": "it",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2052169",
+      "facilityKey": "kagoshima-hq",
+      "category": "it",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2267339",
+      "facilityKey": "fukuoka-branch",
+      "category": "office",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2267338",
+      "facilityKey": "fukuoka-branch",
+      "category": "office",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "2267337",
+      "facilityKey": "kagoshima-hq",
+      "category": "office",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2267327",
+      "facilityKey": "kagoshima-hq",
+      "category": "office",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2215700",
+      "facilityKey": "facility-鹿児島北",
+      "category": "office",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2215699",
+      "facilityKey": "facility-鹿児島北",
+      "category": "office",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2215694",
+      "facilityKey": "facility-鹿児島北",
+      "category": "office",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2215705",
+      "facilityKey": "facility-鹿児島南",
+      "category": "office",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2215707",
+      "facilityKey": "facility-鹿児島南",
+      "category": "office",
+      "employment": [
+        "正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "2215706",
+      "facilityKey": "facility-鹿児島南",
+      "category": "office",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "kagoshima"
+    }
+  ]
+}
