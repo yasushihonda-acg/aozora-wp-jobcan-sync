@@ -388,11 +388,18 @@
   color: var(--color-ink);
   text-decoration: none;
   background: #fff;
+  border-left: 3px solid var(--color-accent);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-soft);
   transition: transform var(--transition), box-shadow var(--transition);
 }
+
+/* 職種系統アクセント (2026-07-23 採用コンサルフィードバック対応) — sync-job-list.css の .job-list-card--* と同一トークンを参照 */
+.category-card--care   { border-left-color: var(--job-care); }
+.category-card--nurse  { border-left-color: var(--job-nurse); }
+.category-card--office { border-left-color: var(--job-office); }
+.category-card--it     { border-left-color: var(--job-it); }
 .category-card:hover {
   color: var(--color-ink);
   transform: translateY(-4px);
@@ -426,6 +433,11 @@
   font-weight: var(--weight-bold);
   transition: transform var(--transition);
 }
+
+.category-card--care .category-card__title::after   { color: var(--job-care); }
+.category-card--nurse .category-card__title::after  { color: var(--job-nurse); }
+.category-card--office .category-card__title::after { color: var(--job-office); }
+.category-card--it .category-card__title::after     { color: var(--job-it); }
 .category-card:hover .category-card__title::after { transform: translateX(4px); }
 .category-card__lead {
   color: var(--color-muted);

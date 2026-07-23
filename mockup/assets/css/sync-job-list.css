@@ -74,10 +74,17 @@
 .job-list-card {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
   border-radius: var(--radius-md);
   overflow: hidden;
   transition: box-shadow var(--transition), transform var(--transition);
 }
+
+/* 職種系統アクセント (2026-07-23 採用コンサルフィードバック対応) */
+.job-list-card--care   { border-left-color: var(--job-care); }
+.job-list-card--nurse  { border-left-color: var(--job-nurse); }
+.job-list-card--office { border-left-color: var(--job-office); }
+.job-list-card--it     { border-left-color: var(--job-it); }
 
 .job-list-card:hover {
   box-shadow: var(--shadow-lift);
@@ -128,6 +135,12 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
 }
+
+/* 職種ラベル(先頭チップ)のみ系統色化、雇用形態ラベルは中立トーンのまま */
+.job-list-card--care .job-list-card__label:first-child   { background: var(--job-care-soft);   color: var(--job-care-ink); }
+.job-list-card--nurse .job-list-card__label:first-child  { background: var(--job-nurse-soft);  color: var(--job-nurse-ink); }
+.job-list-card--office .job-list-card__label:first-child { background: var(--job-office-soft); color: var(--job-office-ink); }
+.job-list-card--it .job-list-card__label:first-child     { background: var(--job-it-soft);     color: var(--job-it-ink); }
 
 .job-list-card__title {
   font-size: var(--text-lg);
