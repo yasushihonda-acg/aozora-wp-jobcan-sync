@@ -8,6 +8,8 @@
 <link href="https://recruit.jobcan.jp/aozora/list?hide_breadcrumb=true&amp;hide_search=true" rel="canonical"/>
 <link href="assets/css/tokens.css" rel="stylesheet"/>
 <link href="assets/css/sync-job-list.css" rel="stylesheet"/>
+<link href="assets/css/map-search.css" rel="stylesheet"/>
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" rel="stylesheet"/>
 </head>
 <body>
 <main class="job-list">
@@ -21,6 +23,58 @@
 <h1 class="job-list__title">求人一覧</h1>
 <p class="job-list__lede">34 件の募集中ポジション</p>
 </header>
+<div class="job-search" id="job-search">
+<div class="job-search-panel" id="job-search-panel" hidden="">
+<div class="job-search-panel__row">
+<span class="job-search-panel__label">職種</span>
+<div class="job-search-panel__chips" data-filter-group="category">
+<button aria-pressed="false" class="job-search-panel__chip" data-value="care" type="button">介護・相談</button>
+<button aria-pressed="false" class="job-search-panel__chip" data-value="office" type="button">事務</button>
+<button aria-pressed="false" class="job-search-panel__chip" data-value="it" type="button">IT</button>
+</div>
+</div>
+<div class="job-search-panel__row">
+<span class="job-search-panel__label">雇用形態</span>
+<div class="job-search-panel__chips" data-filter-group="employment">
+<button aria-pressed="false" class="job-search-panel__chip" data-value="正社員" type="button">正社員</button>
+<button aria-pressed="false" class="job-search-panel__chip" data-value="短時間正社員" type="button">短時間正社員</button>
+<button aria-pressed="false" class="job-search-panel__chip" data-value="パート" type="button">パート</button>
+<button aria-pressed="false" class="job-search-panel__chip" data-value="アルバイト" type="button">アルバイト</button>
+</div>
+</div>
+<div class="job-search-panel__row">
+<span class="job-search-panel__label">エリア</span>
+<div class="job-search-panel__chips" data-filter-group="area">
+<button aria-pressed="false" class="job-search-panel__chip" data-value="kagoshima" type="button">鹿児島エリア</button>
+<button aria-pressed="false" class="job-search-panel__chip" data-value="fukuoka" type="button">福岡エリア</button>
+</div>
+</div>
+<div class="job-search-panel__row">
+<span class="job-search-panel__label">フリーワード</span>
+<div class="job-search-panel__freeword">
+<input aria-label="施設名・キーワードで検索" id="job-search-freeword" placeholder="施設名・キーワードで検索" type="search"/>
+</div>
+</div>
+<div class="job-search-panel__actions">
+<p aria-live="polite" class="job-search-panel__count" id="job-search-count">34 件を表示中</p>
+<div class="job-search-panel__buttons">
+<button class="job-search-panel__btn job-search-panel__btn--primary" id="job-search-gps" type="button">現在地から近い順</button>
+<button class="job-search-panel__btn" id="job-search-clear" type="button">条件をクリア</button>
+</div>
+</div>
+<p aria-live="polite" class="job-search-panel__gps-status" hidden="" id="job-search-gps-status"></p>
+</div>
+<div class="job-search-layout" id="job-search-layout">
+<div class="job-map-wrap" hidden="" id="job-map-wrap">
+<div class="job-map" id="job-map"></div>
+<p class="job-map__fallback">地図を表示できませんでした。下記の一覧からお探しください。</p>
+</div>
+<div class="job-search-list-col" id="job-search-list-col">
+<div class="job-search-facility-filter" hidden="" id="job-search-facility-filter">
+<span id="job-search-facility-filter-label"></span>
+<button class="job-search-facility-filter__clear" id="job-search-facility-filter-clear" type="button">絞り込みを解除</button>
+</div>
+<p class="job-search-empty" hidden="" id="job-search-empty">条件に一致する求人が見つかりませんでした。条件を変更するか「条件をクリア」をお試しください。</p>
 <ul class="job-list__cards" role="list">
 <li class="job-list-card job-list-card--care">
 <a class="job-list-card__link" href="jobs/1777023.html" rel="noopener">
@@ -677,11 +731,16 @@
 </a>
 </li>
 </ul>
+</div>
+</div>
+</div>
 <footer class="job-list__footer">
 <p class="job-list__source-note">
     応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
   </p>
 </footer>
 </main>
+<script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/js/map-search.js"></script>
 </body>
 </html>
