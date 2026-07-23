@@ -168,6 +168,7 @@
   box-shadow: var(--shadow-soft);
   background: #fff;
   margin-bottom: var(--space-6);
+  padding: var(--space-6) var(--space-4);
 }
 
 /* --- 九州シルエット地図(2026-07-23 決裁者フィードバック対応) ---
@@ -177,6 +178,9 @@
  * フラット単色+白い県境線のイラスト調地図として採用。ピンは実際の緯度経度ではなく
  * 該当県(福岡/鹿児島)の重心に固定配置したクラスタとして重ねる(GPS距離計算自体は
  * 実緯度経度のHaversine計算のまま)。
+ * padding は `.job-map-wrap` 側に持たせる(ここに padding を足すと content-box が
+ * 200:298 からずれ、SVG が preserveAspectRatio でレターボックスされてピン位置(%)と
+ * 実際の描画位置がわずかにずれるため、実機検証で発覚)。
  */
 .job-map-diagram {
   position: relative;
@@ -184,7 +188,6 @@
   max-width: 360px;
   margin-inline: auto;
   aspect-ratio: 200 / 298;
-  padding: var(--space-6) 0;
 }
 
 .job-map-svg {

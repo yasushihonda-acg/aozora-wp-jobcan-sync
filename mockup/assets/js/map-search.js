@@ -339,6 +339,26 @@
           highlightFacility(key);
         });
       });
+
+      // 地図SVGの取得は非同期のため、ピン生成が完了するより前にフィルタ操作や
+      // GPSボタンのクリックが起きているケースがある(実機検証で発覚)。その間に
+      // 生成された状態(絞り込み結果・現在地からの最寄り拠点)をピン生成直後に
+      // 反映し直す。
+      applyNearestPinHighlight();
+      applyFilters();
+    }
+
+    function applyNearestPinHighlight() {
+      if (!state.distances) return;
+      diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
+        p.classList.remove('is-nearest');
+      });
+      var nearestKey = Object.keys(state.distances).sort(function (a, b) {
+        return state.distances[a] - state.distances[b];
+      })[0];
+      if (!nearestKey) return;
+      var nearestPin = diagramEl.querySelector('[data-facility-key="' + nearestKey + '"]');
+      if (nearestPin) nearestPin.classList.add('is-nearest');
     }
 
     function initDiagram() {
@@ -402,16 +422,7 @@
             setGpsStatus('現在地から近い順に並び替えました。');
             gpsBtn.disabled = false;
 
-            diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
-              p.classList.remove('is-nearest');
-            });
-            var nearestKey = Object.keys(distances).sort(function (a, b) {
-              return distances[a] - distances[b];
-            })[0];
-            if (nearestKey) {
-              var nearestPin = diagramEl.querySelector('[data-facility-key="' + nearestKey + '"]');
-              if (nearestPin) nearestPin.classList.add('is-nearest');
-            }
+            applyNearestPinHighlight();
             applyFilters();
           },
           function (err) {
