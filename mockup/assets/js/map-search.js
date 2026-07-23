@@ -229,16 +229,78 @@
     // 第1弾(Leaflet+地理院タイル→白地図)でも「実地図画像である限りスタイリッシュな
     // トンマナと合わない」との指摘を受け、実地図を完全に廃止。assets/img/kyushu-map.svg
     // (geolonia/japanese-prefectures 由来、九州7県のみ抽出した簡略化シルエット)を
-    // フラット単色の背景として使い、ピンは該当県(福岡=40/鹿児島=46)の重心座標
-    // (SVG の viewBox に対するパーセント位置、ビルド時に一度だけ算出)にクラスタ表示する。
-    // GPS距離計算自体は実緯度経度のHaversine計算のままで、可視化だけを分離している。
+    // フラット単色の背景として使う。
+    //
+    // ピン配置(2026-07-24改訂): 初版は該当県(福岡=40/鹿児島=46)の重心1点に全拠点を
+    // 団子状にまとめていたが「雑になった」との指摘を受け、拠点の実緯度経度(GPS距離
+    // 計算に既に使っている値)を県ポリゴンの外接矩形(viewBoxに対する%、kyushu-map.svg
+    // から算出しビルド時に一度だけハードコード)へ線形マッピングし、拠点ごとの相対位置
+    // を反映する。ただし本当に近接した拠点(徒歩圏内)まで個別ピンにすると26px幅の
+    // ピン同士が重なって押しづらくなるため、しきい値未満はクラスタチップにまとめる
+    // (既存の.job-map-pin-clusterスタイルを流用、位置のみ動的算出に変更)。
     var AREA_ORDER = ['fukuoka', 'kagoshima'];
-    // 各エリアの代表県重心 (kyushu-map.svg の viewBox 内でのパーセント位置)
-    var AREA_ANCHOR = {
-      fukuoka: { left: 58.5, top: 29.9 },
-      kagoshima: { left: 50.0, top: 75.7 },
+    // 各県ポリゴンの外接矩形 (kyushu-map.svg の viewBox "36 692 200 298" に対するパーセント位置)
+    var AREA_BOUNDS = {
+      fukuoka: { left: 43.5, right: 73.5, top: 20.1, bottom: 39.6 },
+      kagoshima: { left: 41.0, right: 70.0, top: 56.7, bottom: 81.5 },
     };
+    var AREA_BOUNDS_INSET = 0.18; // 県境ぎりぎりにピンが乗らないよう外接矩形の内側に取る余白
+    var CLUSTER_MERGE_PX = 30; // この距離未満のピンは1つのクラスタチップにまとめる(ピン幅26px)
+    var CLUSTER_REF_WIDTH = 360; // %→pxの概算換算基準 (.job-map-diagram の max-width)
+    var CLUSTER_REF_HEIGHT = (CLUSTER_REF_WIDTH * 298) / 200;
     var popupEl = null;
+
+    function computeFacilityPositions() {
+      var positions = {};
+      AREA_ORDER.forEach(function (area) {
+        var bounds = AREA_BOUNDS[area];
+        var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
+        if (!keys.length || !bounds) return;
+
+        var lats = keys.map(function (k) { return facilities[k].lat; });
+        var lngs = keys.map(function (k) { return facilities[k].lng; });
+        var latMin = Math.min.apply(null, lats);
+        var latMax = Math.max.apply(null, lats);
+        var lngMin = Math.min.apply(null, lngs);
+        var lngMax = Math.max.apply(null, lngs);
+
+        var w = bounds.right - bounds.left;
+        var h = bounds.bottom - bounds.top;
+        var x0 = bounds.left + w * AREA_BOUNDS_INSET;
+        var x1 = bounds.right - w * AREA_BOUNDS_INSET;
+        var y0 = bounds.top + h * AREA_BOUNDS_INSET;
+        var y1 = bounds.bottom - h * AREA_BOUNDS_INSET;
+
+        keys.forEach(function (key) {
+          var f = facilities[key];
+          var tx = lngMax === lngMin ? 0.5 : (f.lng - lngMin) / (lngMax - lngMin);
+          var ty = latMax === latMin ? 0.5 : (latMax - f.lat) / (latMax - latMin); // 北(緯度大)が上
+          positions[key] = { area: area, left: x0 + tx * (x1 - x0), top: y0 + ty * (y1 - y0) };
+        });
+      });
+      return positions;
+    }
+
+    function clusterFacilityPositions(positions) {
+      var clusters = [];
+      Object.keys(positions).forEach(function (key) {
+        var pos = positions[key];
+        var target = null;
+        for (var i = 0; i < clusters.length; i++) {
+          var c = clusters[i];
+          if (c.area !== pos.area) continue;
+          var dx = ((c.left - pos.left) / 100) * CLUSTER_REF_WIDTH;
+          var dy = ((c.top - pos.top) / 100) * CLUSTER_REF_HEIGHT;
+          if (Math.sqrt(dx * dx + dy * dy) < CLUSTER_MERGE_PX) {
+            target = c;
+            break;
+          }
+        }
+        if (target) target.keys.push(key);
+        else clusters.push({ area: pos.area, left: pos.left, top: pos.top, keys: [key] });
+      });
+      return clusters;
+    }
 
     function categoryClass(cats) {
       if (!cats || cats.length !== 1) return 'job-map-pin--mixed';
@@ -309,13 +371,13 @@
     });
 
     function buildPinClusters() {
-      // 空エリア(拠点0件)はクラスタごと描画しない。
-      var clustersHtml = AREA_ORDER.map(function (area) {
-        var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
-        if (!keys.length) return '';
-        var anchor = AREA_ANCHOR[area];
-        var html = '<div class="job-map-pin-cluster" data-area="' + area + '" style="left:' + anchor.left + '%;top:' + anchor.top + '%">';
-        keys.forEach(function (key) {
+      // 拠点の実緯度経度から算出した位置をもとに、近接する拠点だけをクラスタチップへ
+      // まとめる(空エリア・単独拠点はそのまま1ピンのチップになる)。
+      var positions = computeFacilityPositions();
+      var clusters = clusterFacilityPositions(positions);
+      var clustersHtml = clusters.map(function (cluster) {
+        var html = '<div class="job-map-pin-cluster" data-area="' + cluster.area + '" style="left:' + cluster.left + '%;top:' + cluster.top + '%">';
+        cluster.keys.forEach(function (key) {
           var f = facilities[key];
           html +=
             '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
