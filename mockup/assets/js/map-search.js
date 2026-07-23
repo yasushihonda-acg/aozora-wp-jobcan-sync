@@ -68,11 +68,6 @@
       }
     });
 
-    var jobsById = {};
-    jobs.forEach(function (j) {
-      if (cardsById[j.id]) jobsById[j.id] = j;
-    });
-
     var state = {
       category: new Set(),
       employment: new Set(),
@@ -120,6 +115,7 @@
         setGpsStatus('');
         restoreOriginalOrder();
         setFacilityFilter(null);
+        clearHighlight();
         applyFilters();
       });
     }
@@ -128,6 +124,7 @@
       facilityFilterClear.addEventListener('click', function () {
         state.facility = null;
         setFacilityFilter(null);
+        clearHighlight();
         applyFilters();
       });
     }
@@ -135,6 +132,12 @@
     function restoreOriginalOrder() {
       originalOrder.forEach(function (li) {
         listCol.querySelector('.job-list__cards').appendChild(li);
+      });
+    }
+
+    function clearHighlight() {
+      listCol.querySelectorAll('.job-list-card.is-highlighted').forEach(function (li) {
+        li.classList.remove('is-highlighted');
       });
     }
 
@@ -204,11 +207,13 @@
       });
 
       if (state.distances) {
+        var distanceOf = function (job) {
+          var km = state.distances[job.facilityKey];
+          return typeof km === 'number' ? km : Infinity;
+        };
         var sorted = jobs
-          .filter(function (job) { return !cardsById[job.id].hidden; })
-          .sort(function (a, b) {
-            return (state.distances[a.facilityKey] || Infinity) - (state.distances[b.facilityKey] || Infinity);
-          });
+          .filter(function (job) { return cardsById[job.id] && !cardsById[job.id].hidden; })
+          .sort(function (a, b) { return distanceOf(a) - distanceOf(b); });
         var ul = listCol.querySelector('.job-list__cards');
         sorted.forEach(function (job) { ul.appendChild(cardsById[job.id]); });
       }
@@ -297,15 +302,17 @@
 
         if (bounds.length) mapInstance.fitBounds(bounds, { padding: [24, 24] });
       } catch (e) {
+        // マーカー/fitBounds 等が途中で失敗した場合、既に有効化した2カラムレイアウトを
+        // 解除しないと「地図の代わりに表示不可文言だけが sticky な狭い列に残る」という
+        // 見た目のほうがフォールバック無しの単一カラムより悪化する。
+        layout.classList.remove('job-search-layout--active');
         mapWrap.classList.add('job-map--fallback');
         mapWrap.hidden = false;
       }
     }
 
     function highlightFacility(key) {
-      listCol.querySelectorAll('.job-list-card.is-highlighted').forEach(function (li) {
-        li.classList.remove('is-highlighted');
-      });
+      clearHighlight();
       var firstMatch = null;
       jobs.forEach(function (job) {
         if (job.facilityKey !== key) return;
