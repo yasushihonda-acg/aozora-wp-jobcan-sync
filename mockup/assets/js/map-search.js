@@ -5,7 +5,6 @@
   if (!root) return;
 
   var panel = document.getElementById('job-search-panel');
-  var layout = document.getElementById('job-search-layout');
   var mapWrap = document.getElementById('job-map-wrap');
   var diagramEl = document.getElementById('job-map-diagram');
   var listCol = document.getElementById('job-search-list-col');
@@ -19,7 +18,7 @@
   var facilityFilterClear = document.getElementById('job-search-facility-filter-clear');
   var emptyMessage = document.getElementById('job-search-empty');
 
-  if (!panel || !layout || !mapWrap || !diagramEl || !listCol || !countEl) return;
+  if (!panel || !mapWrap || !diagramEl || !listCol || !countEl) return;
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -272,9 +271,17 @@
       diagramEl.appendChild(popupEl);
 
       var left = pinRect.left - diagramRect.left + pinRect.width / 2 - popupEl.offsetWidth / 2;
-      var top = pinRect.top - diagramRect.top + pinRect.height + 8;
       var maxLeft = diagramRect.width - popupEl.offsetWidth - 8;
       popupEl.style.left = Math.max(8, Math.min(left, maxLeft)) + 'px';
+
+      // 下段(鹿児島エリア等)のピンでは pin の下に表示すると .job-map-wrap の
+      // overflow:hidden で吹き出しが切れて見えなくなるため、下に十分な余白が
+      // ない場合は pin の上側に表示する(実機検証で発覚)。
+      var top = pinRect.top - diagramRect.top + pinRect.height + 8;
+      var popupHeight = popupEl.offsetHeight;
+      if (top + popupHeight > diagramRect.height - 8) {
+        top = Math.max(8, pinRect.top - diagramRect.top - popupHeight - 8);
+      }
       popupEl.style.top = top + 'px';
 
       popupEl.querySelector('.job-map-popup__close').addEventListener('click', closePopup);
@@ -298,13 +305,14 @@
 
     function initDiagram() {
       try {
-        var html = '';
-        AREA_ORDER.forEach(function (area, index) {
+        // 空エリア(拠点0件)はそもそも描画しないため、連結線もレンダリング対象の
+        // エリア間にのみ挿入する(末尾に空エリアが来ても線がぶら下がらないようにする)。
+        var regionsHtml = AREA_ORDER.map(function (area) {
           var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
-          if (!keys.length) return;
+          if (!keys.length) return null;
           var jobCount = keys.reduce(function (sum, k) { return sum + facilities[k].jobCount; }, 0);
 
-          html += '<div class="job-map-region" data-area="' + area + '">';
+          var html = '<div class="job-map-region" data-area="' + area + '">';
           html += '<div class="job-map-region__head">';
           html += '<span class="job-map-region__name">' + AREA_LABEL[area] + '</span>';
           html += '<span class="job-map-region__count">' + keys.length + '拠点・' + jobCount + '件</span>';
@@ -316,13 +324,11 @@
               'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
           });
           html += '</div></div>';
+          return html;
+        }).filter(Boolean);
 
-          if (index === 0) {
-            html += '<div class="job-map-connector"><span class="job-map-connector__label">約220km</span></div>';
-          }
-        });
-
-        diagramEl.innerHTML = html;
+        var connectorHtml = '<div class="job-map-connector"><span class="job-map-connector__label">約220km</span></div>';
+        diagramEl.innerHTML = regionsHtml.join(connectorHtml);
         diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
           pin.addEventListener('click', function (e) {
             e.stopPropagation();
