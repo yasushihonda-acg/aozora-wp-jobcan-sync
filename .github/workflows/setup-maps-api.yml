@@ -1,0 +1,75 @@
+name: Setup Maps API
+
+# 求人一覧ページ(mockup/jobs.html)の地図をGoogle Mapsに刷新するための一回限りの
+# GCPセットアップ用ワークフロー(手動トリガーのみ)。WIF(Workload Identity
+# Federation)経由でGCPに認証し、Maps JavaScript APIの有効化と、GitHub Pagesの
+# ドメインに限定したAPIキーの発行を行う。認証設定は`docs/runbooks/wif-setup.md`参照。
+#
+# 発行されたAPIキーはHTTPリファラー制限付きのクライアントキー(Google Maps JS APIの
+# 仕様上ブラウザに露出する前提のキー)であり、Secretとしては扱わない。実行後の
+# ジョブサマリーに表示された値を `mockup/jobs.html` に直接埋め込んで使用する。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DEPLOY_SA }}
+          project_id: ${{ secrets.GCP_PROJECT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT }}
+
+      - name: Enable Maps JavaScript API
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          gcloud services enable maps-backend.googleapis.com --project="$GCP_PROJECT"
+
+      - name: Create referrer-restricted API key (idempotent)
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          EXISTING=$(gcloud services api-keys list \
+            --project="$GCP_PROJECT" \
+            --filter="displayName=jobs-map-embed" \
+            --format="value(name)")
+          if [ -z "$EXISTING" ]; then
+            gcloud services api-keys create \
+              --project="$GCP_PROJECT" \
+              --display-name="jobs-map-embed" \
+              --api-target=service=maps-backend.googleapis.com \
+              --allowed-referrers="https://yasushihonda-acg.github.io/*,http://localhost:8989/*"
+          else
+            echo "API key 'jobs-map-embed' already exists (${EXISTING}), skipping creation."
+          fi
+
+      - name: Output key value to job summary
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+        run: |
+          KEY_NAME=$(gcloud services api-keys list \
+            --project="$GCP_PROJECT" \
+            --filter="displayName=jobs-map-embed" \
+            --format="value(name)")
+          KEY_STRING=$(gcloud services api-keys get-key-string "$KEY_NAME" --project="$GCP_PROJECT" --format="value(keyString)")
+          {
+            echo "## Maps JavaScript API key"
+            echo '```'
+            echo "$KEY_STRING"
+            echo '```'
+            echo ""
+            echo "referrer制限: \`https://yasushihonda-acg.github.io/*\`, \`http://localhost:8989/*\`"
+            echo ""
+            echo "このキーをコピーして \`mockup/jobs.html\` に埋め込んでください(referrer制限済みのクライアントキーのためSecret登録は不要)。"
+          } >> "$GITHUB_STEP_SUMMARY"
