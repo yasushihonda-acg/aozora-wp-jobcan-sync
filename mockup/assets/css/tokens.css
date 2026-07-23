@@ -24,6 +24,24 @@
   /* 補助 (本家で背景に出る色) */
   --color-sub-blue:      #408bd1;
 
+  /* --- Job category accents (2026-07-23 採用コンサルフィードバック対応、職種色分け) ---
+   * 4系統: care(介護系) / nurse(看護系) / office(事務系) / it(IT系)。
+   * Stage 1 で単色統一した accent 方針との緊張を避けるため、中彩度・ポスター調に抑制。
+   * care は既存 --color-accent 系と同一値だが、job-list-card 側で var(--job-*) に統一参照するため専用定義。
+   */
+  --job-care:            #0a52b8;
+  --job-care-soft:       #ecf3fe;
+  --job-care-ink:        #063c89;
+  --job-nurse:           #1f7a6a;
+  --job-nurse-soft:      #e3f1ee;
+  --job-nurse-ink:       #0e5346;
+  --job-office:          #b06a1f;
+  --job-office-soft:     #f7ecdd;
+  --job-office-ink:      #7a4712;
+  --job-it:              #5a3ea8;
+  --job-it-soft:         #ece7f6;
+  --job-it-ink:          #3d2879;
+
   /* --- Neutrals --- */
   --color-ink:           #020201;   /* 本文 (本家準拠) */
   --color-heading:       #333333;   /* 見出し (本家準拠) */
