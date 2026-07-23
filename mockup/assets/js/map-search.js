@@ -6,7 +6,7 @@
 
   var panel = document.getElementById('job-search-panel');
   var mapWrap = document.getElementById('job-map-wrap');
-  var diagramEl = document.getElementById('job-map-diagram');
+  var mapPanelsEl = document.getElementById('job-map-panels');
   var listCol = document.getElementById('job-search-list-col');
   var countEl = document.getElementById('job-search-count');
   var freewordEl = document.getElementById('job-search-freeword');
@@ -18,7 +18,16 @@
   var facilityFilterClear = document.getElementById('job-search-facility-filter-clear');
   var emptyMessage = document.getElementById('job-search-empty');
 
-  if (!panel || !mapWrap || !diagramEl || !listCol || !countEl) return;
+  // エリア(福岡/鹿児島)ごとに拡大パネルを分けて表示する(2026-07-24改訂)ため、
+  // 地図の描画先は単一要素ではなくエリア別の複数要素になる。
+  var diagramEls = {};
+  if (mapPanelsEl) {
+    Array.prototype.forEach.call(mapPanelsEl.querySelectorAll('.job-map-diagram'), function (el) {
+      diagramEls[el.getAttribute('data-area')] = el;
+    });
+  }
+
+  if (!panel || !mapWrap || !mapPanelsEl || !listCol || !countEl) return;
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -115,7 +124,7 @@
         restoreOriginalOrder();
         setFacilityFilter(null);
         clearHighlight();
-        diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
+        mapPanelsEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
           p.classList.remove('is-nearest');
         });
         applyFilters();
@@ -225,37 +234,51 @@
       updatePins(visibleFacilityKeys);
     }
 
-    // --- 九州シルエット地図(2026-07-23決裁者フィードバック対応) ---
-    // 第1弾(Leaflet+地理院タイル→白地図)でも「実地図画像である限りスタイリッシュな
-    // トンマナと合わない」との指摘を受け、実地図を完全に廃止。assets/img/kyushu-map.svg
-    // (geolonia/japanese-prefectures 由来、九州7県のみ抽出した簡略化シルエット)を
-    // フラット単色の背景として使う。
-    //
-    // ピン配置(2026-07-24改訂): 初版は該当県(福岡=40/鹿児島=46)の重心1点に全拠点を
-    // 団子状にまとめていたが「雑になった」との指摘を受け、拠点の実緯度経度(GPS距離
-    // 計算に既に使っている値)を県ポリゴンの外接矩形(viewBoxに対する%、kyushu-map.svg
-    // から算出しビルド時に一度だけハードコード)へ線形マッピングし、拠点ごとの相対位置
-    // を反映する。ただし本当に近接した拠点(徒歩圏内)まで個別ピンにすると26px幅の
-    // ピン同士が重なって押しづらくなるため、しきい値未満はクラスタチップにまとめる
-    // (既存の.job-map-pin-clusterスタイルを流用、位置のみ動的算出に変更)。
+    // --- 福岡・鹿児島 拡大パネル地図(2026-07-24改訂) ---
+    // 第1弾(Leaflet+地理院タイル→白地図)は「実地図画像である限りトンマナと合わない」、
+    // 第2弾(九州シルエット全体+県重心1点にピンを団子状集約)は「雑になった」との指摘を
+    // 順に受けての改訂。拠点が実在するのは福岡・鹿児島の2県のみで、九州シルエット全体を
+    // 出すと残り5県分が意味を持たないまま画面を占有してしまうため、対象2県だけを
+    // assets/img/kyushu-map.svg のポリゴンから抜き出し、県ごとに拡大した個別パネルとして
+    // 並べる。ピンは各拠点の実緯度経度(GPS距離計算に使っている値と同じ)を県の外接矩形
+    // (kyushu-map.svg の生座標、ビルド時に一度だけ算出しハードコード)へ線形マッピングし、
+    // 拠点ごとの相対位置を反映する。徒歩圏内で実質重なる拠点のみクラスタチップにまとめる。
     var AREA_ORDER = ['fukuoka', 'kagoshima'];
-    // 各県ポリゴンの外接矩形 (kyushu-map.svg の viewBox "36 692 200 298" に対するパーセント位置)
-    var AREA_BOUNDS = {
-      fukuoka: { left: 43.5, right: 73.5, top: 20.1, bottom: 39.6 },
-      kagoshima: { left: 41.0, right: 70.0, top: 56.7, bottom: 81.5 },
+    var AREA_PREF = { fukuoka: '40', kagoshima: '46' };
+    // 各県ポリゴンの外接矩形 (kyushu-map.svg の生座標系、他県分のポリゴンはパネル生成時に除去する)
+    // 鹿児島は本土(鹿児島市周辺)の主ポリゴンのみを対象とし、遠方の離島断片は含めない
+    var AREA_RAW_BBOX = {
+      fukuoka: { x0: 123.0, y0: 752.0, x1: 183.0, y1: 810.0 },
+      kagoshima: { x0: 118.0, y0: 861.0, x1: 176.0, y1: 935.0 },
     };
-    var AREA_BOUNDS_INSET = 0.18; // 県境ぎりぎりにピンが乗らないよう外接矩形の内側に取る余白
-    var CLUSTER_MERGE_PX = 30; // この距離未満のピンは1つのクラスタチップにまとめる(ピン幅26px)
-    var CLUSTER_REF_WIDTH = 360; // %→pxの概算換算基準 (.job-map-diagram の max-width)
-    var CLUSTER_REF_HEIGHT = (CLUSTER_REF_WIDTH * 298) / 200;
+    var AREA_PAD = 0.2; // 県の外接矩形に対する外側余白(パネルのズーム・フレーミング用)
+    var AREA_FACILITY_INSET = 0.15; // 拠点位置を外接矩形のどこまで寄せて配置するか(海岸線への貼り付き防止)
+    // ピンは26px四方を45deg回転表示のため見た目の外接円は約37pxになる。しきい値をピン幅
+    // ちょうど(30px程度)にすると回転後のバウンディングボックスが重なり、片方が完全に
+    // 隠れてしまうケースが実機検証で見つかった(福岡支店ピンが博多ピンを覆い隠す等)ため、
+    // 37pxに余裕を持たせた42pxをしきい値とする。
+    var CLUSTER_MERGE_PX = 42;
+    var CLUSTER_REF_WIDTH = 320; // %→pxの概算換算基準(1パネルあたりの想定描画幅)
     var popupEl = null;
+
+    function areaViewBox(area) {
+      var b = AREA_RAW_BBOX[area];
+      var w = b.x1 - b.x0;
+      var h = b.y1 - b.y0;
+      return {
+        x: b.x0 - w * AREA_PAD,
+        y: b.y0 - h * AREA_PAD,
+        w: w * (1 + 2 * AREA_PAD),
+        h: h * (1 + 2 * AREA_PAD),
+      };
+    }
 
     function computeFacilityPositions() {
       var positions = {};
       AREA_ORDER.forEach(function (area) {
-        var bounds = AREA_BOUNDS[area];
+        var b = AREA_RAW_BBOX[area];
         var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
-        if (!keys.length || !bounds) return;
+        if (!keys.length || !b) return;
 
         var lats = keys.map(function (k) { return facilities[k].lat; });
         var lngs = keys.map(function (k) { return facilities[k].lng; });
@@ -264,24 +287,37 @@
         var lngMin = Math.min.apply(null, lngs);
         var lngMax = Math.max.apply(null, lngs);
 
-        var w = bounds.right - bounds.left;
-        var h = bounds.bottom - bounds.top;
-        var x0 = bounds.left + w * AREA_BOUNDS_INSET;
-        var x1 = bounds.right - w * AREA_BOUNDS_INSET;
-        var y0 = bounds.top + h * AREA_BOUNDS_INSET;
-        var y1 = bounds.bottom - h * AREA_BOUNDS_INSET;
+        var w = b.x1 - b.x0;
+        var h = b.y1 - b.y0;
+        var ix0 = b.x0 + w * AREA_FACILITY_INSET;
+        var ix1 = b.x1 - w * AREA_FACILITY_INSET;
+        var iy0 = b.y0 + h * AREA_FACILITY_INSET;
+        var iy1 = b.y1 - h * AREA_FACILITY_INSET;
+        var vb = areaViewBox(area);
 
         keys.forEach(function (key) {
           var f = facilities[key];
           var tx = lngMax === lngMin ? 0.5 : (f.lng - lngMin) / (lngMax - lngMin);
           var ty = latMax === latMin ? 0.5 : (latMax - f.lat) / (latMax - latMin); // 北(緯度大)が上
-          positions[key] = { area: area, left: x0 + tx * (x1 - x0), top: y0 + ty * (y1 - y0) };
+          var xRaw = ix0 + tx * (ix1 - ix0);
+          var yRaw = iy0 + ty * (iy1 - iy0);
+          positions[key] = {
+            area: area,
+            left: ((xRaw - vb.x) / vb.w) * 100,
+            top: ((yRaw - vb.y) / vb.h) * 100,
+          };
         });
       });
       return positions;
     }
 
     function clusterFacilityPositions(positions) {
+      var refHeight = {};
+      AREA_ORDER.forEach(function (area) {
+        var vb = areaViewBox(area);
+        refHeight[area] = CLUSTER_REF_WIDTH * (vb.h / vb.w);
+      });
+
       var clusters = [];
       Object.keys(positions).forEach(function (key) {
         var pos = positions[key];
@@ -290,7 +326,7 @@
           var c = clusters[i];
           if (c.area !== pos.area) continue;
           var dx = ((c.left - pos.left) / 100) * CLUSTER_REF_WIDTH;
-          var dy = ((c.top - pos.top) / 100) * CLUSTER_REF_HEIGHT;
+          var dy = ((c.top - pos.top) / 100) * refHeight[pos.area];
           if (Math.sqrt(dx * dx + dy * dy) < CLUSTER_MERGE_PX) {
             target = c;
             break;
@@ -308,7 +344,7 @@
     }
 
     function updatePins(visibleFacilityKeys) {
-      diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
+      mapPanelsEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
         var key = pin.getAttribute('data-facility-key');
         pin.classList.toggle('is-dimmed', !visibleFacilityKeys[key]);
       });
@@ -325,6 +361,8 @@
       closePopup();
       var f = facilities[key];
       if (!f) return;
+      var diagramEl = diagramEls[f.area];
+      if (!diagramEl) return;
       var diagramRect = diagramEl.getBoundingClientRect();
       var pinRect = pinEl.getBoundingClientRect();
 
@@ -372,28 +410,49 @@
 
     function buildPinClusters() {
       // 拠点の実緯度経度から算出した位置をもとに、近接する拠点だけをクラスタチップへ
-      // まとめる(空エリア・単独拠点はそのまま1ピンのチップになる)。
+      // まとめ、エリアごとの拡大パネルに描画する(単独拠点はそのまま1ピンのチップになる)。
       var positions = computeFacilityPositions();
       var clusters = clusterFacilityPositions(positions);
-      var clustersHtml = clusters.map(function (cluster) {
-        var html = '<div class="job-map-pin-cluster" data-area="' + cluster.area + '" style="left:' + cluster.left + '%;top:' + cluster.top + '%">';
-        cluster.keys.forEach(function (key) {
-          var f = facilities[key];
-          html +=
-            '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
-            'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
-        });
-        html += '</div>';
-        return html;
-      }).join('');
-
-      var wrap = document.createElement('div');
-      wrap.innerHTML = clustersHtml;
-      Array.prototype.slice.call(wrap.children).forEach(function (cluster) {
-        diagramEl.appendChild(cluster);
+      var clustersByArea = {};
+      clusters.forEach(function (cluster) {
+        (clustersByArea[cluster.area] = clustersByArea[cluster.area] || []).push(cluster);
       });
 
-      diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
+      AREA_ORDER.forEach(function (area) {
+        var target = diagramEls[area];
+        if (!target) return;
+        var areaClusters = clustersByArea[area] || [];
+        var html = areaClusters.map(function (cluster) {
+          // 単独拠点は白チップで囲まず、素のピンマーカーとして直接配置する
+          // (重なる拠点だけをチップにまとめる方が地図全体がすっきり見えるため)。
+          if (cluster.keys.length === 1) {
+            var key = cluster.keys[0];
+            var f = facilities[key];
+            return (
+              '<button type="button" class="job-map-pin job-map-pin--solo ' + categoryClass(f.categories) + '" ' +
+              'style="left:' + cluster.left + '%;top:' + cluster.top + '%" ' +
+              'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>'
+            );
+          }
+          var h = '<div class="job-map-pin-cluster" style="left:' + cluster.left + '%;top:' + cluster.top + '%">';
+          cluster.keys.forEach(function (key) {
+            var f = facilities[key];
+            h +=
+              '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
+              'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
+          });
+          h += '</div>';
+          return h;
+        }).join('');
+
+        var wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        Array.prototype.slice.call(wrap.children).forEach(function (cluster) {
+          target.appendChild(cluster);
+        });
+      });
+
+      mapPanelsEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
         pin.addEventListener('click', function (e) {
           e.stopPropagation();
           var key = pin.getAttribute('data-facility-key');
@@ -412,15 +471,28 @@
 
     function applyNearestPinHighlight() {
       if (!state.distances) return;
-      diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
+      mapPanelsEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
         p.classList.remove('is-nearest');
       });
       var nearestKey = Object.keys(state.distances).sort(function (a, b) {
         return state.distances[a] - state.distances[b];
       })[0];
       if (!nearestKey) return;
-      var nearestPin = diagramEl.querySelector('[data-facility-key="' + nearestKey + '"]');
+      var nearestPin = mapPanelsEl.querySelector('[data-facility-key="' + nearestKey + '"]');
       if (nearestPin) nearestPin.classList.add('is-nearest');
+    }
+
+    function buildAreaSvgMarkup(svgText, area) {
+      var wrap = document.createElement('div');
+      wrap.innerHTML = svgText;
+      var svg = wrap.querySelector('svg');
+      var prefCode = AREA_PREF[area];
+      svg.querySelectorAll('[data-pref]').forEach(function (el) {
+        if (el.getAttribute('data-pref') !== prefCode) el.remove();
+      });
+      var vb = areaViewBox(area);
+      svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+      return svg.outerHTML;
     }
 
     function initDiagram() {
@@ -430,7 +502,11 @@
           return res.text();
         })
         .then(function (svgText) {
-          diagramEl.innerHTML = svgText;
+          AREA_ORDER.forEach(function (area) {
+            var target = diagramEls[area];
+            if (!target) return;
+            target.innerHTML = buildAreaSvgMarkup(svgText, area);
+          });
           buildPinClusters();
           mapWrap.hidden = false;
         })

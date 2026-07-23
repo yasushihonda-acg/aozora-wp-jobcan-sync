@@ -171,29 +171,44 @@
   padding: var(--space-6) var(--space-4);
 }
 
-/* --- 九州シルエット地図(2026-07-23 決裁者フィードバック対応) ---
- * 第1弾(Leaflet+地理院タイル→白地図)でも「実地図画像である限り質感が合わない」との
- * 指摘を受け、実地図を完全に廃止。geolonia/japanese-prefectures 由来の簡略化SVG
- * (assets/img/kyushu-map.svg、九州7県のみ抽出・鹿児島は本土+近隣島嶼のみ)を
- * フラット単色+白い県境線のイラスト調地図として採用。ピンは実際の緯度経度ではなく
- * 該当県(福岡/鹿児島)の重心に固定配置したクラスタとして重ねる(GPS距離計算自体は
- * 実緯度経度のHaversine計算のまま)。
- * padding は `.job-map-wrap` 側に持たせる(ここに padding を足すと content-box が
- * 200:298 からずれ、SVG が preserveAspectRatio でレターボックスされてピン位置(%)と
- * 実際の描画位置がわずかにずれるため、実機検証で発覚)。
+/* --- 福岡・鹿児島 拡大パネル地図(2026-07-24 改訂) ---
+ * 九州シルエット全体+県重心1点にピンを集約する版(2026-07-23)は「雑になった」との
+ * 指摘を受けての改訂。拠点が実在するのは福岡・鹿児島の2県のみで、九州シルエット全体を
+ * 出すと残り5県分が意味を持たないまま画面を占有してしまうため、対象2県だけを
+ * geolonia/japanese-prefectures 由来の簡略化SVG(assets/img/kyushu-map.svg)から
+ * 抜き出し、県ごとに拡大した個別パネルとして並べる(map-search.js側でSVGのviewBoxを
+ * 県の外接矩形にクロップし、他県分のポリゴンを除去)。ピンは実際の緯度経度を県の
+ * 外接矩形へ線形マッピングした個別位置に配置する(GPS距離計算自体は実緯度経度の
+ * Haversine計算のまま)。
  */
+.job-map-panels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-5);
+}
+
+.job-map-panel {
+  flex: 1 1 240px;
+  max-width: 320px;
+}
+
+.job-map-panel__label {
+  text-align: center;
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  margin: 0 0 var(--space-2);
+}
+
 .job-map-diagram {
   position: relative;
   width: 100%;
-  max-width: 360px;
-  margin-inline: auto;
-  aspect-ratio: 200 / 298;
 }
 
 .job-map-svg {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 .job-map-svg [data-pref] {
   fill: var(--color-accent-light);
@@ -201,12 +216,14 @@
   stroke-width: 2.2;
   stroke-linejoin: round;
 }
-/* 拠点が実在する2県(福岡=40/鹿児島=46)のみ濃いアクセント色で強調 */
+/* 拠点が実在する県(福岡=40/鹿児島=46)は濃いアクセント色で強調(パネルは1県のみ描画するため常に該当) */
 .job-map-svg [data-pref="40"],
 .job-map-svg [data-pref="46"] {
   fill: var(--color-accent);
 }
 
+/* 徒歩圏内で実質重なる拠点が複数ある場合のみ、白いチップにまとめて表示する
+ * (単独拠点は .job-map-pin--solo で素のピンマーカーとして直接配置する)。 */
 .job-map-pin-cluster {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -229,13 +246,25 @@
   height: 26px;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  box-shadow: var(--shadow-soft);
+  /* 介護カテゴリ色(--job-care)が地図の塗り色(--color-accent)と同一のため、白い縁取りを
+   * 必ず入れて背景色に関わらずピンが視認できるようにする(実機検証で埋没を発見)。 */
+  box-shadow: 0 0 0 2px #fff, var(--shadow-soft);
   transition: transform var(--transition), box-shadow var(--transition);
   opacity: 1;
+}
+.job-map-pin--solo {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
 .job-map-pin:hover,
 .job-map-pin:focus-visible {
   transform: rotate(-45deg) scale(1.15);
+}
+/* .job-map-pin--solo は translate(-50%,-50%) による絶対配置を hover 時も保持する必要があるため、
+ * 詳細度が同じ .job-map-pin:hover より後ろに置いてソース順で上書きする */
+.job-map-pin--solo:hover,
+.job-map-pin--solo:focus-visible {
+  transform: translate(-50%, -50%) rotate(-45deg) scale(1.15);
 }
 .job-map-pin.is-dimmed { opacity: 0.3; }
 .job-map-pin.is-nearest {
