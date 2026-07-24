@@ -297,6 +297,18 @@
       if (infoWindow) infoWindow.close();
     }
 
+    // google.maps.InfoWindow は閉じるボタン・別InfoWindowを開く操作以外では自動的に
+    // 閉じない(地図の外側をクリックしても開いたまま残る、/code-review high で検出)ため、
+    // 旧実装同様に外側クリック・Escapeキーで閉じる挙動を明示的に用意する。
+    document.addEventListener('click', function (e) {
+      if (!infoWindow) return;
+      if (mapPanelsEl.contains(e.target)) return;
+      closeInfoWindow();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeInfoWindow();
+    });
+
     function showInfoWindow(key, marker) {
       var f = facilities[key];
       if (!f) return;
@@ -353,15 +365,28 @@
         return;
       }
 
-      // fitBounds は描画先要素が実サイズを持っている必要があるため、
-      // Mapインスタンス生成前に hidden を解除する。
-      mapWrap.hidden = false;
-
+      // 拠点が1件も無いエリアはパネルごと非表示にする(空の地図ボックスが残るのを防ぐ、
+      // /code-review high で検出)。
+      var activeAreas = AREA_ORDER.filter(function (area) {
+        return Object.keys(facilities).some(function (k) { return facilities[k].area === area; });
+      });
       AREA_ORDER.forEach(function (area) {
         var target = diagramEls[area];
         if (!target) return;
+        var panelEl = target.closest('.job-map-panel');
+        if (panelEl) panelEl.hidden = activeAreas.indexOf(area) === -1;
+      });
+      if (!activeAreas.length) return;
+
+      // fitBounds は描画先要素が実サイズを持っている必要があるため、hidden 解除直後の
+      // 同一同期タスク内では要素が未レイアウトのままになりうる(0×0基準の誤ったズームに
+      // なるケースがある、/code-review high で検出)。1フレーム待ってからMapを生成する。
+      mapWrap.hidden = false;
+      await new Promise(function (resolve) { requestAnimationFrame(resolve); });
+
+      activeAreas.forEach(function (area) {
+        var target = diagramEls[area];
         var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
-        if (!keys.length) return;
 
         var bounds = new google.maps.LatLngBounds();
         keys.forEach(function (k) {
@@ -387,6 +412,10 @@
             map: map,
             icon: markerIcon(categoryColor(f.categories), false),
             title: f.name,
+            // optimized:false はキーボード操作・スクリーンリーダーでのマーカー到達に必須
+            // (公式: マーカーをDOM要素として描画することでbutton相当のセマンティクスを持つ、
+            // /code-review high で検出)。
+            optimized: false,
           });
           marker.addListener('click', function () {
             showInfoWindow(key, marker);
