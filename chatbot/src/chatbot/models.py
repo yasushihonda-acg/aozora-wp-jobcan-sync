@@ -36,8 +36,49 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage] = Field(default_factory=list, max_length=50)
 
 
+class JobCard(BaseModel):
+    """A single recommended job, resolved server-side from a Gemini-suggested
+    id against the known job list (`knowledge.resolve_jobs`) — never built
+    directly from model output, so a hallucinated id/title can't reach the
+    client."""
+
+    id: str
+    title: str
+    url: str
+    category: str
+    employment: list[str]
+    facility: str
+    city: str
+
+
+class GeminiReply(BaseModel):
+    """Structured output schema passed to Gemini as `response_schema`.
+
+    `job_ids` are raw candidate ids as chosen by the model — still
+    unvalidated at this layer. The caller (`app.py`) must resolve them
+    through `knowledge.resolve_jobs` before they reach `ChatResponse.jobs`.
+
+    `suggestions`/`job_ids` intentionally allow up to 10 items, not the 3 the
+    prompt asks for: Gemini's constrained decoding doesn't perfectly honor a
+    tight `max_length` on every call, and the SDK discards the *entire*
+    response (including a perfectly good `reply`) when this model fails
+    Pydantic validation (`response.parsed` becomes `None` — see
+    `gemini.py`'s `generate_reply`). A generous ceiling here is a pure
+    request-size sanity guard; `generate_reply` truncates to 3 in code.
+    """
+
+    reply: str
+    suggestions: list[str] = Field(default_factory=list, max_length=10)
+    job_ids: list[str] = Field(default_factory=list, max_length=10)
+
+
 class ChatResponse(BaseModel):
     reply: str
     # True when the model refused / was safety-filtered and `reply` is the
     # canned fallback message rather than a grounded answer.
     blocked: bool = False
+    # Follow-up question chips the client can offer the user (e.g. "続けて
+    # 聞ける質問"). Empty when the model had nothing to suggest.
+    suggestions: list[str] = Field(default_factory=list)
+    # Recommended jobs, already validated against the known job list.
+    jobs: list[JobCard] = Field(default_factory=list)

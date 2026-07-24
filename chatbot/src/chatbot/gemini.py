@@ -13,14 +13,31 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 from google import genai
 from google.genai import types
 
 from .config import AppConfig
-from .models import ChatMessage
+from .models import ChatMessage, GeminiReply
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class GeneratedReply:
+    """Result of one `generate_reply` call.
+
+    `job_ids` are still raw, unvalidated candidate ids from the model — the
+    caller (`app.py`) must resolve them through `knowledge.resolve_jobs`
+    before they reach a client. Keeping that resolution out of this module
+    means `gemini.py` has no dependency on `knowledge.py`.
+    """
+
+    reply: str
+    suggestions: list[str] = field(default_factory=list)
+    job_ids: list[str] = field(default_factory=list)
+    blocked: bool = False
 
 # Kept loose (BLOCK_ONLY_HIGH) because everyday care-industry vocabulary
 # (夜勤/介護/身体介助 etc.) can otherwise trip default safety thresholds and
@@ -70,14 +87,15 @@ async def generate_reply(
     system_instruction: str,
     history: Sequence[ChatMessage],
     message: str,
-) -> tuple[str, bool]:
-    """Call Vertex AI Gemini and return (reply_text, blocked).
+) -> GeneratedReply:
+    """Call Vertex AI Gemini and return a `GeneratedReply`.
 
     `blocked=True` means the model refused / was safety-filtered / returned
-    nothing usable, and `reply_text` is `REFUSAL_MESSAGE` rather than a
-    grounded answer. Two-layer scope guard: (a) the system prompt tells the
-    model to decline out-of-scope questions itself, (b) this function catches
-    the case where the model still returns an empty/blocked response.
+    nothing usable (including malformed structured output), and `reply` is
+    one of the canned fallback messages rather than a grounded answer.
+    Two-layer scope guard: (a) the system prompt tells the model to decline
+    out-of-scope questions itself, (b) this function catches the case where
+    the model still returns an empty/blocked/unparseable response.
 
     Raises on transport/API failure (404 model retired, timeout, quota) —
     the caller (app.py `/chat` handler) maps that to HTTP 503.
@@ -90,6 +108,14 @@ async def generate_reply(
             system_instruction=system_instruction,
             max_output_tokens=cfg.max_output_tokens,
             temperature=0.2,
+            # Structured JSON output (reply/suggestions/job_ids) — confirmed
+            # compatible with system_instruction/safety_settings/http_options
+            # via context7 `/googleapis/python-genai` (2026-07-24). Gemini's
+            # constrained decoding also enforces GeminiReply's field
+            # constraints (e.g. max 3 items), reducing reliance on the
+            # prompt instruction alone.
+            response_mime_type="application/json",
+            response_schema=GeminiReply,
             safety_settings=[
                 types.SafetySetting(
                     category=category,
@@ -112,31 +138,51 @@ async def generate_reply(
 
     if not response.candidates:
         _logger.info("gemini returned no candidates", extra={"model": cfg.model_id})
-        return REFUSAL_MESSAGE, True
+        return GeneratedReply(reply=REFUSAL_MESSAGE, blocked=True)
 
     finish_reason = getattr(response.candidates[0], "finish_reason", None)
-    text = response.text
     # `FinishReason` mixes `str` + `Enum` but does NOT override `__str__`, so
     # `str(finish_reason)` yields `'FinishReason.SAFETY'`, not `'SAFETY'` —
     # confirmed by direct execution against the installed SDK. Compare
     # against the enum member itself instead.
     if finish_reason == types.FinishReason.SAFETY:
         _logger.info("gemini response safety-blocked", extra={"model": cfg.model_id})
-        return REFUSAL_MESSAGE, True
+        return GeneratedReply(reply=REFUSAL_MESSAGE, blocked=True)
     if finish_reason == types.FinishReason.MAX_TOKENS:
-        # A MAX_TOKENS finish still carries non-empty (truncated) text, so
-        # without this check it would fall through both the SAFETY branch
-        # and the `not text` branch below and be shown to the user as a
-        # complete answer cut off mid-sentence, with no truncation
-        # indicator anywhere in the UI. `max_output_tokens` (512) and the
-        # system prompt's "数百字以内" instruction make this rare in
-        # practice, but not impossible if the model ignores the length hint.
+        # A MAX_TOKENS finish means the JSON was cut off mid-generation and
+        # `response.parsed` will be None (invalid JSON) — without this
+        # explicit branch that would fall into the generic "failed to parse"
+        # case below and show REFUSAL_MESSAGE instead of a truncation-specific
+        # message. `max_output_tokens` (768) and the system prompt's "数百字
+        # 以内" instruction make this rare in practice, but not impossible if
+        # the model ignores the length hint.
         _logger.info(
             "gemini response truncated at max_output_tokens", extra={"model": cfg.model_id}
         )
-        return TRUNCATED_MESSAGE, True
-    if not text:
-        _logger.info("gemini returned empty text", extra={"model": cfg.model_id})
-        return REFUSAL_MESSAGE, True
+        return GeneratedReply(reply=TRUNCATED_MESSAGE, blocked=True)
 
-    return text, False
+    parsed = response.parsed
+    # The SDK sets `.parsed` to None (never raises) on invalid JSON or a
+    # pydantic validation failure — e.g. the model naming more than 3
+    # suggestions/job_ids despite the schema's `max_length` constraint on
+    # constrained decoding not being perfectly honored. Confirmed via
+    # context7 `/googleapis/python-genai` (`_from_response`, 2026-07-24).
+    if not isinstance(parsed, GeminiReply):
+        _logger.info(
+            "gemini structured output failed to parse",
+            extra={"model": cfg.model_id, "finish_reason": str(finish_reason)},
+        )
+        return GeneratedReply(reply=REFUSAL_MESSAGE, blocked=True)
+    if not parsed.reply:
+        _logger.info("gemini returned empty reply text", extra={"model": cfg.model_id})
+        return GeneratedReply(reply=REFUSAL_MESSAGE, blocked=True)
+
+    # `GeminiReply` only bounds these at 10 (see its docstring) so that a
+    # 4-item overflow doesn't nuke a good `reply` — the real 3-item cap the
+    # prompt asks for is enforced here instead.
+    return GeneratedReply(
+        reply=parsed.reply,
+        suggestions=parsed.suggestions[:3],
+        job_ids=parsed.job_ids[:3],
+        blocked=False,
+    )

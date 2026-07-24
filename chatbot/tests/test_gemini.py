@@ -15,7 +15,7 @@ from google.genai import types
 
 from chatbot.config import AppConfig
 from chatbot.gemini import REFUSAL_MESSAGE, TRUNCATED_MESSAGE, generate_reply
-from chatbot.models import ChatMessage
+from chatbot.models import ChatMessage, GeminiReply
 
 
 def _config() -> AppConfig:
@@ -62,24 +62,90 @@ def _as_client(stub: _StubClient) -> genai.Client:
     return cast(genai.Client, stub)
 
 
-def _response_with_text(text: str, finish_reason: types.FinishReason | None = None) -> Any:
+def _response_with_text(
+    text: str,
+    finish_reason: types.FinishReason | None = None,
+    parsed: GeminiReply | None = None,
+) -> Any:
     candidate = types.Candidate(
         content=types.Content(role="model", parts=[types.Part.from_text(text=text)]),
         finish_reason=finish_reason,
     )
-    return types.GenerateContentResponse(candidates=[candidate])
+    return types.GenerateContentResponse(candidates=[candidate], parsed=parsed)
 
 
 @pytest.mark.asyncio
 async def test_generate_reply_returns_grounded_text() -> None:
-    client = _StubClient(_response_with_text("未経験でも応募可能です。"))
+    parsed = GeminiReply(reply="未経験でも応募可能です。", suggestions=[], job_ids=[])
+    client = _StubClient(_response_with_text("ignored raw text", parsed=parsed))
 
-    text, blocked = await generate_reply(
+    result = await generate_reply(
         _as_client(client), _config(), system_instruction="system", history=[], message="質問"
     )
 
-    assert text == "未経験でも応募可能です。"
-    assert blocked is False
+    assert result.reply == "未経験でも応募可能です。"
+    assert result.blocked is False
+    assert result.suggestions == []
+    assert result.job_ids == []
+
+
+@pytest.mark.asyncio
+async def test_generate_reply_returns_suggestions_and_job_ids() -> None:
+    parsed = GeminiReply(
+        reply="日勤のみの求人もございます。",
+        suggestions=["未経験でも応募できますか？", "選考期間はどれくらいですか？"],
+        job_ids=["2264205"],
+    )
+    client = _StubClient(_response_with_text("ignored raw text", parsed=parsed))
+
+    result = await generate_reply(
+        _as_client(client), _config(), system_instruction="system", history=[], message="質問"
+    )
+
+    assert result.suggestions == ["未経験でも応募できますか？", "選考期間はどれくらいですか？"]
+    assert result.job_ids == ["2264205"]
+    assert result.blocked is False
+
+
+@pytest.mark.asyncio
+async def test_generate_reply_truncates_suggestions_and_job_ids_to_three() -> None:
+    """Regression test: `GeminiReply` bounds these fields at 10 (not 3) so
+    that constrained decoding slightly overshooting the prompt's "3 max"
+    instruction doesn't fail Pydantic validation and discard a good `reply`
+    entirely (see `GeminiReply`'s docstring and `/code-review medium`
+    finding at gemini.py:170). The real 3-item cap must be enforced here."""
+    parsed = GeminiReply(
+        reply="複数の求人がございます。",
+        suggestions=["Q1", "Q2", "Q3", "Q4", "Q5"],
+        job_ids=["1", "2", "3", "4"],
+    )
+    client = _StubClient(_response_with_text("ignored raw text", parsed=parsed))
+
+    result = await generate_reply(
+        _as_client(client), _config(), system_instruction="system", history=[], message="質問"
+    )
+
+    assert result.reply == "複数の求人がございます。"
+    assert result.suggestions == ["Q1", "Q2", "Q3"]
+    assert result.job_ids == ["1", "2", "3"]
+    assert result.blocked is False
+
+
+@pytest.mark.asyncio
+async def test_generate_reply_requests_structured_json_output() -> None:
+    """Regression test: without `response_mime_type`/`response_schema` the
+    model returns free-form text and `response.parsed` is never populated by
+    the SDK, so every reply would fall into the parse-failure branch."""
+    parsed = GeminiReply(reply="ok", suggestions=[], job_ids=[])
+    client = _StubClient(_response_with_text("ok", parsed=parsed))
+
+    await generate_reply(
+        _as_client(client), _config(), system_instruction="system", history=[], message="質問"
+    )
+
+    assert client.models.last_config is not None
+    assert client.models.last_config.response_mime_type == "application/json"
+    assert client.models.last_config.response_schema is GeminiReply
 
 
 @pytest.mark.asyncio
@@ -92,58 +158,75 @@ async def test_generate_reply_detects_safety_finish_reason() -> None:
         _response_with_text("partial filtered text", finish_reason=types.FinishReason.SAFETY)
     )
 
-    text, blocked = await generate_reply(
+    result = await generate_reply(
         _as_client(client), _config(), system_instruction="system", history=[], message="質問"
     )
 
-    assert text == REFUSAL_MESSAGE
-    assert blocked is True
+    assert result.reply == REFUSAL_MESSAGE
+    assert result.blocked is True
+    assert result.suggestions == []
+    assert result.job_ids == []
 
 
 @pytest.mark.asyncio
 async def test_generate_reply_detects_max_tokens_truncation() -> None:
-    """Regression test: a MAX_TOKENS finish still carries non-empty
-    (truncated) text, so without an explicit check it would fall through
-    both the SAFETY branch and the `not text` branch and be returned as a
-    normal complete answer, cut off mid-sentence, with no indication to the
-    user that it was truncated."""
+    """Regression test: a MAX_TOKENS finish means the JSON was cut off
+    mid-generation (so `response.parsed` is None) — without an explicit
+    check this would fall through to the generic parse-failure branch and
+    show REFUSAL_MESSAGE instead of a truncation-specific message."""
     client = _StubClient(
         _response_with_text(
-            "夜勤のない働き方もご用意しております。デイサービス、訪問介護、事",
+            '{"reply": "夜勤のない働き方もご用意しております。デイサービス、訪問介護、事',
             finish_reason=types.FinishReason.MAX_TOKENS,
         )
     )
 
-    text, blocked = await generate_reply(
+    result = await generate_reply(
         _as_client(client), _config(), system_instruction="system", history=[], message="質問"
     )
 
-    assert text == TRUNCATED_MESSAGE
-    assert blocked is True
+    assert result.reply == TRUNCATED_MESSAGE
+    assert result.blocked is True
 
 
 @pytest.mark.asyncio
 async def test_generate_reply_handles_no_candidates() -> None:
     client = _StubClient(types.GenerateContentResponse(candidates=[]))
 
-    text, blocked = await generate_reply(
+    result = await generate_reply(
         _as_client(client), _config(), system_instruction="system", history=[], message="質問"
     )
 
-    assert text == REFUSAL_MESSAGE
-    assert blocked is True
+    assert result.reply == REFUSAL_MESSAGE
+    assert result.blocked is True
 
 
 @pytest.mark.asyncio
-async def test_generate_reply_handles_empty_text() -> None:
-    client = _StubClient(_response_with_text(""))
+async def test_generate_reply_handles_empty_reply_text() -> None:
+    parsed = GeminiReply(reply="", suggestions=[], job_ids=[])
+    client = _StubClient(_response_with_text("", parsed=parsed))
 
-    text, blocked = await generate_reply(
+    result = await generate_reply(
         _as_client(client), _config(), system_instruction="system", history=[], message="質問"
     )
 
-    assert text == REFUSAL_MESSAGE
-    assert blocked is True
+    assert result.reply == REFUSAL_MESSAGE
+    assert result.blocked is True
+
+
+@pytest.mark.asyncio
+async def test_generate_reply_handles_unparseable_structured_output() -> None:
+    """`response.parsed` stays None (never raises) when the SDK can't parse
+    the model's JSON against `GeminiReply` — confirmed via context7
+    `/googleapis/python-genai` `_from_response` (2026-07-24)."""
+    client = _StubClient(_response_with_text("not valid json", parsed=None))
+
+    result = await generate_reply(
+        _as_client(client), _config(), system_instruction="system", history=[], message="質問"
+    )
+
+    assert result.reply == REFUSAL_MESSAGE
+    assert result.blocked is True
 
 
 @pytest.mark.asyncio
@@ -151,7 +234,8 @@ async def test_generate_reply_sets_bounded_timeout_and_retry() -> None:
     """Regression test: without an explicit `http_options`, the installed SDK
     uses an unbounded timeout (`max_allowed_time=inf`) and zero retries
     (`stop_after_attempt(1)`) — confirmed by reading `_api_client.py`."""
-    client = _StubClient(_response_with_text("ok"))
+    parsed = GeminiReply(reply="ok", suggestions=[], job_ids=[])
+    client = _StubClient(_response_with_text("ok", parsed=parsed))
 
     await generate_reply(
         _as_client(client), _config(), system_instruction="system", history=[], message="質問"
@@ -167,7 +251,8 @@ async def test_generate_reply_sets_bounded_timeout_and_retry() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_reply_includes_history_in_contents() -> None:
-    client = _StubClient(_response_with_text("ok"))
+    parsed = GeminiReply(reply="ok", suggestions=[], job_ids=[])
+    client = _StubClient(_response_with_text("ok", parsed=parsed))
     history = [
         ChatMessage(role="user", content="前の質問"),
         ChatMessage(role="model", content="前の回答"),
