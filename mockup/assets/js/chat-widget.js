@@ -23,6 +23,15 @@
   var MAX_HISTORY_TURNS = 6;
   var LOCAL_HOSTNAMES = ['localhost', '127.0.0.1'];
 
+  // 初回グリーティング直後に出す固定サジェスト (FAQ由来)。2回目以降の応答は
+  // バックエンドが質問内容に応じて動的に返す suggestions を使う。
+  var STARTER_SUGGESTIONS = [
+    '未経験でも応募できますか？',
+    '夜勤のない求人はありますか？',
+    '選考にはどれくらいかかりますか？',
+    '見学だけでも可能ですか？',
+  ];
+
   var currentScript = document.currentScript;
 
   function resolveEndpoint() {
@@ -76,6 +85,62 @@
     svg.innerHTML =
       '<path d="M4 12l16-7-6.5 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>';
     return svg;
+  }
+
+  // ─── bot応答の軽量Markdownレンダリング ─────────────────────────────────
+  // system prompt (chatbot/src/chatbot/prompts.py) は **太字** と `- ` 箇条書き
+  // のみを許可し、見出し・表・コードブロック・リンク記法は使わせない。ここでは
+  // その範囲だけを DOM 生成 (createElement/textContent) で描画する — innerHTML
+  // は一切使わないため、応答テキストに HTML タグが含まれていてもテキストとして
+  // 表示されるだけで XSS は発火しない。
+
+  var BULLET_LINE = /^\s*[-・]\s+/;
+  var BOLD_SPLIT = /(\*\*[^*]+\*\*)/g;
+  var BOLD_MATCH = /^\*\*([^*]+)\*\*$/;
+  // system prompt でリンク記法は使わせない方針だが、念のため本文中に
+  // [text](url) が混じっても url は描画せず text だけ残す (防御的多層防御)。
+  var MARKDOWN_LINK = /\[([^\]]+)\]\([^)]*\)/g;
+
+  function appendInlineMarkdown(parent, text) {
+    var parts = String(text).split(BOLD_SPLIT);
+    parts.forEach(function (part) {
+      if (!part) return;
+      var m = BOLD_MATCH.exec(part);
+      if (m) {
+        var strong = document.createElement('strong');
+        strong.textContent = m[1];
+        parent.appendChild(strong);
+      } else {
+        parent.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
+  function renderRichText(container, text) {
+    var lines = String(text).replace(MARKDOWN_LINK, '$1').split('\n');
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (BULLET_LINE.test(line)) {
+        var ul = el('ul', 'chat-widget__list');
+        while (i < lines.length && BULLET_LINE.test(lines[i])) {
+          var li = document.createElement('li');
+          appendInlineMarkdown(li, lines[i].replace(BULLET_LINE, ''));
+          ul.appendChild(li);
+          i++;
+        }
+        container.appendChild(ul);
+        continue;
+      }
+      if (line.trim() === '') {
+        i++;
+        continue;
+      }
+      var p = el('p', 'chat-widget__paragraph');
+      appendInlineMarkdown(p, line);
+      container.appendChild(p);
+      i++;
+    }
   }
 
   function init() {
@@ -146,10 +211,58 @@
 
     function addMessage(text, kind) {
       var bubble = el('div', 'chat-widget__message chat-widget__message--' + kind);
-      bubble.textContent = text; // textContent のみ — HTML/Markdown はレンダリングしない (XSS対策)
+      if (kind === 'bot') {
+        renderRichText(bubble, text); // **太字**/箇条書きのみ対応、DOM生成でXSS対策
+      } else {
+        bubble.textContent = text; // user/error は常にプレーンテキスト
+      }
       messages.appendChild(bubble);
       messages.scrollTop = messages.scrollHeight;
       return bubble;
+    }
+
+    function addJobCards(jobs) {
+      if (!jobs || !jobs.length) return;
+      var wrap = el('div', 'chat-widget__jobs');
+      jobs.forEach(function (job) {
+        // 求人詳細は別タブで開く — 同タブ遷移だとチャットの会話が失われるため。
+        var card = el('a', 'chat-widget__job-card', {
+          href: job.url,
+          target: '_blank',
+          rel: 'noopener',
+        });
+        var title = el('p', 'chat-widget__job-card-title');
+        title.textContent = job.title;
+        var meta = el('p', 'chat-widget__job-card-meta');
+        meta.textContent =
+          job.facility + '（' + job.city + '） ／ ' + job.employment.join('・');
+        var cta = el('span', 'chat-widget__job-card-cta');
+        cta.textContent = '詳細を見る';
+        card.appendChild(title);
+        card.appendChild(meta);
+        card.appendChild(cta);
+        wrap.appendChild(card);
+      });
+      messages.appendChild(wrap);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function addSuggestions(suggestions) {
+      if (!suggestions || !suggestions.length) return;
+      var wrap = el('div', 'chat-widget__suggestions');
+      suggestions.forEach(function (text) {
+        var chip = el('button', 'chat-widget__chip', { type: 'button' });
+        chip.textContent = text;
+        chip.addEventListener('click', function () {
+          if (sending) return;
+          wrap.remove(); // 送信後にこのグループを消し、多重送信を防ぐ
+          textarea.value = text;
+          form.requestSubmit();
+        });
+        wrap.appendChild(chip);
+      });
+      messages.appendChild(wrap);
+      messages.scrollTop = messages.scrollHeight;
     }
 
     function addTypingIndicator() {
@@ -171,6 +284,7 @@
           'こんにちは。採用に関するご質問（未経験可否・夜勤の有無・選考期間など）にお答えします。',
           'bot'
         );
+        addSuggestions(STARTER_SUGGESTIONS);
       }
       window.requestAnimationFrame(function () {
         textarea.focus();
@@ -195,12 +309,26 @@
       }
     });
 
+    // IME (日本語入力等) の変換中かどうかを追跡する。変換候補を確定するための
+    // Enter を送信トリガーとして扱ってしまうと (/code-review 前の実装のバグ)、
+    // 意図せずメッセージが送信されてしまう。
+    var composing = false;
+    textarea.addEventListener('compositionstart', function () {
+      composing = true;
+    });
+    textarea.addEventListener('compositionend', function () {
+      composing = false;
+    });
+
     // Enter で送信、Shift+Enter で改行 (map-search.js 同様プレーンJSのみ)。
+    // `e.isComposing` に加えて legacy な `keyCode === 229` も見るのは、IME変換
+    // 確定用の Enter を isComposing=false 済みの keydown として送ってくる
+    // ブラウザ実装のばらつきに対応するための、広く使われている防御的チェック。
     textarea.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        form.requestSubmit();
-      }
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      if (composing || e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      form.requestSubmit();
     });
 
     form.addEventListener('submit', function (e) {
@@ -243,6 +371,8 @@
           // — ユーザー視点では「答えられない」という通常の応答の一種であり、見た目を変える
           // 必要はない (エラー扱いにしない)。
           addMessage(data.reply, 'bot');
+          addJobCards(data.jobs);
+          addSuggestions(data.suggestions);
           history.push({ role: 'user', content: message });
           history.push({ role: 'model', content: data.reply });
           history = history.slice(-MAX_HISTORY_TURNS);

@@ -21,14 +21,45 @@ GCP_PROJECT=aozora-wp-jobcan-sync uv run python scripts/probe_model.py
 
 ## 知識ベースの鮮度（既知のトレードオフ）
 
-`src/chatbot/knowledge/faq.yaml` と `jobs_summary.json` はコンテナイメージに同梱され、
-起動時に一度だけ読み込まれる（RAG なし、外部フェッチなし — Phase A の求人 34 件・FAQ 5 件
-という小規模データに対する意図的なシンプル設計）。
+`src/chatbot/knowledge/faq.yaml` / `jobs_summary.json` / `jobs_detail.json` はコンテナ
+イメージに同梱され、起動時に一度だけ読み込まれる（RAG なし、外部フェッチなし — Phase A の
+求人 34 件・FAQ 5 件という小規模データに対する意図的なシンプル設計）。
 
-**`mockup/index.html` の `#faq` や `mockup/assets/data/jobs.json` を更新しても、この
-チャットボットの回答には自動反映されない。** 知識ベースを更新したら手動でこの2ファイルを
-同期し、再デプロイすること。将来的に鮮度が問題になった場合は、起動時に GitHub Pages の
-`jobs.json` を fetch する設計への切り替えを検討（follow-up、未実装）。
+**`mockup/index.html` の `#faq` や `mockup/assets/data/jobs.json` / `mockup/jobs.html` を
+更新しても、このチャットボットの回答には自動反映されない。** 知識ベースを更新したら
+`uv run python scripts/build_jobs_detail.py` で `jobs_detail.json` を再生成し（`jobs_summary.json`
+は引き続き手動更新）、再デプロイすること。将来的に鮮度が問題になった場合は、起動時に
+GitHub Pages の `jobs.json` を fetch する設計への切り替えを検討（follow-up、未実装）。
+
+## レスポンス形式（構造化出力、2026-07-24 拡張）
+
+`POST /chat` は Gemini の構造化出力（`response_mime_type=application/json` +
+`response_schema=GeminiReply`）を使い、1回の呼び出しで回答本文に加えて質問サジェストと
+関連求人IDを生成する。求人IDは `knowledge.resolve_jobs()` で `jobs_detail.json` の
+既知IDとのホワイトリスト照合を経てから返す（モデルが存在しないIDを挙げても弾かれる）。
+
+```json
+{
+  "reply": "夜勤のないお仕事もございます。デイサービスや訪問介護、事務系の求人でお探しいただけます。",
+  "blocked": false,
+  "suggestions": ["未経験でも応募できますか？", "選考にはどれくらいかかりますか？"],
+  "jobs": [
+    {
+      "id": "2264205",
+      "title": "※2026年8月OPEN※福岡【パート】日勤・介護スタッフ（四箇／デイ・有料）",
+      "url": "jobs/2264205.html",
+      "category": "care",
+      "employment": ["パート"],
+      "facility": "あおぞらケアグループ四箇（デイ・有料）",
+      "city": "福岡市早良区"
+    }
+  ]
+}
+```
+
+`reply` は `**太字**` と `- ` 箇条書きのみを許可した軽量Markdown（`mockup/assets/js/chat-widget.js`
+の `renderRichText` が DOM 生成でレンダリングする、innerHTML 不使用）。`suggestions` /
+`jobs` は0件のこともある。
 
 ## ローカル開発
 

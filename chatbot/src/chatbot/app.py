@@ -38,15 +38,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 
 from .config import AppConfig
-from .gemini import build_client, generate_reply
-from .knowledge import build_context
+from .gemini import GeneratedReply, build_client, generate_reply
+from .knowledge import build_context, resolve_jobs
 from .models import ChatMessage, ChatRequest, ChatResponse
 from .prompts import build_system_instruction
 from .ratelimit import RateLimiter
 
 _logger = logging.getLogger(__name__)
 
-GenerateFn = Callable[..., Awaitable[tuple[str, bool]]]
+GenerateFn = Callable[..., Awaitable[GeneratedReply]]
 
 
 def _apply_security_headers(response: Response) -> Response:
@@ -133,7 +133,7 @@ def create_app(
 
         async def _real_generate(
             *, history: Sequence[ChatMessage], message: str
-        ) -> tuple[str, bool]:
+        ) -> GeneratedReply:
             if not _client_holder:
                 _client_holder.append(build_client(app_config))
             return await generate_reply(
@@ -197,7 +197,7 @@ def create_app(
         trimmed_history = _trim_history(payload.history, app_config)
 
         try:
-            reply, blocked = await _generate(history=trimmed_history, message=payload.message)
+            generated = await _generate(history=trimmed_history, message=payload.message)
         except Exception:
             # Vertex failure (404 model retired, timeout, quota, network) —
             # never leak the upstream exception to the client; log it here
@@ -208,7 +208,16 @@ def create_app(
                 detail="現在チャットボットをご利用いただけません。しばらくしてから再度お試しください。",
             ) from None
 
-        return ChatResponse(reply=reply, blocked=blocked)
+        # `resolve_jobs` is the whitelist check — a hallucinated/stale id
+        # from the model is silently dropped here rather than reaching the
+        # client (see knowledge.py docstring).
+        jobs = resolve_jobs(generated.job_ids)
+        return ChatResponse(
+            reply=generated.reply,
+            blocked=generated.blocked,
+            suggestions=generated.suggestions,
+            jobs=jobs,
+        )
 
     return app
 

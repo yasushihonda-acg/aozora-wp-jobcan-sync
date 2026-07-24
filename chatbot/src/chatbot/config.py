@@ -52,7 +52,9 @@ class AppConfig:
             ),
             max_input_chars=int(os.environ.get("MAX_INPUT_CHARS", "500")),
             max_history_turns=int(os.environ.get("MAX_HISTORY_TURNS", "6")),
-            max_output_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "512")),
+            # JSON構造化出力 (reply/suggestions/job_ids) はプレーンテキストより
+            # トークン消費が増えるため、旧デフォルト512から引き上げ。
+            max_output_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "768")),
             rate_limit_window_seconds=int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60")),
             rate_limit_max_requests=int(os.environ.get("RATE_LIMIT_MAX_REQUESTS", "20")),
         )

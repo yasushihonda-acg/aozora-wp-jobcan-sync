@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from chatbot.app import create_app
 from chatbot.config import AppConfig
+from chatbot.gemini import GeneratedReply
 from chatbot.ratelimit import RateLimiter
 
 
@@ -37,17 +38,30 @@ def _config(**overrides: Any) -> AppConfig:
 class _FakeGenerate:
     """Records every call so tests can assert on history trimming etc."""
 
-    def __init__(self, reply: str = "テストの回答です。", blocked: bool = False) -> None:
+    def __init__(
+        self,
+        reply: str = "テストの回答です。",
+        blocked: bool = False,
+        suggestions: list[str] | None = None,
+        job_ids: list[str] | None = None,
+    ) -> None:
         self.reply = reply
         self.blocked = blocked
+        self.suggestions = suggestions or []
+        self.job_ids = job_ids or []
         self.raises: BaseException | None = None
         self.calls: list[dict[str, Any]] = []
 
-    async def __call__(self, *, history: Any, message: str) -> tuple[str, bool]:
+    async def __call__(self, *, history: Any, message: str) -> GeneratedReply:
         self.calls.append({"history": history, "message": message})
         if self.raises is not None:
             raise self.raises
-        return self.reply, self.blocked
+        return GeneratedReply(
+            reply=self.reply,
+            blocked=self.blocked,
+            suggestions=self.suggestions,
+            job_ids=self.job_ids,
+        )
 
 
 def _client_with(
@@ -107,6 +121,39 @@ def test_chat_blocked_reply_is_passed_through() -> None:
 
     assert response.status_code == 200
     assert response.json()["blocked"] is True
+
+
+def test_chat_response_includes_suggestions() -> None:
+    fake = _FakeGenerate(suggestions=["未経験でも応募できますか？", "選考期間は？"])
+    client = _client_with(fake)
+
+    response = client.post("/chat", json={"message": "夜勤なしで働けますか？"})
+
+    assert response.json()["suggestions"] == ["未経験でも応募できますか？", "選考期間は？"]
+
+
+def test_chat_response_resolves_known_job_id() -> None:
+    """`1777023` is a real id from `knowledge/jobs_detail.json` (博多 care job)."""
+    fake = _FakeGenerate(job_ids=["1777023"])
+    client = _client_with(fake)
+
+    response = client.post("/chat", json={"message": "博多で働ける求人はありますか？"})
+
+    jobs = response.json()["jobs"]
+    assert len(jobs) == 1
+    assert jobs[0]["id"] == "1777023"
+    assert jobs[0]["url"] == "jobs/1777023.html"
+
+
+def test_chat_response_drops_hallucinated_job_id() -> None:
+    """A model-suggested id that isn't in the known job list must never
+    reach the client — this is the whitelist guard in `knowledge.resolve_jobs`."""
+    fake = _FakeGenerate(job_ids=["9999999"])
+    client = _client_with(fake)
+
+    response = client.post("/chat", json={"message": "求人を教えてください"})
+
+    assert response.json()["jobs"] == []
 
 
 def test_chat_rejects_empty_message() -> None:
