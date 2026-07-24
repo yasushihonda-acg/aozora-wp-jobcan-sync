@@ -59,3 +59,17 @@ def test_window_expiry_resets_the_counter() -> None:
 
     clock.now = 20
     assert limiter.check("1.2.3.4") is True
+
+
+def test_hit_list_growth_stops_once_over_limit() -> None:
+    """Regression test: an abusive key hammering the limiter after already
+    being rejected must not grow its per-key hit list without bound for the
+    rest of the window — only `max_requests + 1` entries are ever needed to
+    know the caller is over the limit."""
+    clock = _ManualClock()
+    limiter = RateLimiter(window_seconds=60, max_requests=2, timer=clock)
+
+    for _ in range(100):
+        limiter.check("1.2.3.4")
+
+    assert len(limiter._hits["1.2.3.4"]) == 3  # max_requests + 1, not 100

@@ -30,7 +30,8 @@ necessary.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +50,10 @@ GenerateFn = Callable[..., Awaitable[tuple[str, bool]]]
 
 
 def _apply_security_headers(response: Response) -> Response:
+    """Mirrors `sync/src/sync/app.py`'s `_apply_security_headers` — keep the
+    two in sync if the header policy ever changes (e.g. adding CSP, or
+    dropping X-Robots-Tag once the recruitment site is meant to be indexed).
+    """
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
@@ -58,14 +63,20 @@ def _client_ip(request: Request) -> str:
     """Best-effort client IP for rate limiting.
 
     Cloud Run terminates TLS at the Google Front End, so `request.client.host`
-    is the GFE, not the browser — `X-Forwarded-For`'s first hop is the
-    signal to use instead (same precedent as the Maps API key referrer setup
-    docs). Spoofable by a direct caller; this is a coarse brake, not an auth
-    boundary (see ratelimit.py docstring).
+    is the GFE, not the browser. `X-Forwarded-For` is a chain where each hop
+    appends the IP of whoever it received the connection from — anything a
+    direct caller supplies ends up at the FRONT of the list, and GFE appends
+    its own observed peer at the END. Using the first entry (as an earlier
+    version of this function did) is fully attacker-controlled and lets a
+    caller defeat the rate limiter by sending a fresh value on every request;
+    the last entry is what GFE itself appended. Still spoofable if this
+    service is ever placed behind another proxy that doesn't strip
+    client-supplied headers — this is a coarse brake, not an auth boundary
+    (see ratelimit.py docstring).
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        return forwarded.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -76,7 +87,10 @@ def _trim_history(history: list[ChatMessage], cfg: AppConfig) -> list[ChatMessag
     submit arbitrary history — the server must not trust that cap (cost
     control, see plan §5.9).
     """
-    trimmed = history[-cfg.max_history_turns :]
+    # `history[-0:]` is `history[0:]` (Python has no negative zero), which
+    # returns the WHOLE list instead of an empty one — `max_history_turns=0`
+    # is a documented, supported env override, so this can't be assumed away.
+    trimmed = history[-cfg.max_history_turns :] if cfg.max_history_turns > 0 else []
     return [
         turn
         if len(turn.content) <= cfg.max_input_chars
@@ -103,6 +117,12 @@ def create_app(
     )
     system_instruction = build_system_instruction(build_context())
 
+    # Holds the lazily-built real client (empty when `generate_fn` was
+    # injected, i.e. every test) so `_lifespan` below can close it on
+    # shutdown without caring which branch was taken — mirrors
+    # `sync/src/sync/app.py`'s `proxy_client.close()` lifespan cleanup.
+    _client_holder: list[genai.Client] = []
+
     # Single declaration point for `_generate` (pyright reportRedeclaration
     # otherwise flags the two branches as conflicting types — an explicit
     # `GenerateFn` annotation vs. an inferred concrete coroutine function).
@@ -110,7 +130,6 @@ def create_app(
     if generate_fn is not None:
         _generate = generate_fn
     else:
-        _client_holder: list[genai.Client] = []
 
         async def _real_generate(
             *, history: Sequence[ChatMessage], message: str
@@ -127,10 +146,19 @@ def create_app(
 
         _generate = _real_generate
 
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if _client_holder:
+                _client_holder[0].close()
+
     app = FastAPI(
         title="Aozora Recruit FAQ Chatbot",
         description="Vertex AI Gemini-backed FAQ assistant for the recruitment mockup",
         version="0.1.0",
+        lifespan=_lifespan,
     )
 
     app.add_middleware(

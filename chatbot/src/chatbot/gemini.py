@@ -92,6 +92,16 @@ async def generate_reply(
                 )
                 for category in _SAFETY_CATEGORIES
             ],
+            # No http_options means an unbounded request (the SDK sets
+            # max_allowed_time=inf when timeout is None) and zero retries
+            # (retry_options=None means stop_after_attempt(1)) — confirmed by
+            # reading google.genai._api_client. 20s keeps this under Cloud
+            # Run's 30s --timeout; 3 attempts uses the SDK's built-in
+            # exponential-backoff retry on 429/500/502/503/504/timeout.
+            http_options=types.HttpOptions(
+                timeout=20_000,
+                retry_options=types.HttpRetryOptions(attempts=3),
+            ),
         ),
     )
 
@@ -101,7 +111,11 @@ async def generate_reply(
 
     finish_reason = getattr(response.candidates[0], "finish_reason", None)
     text = response.text
-    if finish_reason is not None and str(finish_reason) == "SAFETY":
+    # `FinishReason` mixes `str` + `Enum` but does NOT override `__str__`, so
+    # `str(finish_reason)` yields `'FinishReason.SAFETY'`, not `'SAFETY'` —
+    # confirmed by direct execution against the installed SDK. Compare
+    # against the enum member itself instead.
+    if finish_reason == types.FinishReason.SAFETY:
         _logger.info("gemini response safety-blocked", extra={"model": cfg.model_id})
         return REFUSAL_MESSAGE, True
     if not text:

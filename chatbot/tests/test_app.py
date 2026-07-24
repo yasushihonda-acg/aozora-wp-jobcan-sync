@@ -166,6 +166,33 @@ def test_chat_trims_oversized_history_entry_server_side() -> None:
     assert len(sent_history[0].content) == 5
 
 
+def test_chat_max_history_turns_zero_sends_empty_history() -> None:
+    """Regression test: `history[-0:]` is `history[0:]` (Python has no
+    negative zero) and used to return the FULL list instead of an empty one
+    when `max_history_turns=0` — a documented, supported env override."""
+    fake = _FakeGenerate()
+    client = _client_with(fake, config=_config(max_history_turns=0))
+
+    history = [{"role": "user", "content": "1問目"}, {"role": "model", "content": "1回答目"}]
+    client.post("/chat", json={"message": "2問目", "history": history})
+
+    assert fake.calls[0]["history"] == []
+
+
+def test_chat_rejects_history_over_50_entries() -> None:
+    """Regression test: without a list-level `max_length`, Pydantic would
+    fully parse an arbitrarily large history array before `_trim_history`
+    ever discards most of it."""
+    fake = _FakeGenerate()
+    client = _client_with(fake)
+
+    history = [{"role": "user", "content": "x"} for _ in range(51)]
+    response = client.post("/chat", json={"message": "テスト", "history": history})
+
+    assert response.status_code == 422
+    assert fake.calls == []
+
+
 def test_chat_vertex_failure_returns_503() -> None:
     fake = _FakeGenerate()
     fake.raises = RuntimeError("simulated Vertex AI failure")
@@ -188,6 +215,32 @@ def test_chat_rate_limit_exceeded_returns_429() -> None:
     assert first.status_code == 200
     assert second.status_code == 429
     assert "Retry-After" in second.headers
+
+
+def test_rate_limit_key_uses_last_xff_entry_not_first() -> None:
+    """Regression test: GFE appends its own observed peer IP as the LAST
+    entry in X-Forwarded-For; anything before it is caller-supplied and
+    spoofable. Using the first entry (as an earlier version did) lets a
+    caller send a fresh fake value on every request to dodge the limiter
+    entirely — each of the two calls below claims a different spoofed FIRST
+    hop but the same real (last) hop, so they must share one rate-limit key."""
+    limiter = RateLimiter(window_seconds=60, max_requests=1, timer=time.time)
+    fake = _FakeGenerate()
+    client = _client_with(fake, rate_limiter=limiter)
+
+    first = client.post(
+        "/chat",
+        json={"message": "1回目"},
+        headers={"x-forwarded-for": "203.0.113.1, 198.51.100.9"},
+    )
+    second = client.post(
+        "/chat",
+        json={"message": "2回目"},
+        headers={"x-forwarded-for": "203.0.113.99, 198.51.100.9"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
 
 
 def test_chat_cors_preflight_allows_configured_origin() -> None:

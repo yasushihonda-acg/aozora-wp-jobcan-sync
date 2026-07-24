@@ -50,5 +50,10 @@ class RateLimiter:
         if hits is None:
             hits = []
             self._hits[key] = hits
-        hits.append(self._timer())
+        # Stop growing the list once we already know the caller is over the
+        # limit — otherwise an abusive key hammering the endpoint after
+        # being 429'd keeps appending for the rest of the window, growing
+        # unboundedly in memory instead of staying capped at max_requests+1.
+        if len(hits) <= self._max_requests:
+            hits.append(self._timer())
         return len(hits) <= self._max_requests

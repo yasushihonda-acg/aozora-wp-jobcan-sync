@@ -197,8 +197,15 @@
 }
 .chat-widget__send svg { width: 18px; height: 18px; }
 
+/* components.css の .entry-cta-bar は <768px で表示される固定80pxの下部バー
+   (index.html / mockup/jobs/*.html)。トグルボタンの bottom オフセットを
+   その高さ分持ち上げ、サイト主要CTAとの重なりを防ぐ (/code-review high で指摘)。 */
+@media (max-width: 767px) {
+  .chat-widget { bottom: calc(80px + var(--space-3)); }
+}
+
 @media (max-width: 480px) {
-  .chat-widget { right: var(--space-3); bottom: var(--space-3); }
+  .chat-widget { right: var(--space-3); }
   .chat-widget__panel {
     width: calc(100vw - 2 * var(--space-3));
     height: min(70vh, 560px);

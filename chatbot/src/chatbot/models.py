@@ -26,7 +26,14 @@ class ChatRequest(BaseModel):
     """
 
     message: str = Field(..., min_length=1, max_length=4000)
-    history: list[ChatMessage] = Field(default_factory=list)
+    # `max_length` on the list itself matters, not just per-item: without it,
+    # Pydantic fully parses/instantiates however many ChatMessage entries a
+    # caller sends (each individually valid) before `_trim_history` ever
+    # discards most of them — a client could submit tens of thousands of
+    # entries and pay only the per-item validation cost, not a request-size
+    # cap. 50 is a generous ceiling above any realistic `max_history_turns`
+    # config (default 6).
+    history: list[ChatMessage] = Field(default_factory=list, max_length=50)
 
 
 class ChatResponse(BaseModel):
