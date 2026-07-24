@@ -42,10 +42,27 @@ jobs:
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
         run: |
-          EXISTING=$(gcloud services api-keys list \
-            --project="$GCP_PROJECT" \
-            --filter="displayName=jobs-map-embed" \
-            --format="value(name)")
+          # `gcloud services enable` は有効化リクエストの受理をもって成功を返すが、
+          # apikeys.googleapis.com が実際に呼び出し可能になるまで数分の伝播遅延が
+          # あるため(実機で "API has not been used ... or it is disabled" を確認)、
+          # SERVICE_DISABLED を検出した場合はリトライする。
+          MAX_ATTEMPTS=8
+          for i in $(seq 1 "$MAX_ATTEMPTS"); do
+            if EXISTING=$(gcloud services api-keys list \
+              --project="$GCP_PROJECT" \
+              --filter="displayName=jobs-map-embed" \
+              --format="value(name)" 2>/tmp/api-keys-list.err); then
+              break
+            fi
+            if [ "$i" -eq "$MAX_ATTEMPTS" ]; then
+              echo "API Keys API の有効化待ちがタイムアウトしました" >&2
+              cat /tmp/api-keys-list.err >&2
+              exit 1
+            fi
+            echo "apikeys.googleapis.com の伝播待ち... (${i}/${MAX_ATTEMPTS}, 30秒後にリトライ)"
+            sleep 30
+          done
+
           if [ -z "$EXISTING" ]; then
             gcloud services api-keys create \
               --project="$GCP_PROJECT" \
