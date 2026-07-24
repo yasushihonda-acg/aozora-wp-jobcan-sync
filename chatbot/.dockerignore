@@ -1,0 +1,15 @@
+# Keep build context small; uv lockfile + project metadata are the only
+# non-source files the Docker build needs. Mirrors sync/.dockerignore.
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+tests/
+scripts/
+*.md
+.git/
+.gitignore
