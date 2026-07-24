@@ -13,6 +13,12 @@
   // `?chatbot_endpoint=https://attacker.example/collect` を踏んだ訪問者の入力メッセージが
   // 攻撃者サーバーへ送信されてしまうデータ流出経路になる)。
   var DEFAULT_ENDPOINT = 'https://aozora-chatbot-PENDING-DEPLOY.asia-northeast1.run.app/chat';
+  // chatbot/src/chatbot/config.py の AppConfig.max_history_turns (env
+  // MAX_HISTORY_TURNS、既定6) と値が重複している。これは payload サイズを
+  // 抑える送信側のヒントに過ぎず、バックエンドの _trim_history が最終的な
+  // 上限を独立して再適用するので機能的な結合はない。バックエンド側だけ
+  // 変更しても壊れないが、値を大きく変える運用ならこちらも合わせて更新する
+  // こと (/code-review high で指摘: 単一情報源になっていない)。
   var MAX_HISTORY_TURNS = 6;
   var LOCAL_HOSTNAMES = ['localhost', '127.0.0.1'];
 

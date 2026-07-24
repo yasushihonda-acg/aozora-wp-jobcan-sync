@@ -14,7 +14,7 @@ from google import genai
 from google.genai import types
 
 from chatbot.config import AppConfig
-from chatbot.gemini import REFUSAL_MESSAGE, generate_reply
+from chatbot.gemini import REFUSAL_MESSAGE, TRUNCATED_MESSAGE, generate_reply
 from chatbot.models import ChatMessage
 
 
@@ -97,6 +97,28 @@ async def test_generate_reply_detects_safety_finish_reason() -> None:
     )
 
     assert text == REFUSAL_MESSAGE
+    assert blocked is True
+
+
+@pytest.mark.asyncio
+async def test_generate_reply_detects_max_tokens_truncation() -> None:
+    """Regression test: a MAX_TOKENS finish still carries non-empty
+    (truncated) text, so without an explicit check it would fall through
+    both the SAFETY branch and the `not text` branch and be returned as a
+    normal complete answer, cut off mid-sentence, with no indication to the
+    user that it was truncated."""
+    client = _StubClient(
+        _response_with_text(
+            "夜勤のない働き方もご用意しております。デイサービス、訪問介護、事",
+            finish_reason=types.FinishReason.MAX_TOKENS,
+        )
+    )
+
+    text, blocked = await generate_reply(
+        _as_client(client), _config(), system_instruction="system", history=[], message="質問"
+    )
+
+    assert text == TRUNCATED_MESSAGE
     assert blocked is True
 
 

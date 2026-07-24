@@ -197,11 +197,12 @@
 }
 .chat-widget__send svg { width: 18px; height: 18px; }
 
-/* components.css の .entry-cta-bar は <768px で表示される固定80pxの下部バー
-   (index.html / mockup/jobs/*.html)。トグルボタンの bottom オフセットを
-   その高さ分持ち上げ、サイト主要CTAとの重なりを防ぐ (/code-review high で指摘)。 */
+/* components.css の .entry-cta-bar は <768px で表示される固定80pxの下部バー。
+   ただし index.html / mockup/jobs/*.html にはあるが mockup/jobs.html には無い
+   (/code-review high で指摘: 一律オフセットだとjobs.htmlで不要な隙間ができる)。
+   :has() で実際に .entry-cta-bar が存在するページにのみオフセットを限定する。 */
 @media (max-width: 767px) {
-  .chat-widget { bottom: calc(80px + var(--space-3)); }
+  body:has(.entry-cta-bar) .chat-widget { bottom: calc(80px + var(--space-3)); }
 }
 
 @media (max-width: 480px) {

@@ -42,6 +42,11 @@ REFUSAL_MESSAGE = (
     "求人詳細ページまたは応募フォームからお問い合わせください。"
 )
 
+TRUNCATED_MESSAGE = (
+    "回答が長くなり途中で区切れてしまいました。恐れ入りますが、"
+    "もう少し具体的に絞ってご質問いただけますでしょうか。"
+)
+
 
 def build_client(cfg: AppConfig) -> genai.Client:
     """Construct the Vertex AI client. ADC-based (Cloud Run SA / local user
@@ -118,6 +123,18 @@ async def generate_reply(
     if finish_reason == types.FinishReason.SAFETY:
         _logger.info("gemini response safety-blocked", extra={"model": cfg.model_id})
         return REFUSAL_MESSAGE, True
+    if finish_reason == types.FinishReason.MAX_TOKENS:
+        # A MAX_TOKENS finish still carries non-empty (truncated) text, so
+        # without this check it would fall through both the SAFETY branch
+        # and the `not text` branch below and be shown to the user as a
+        # complete answer cut off mid-sentence, with no truncation
+        # indicator anywhere in the UI. `max_output_tokens` (512) and the
+        # system prompt's "数百字以内" instruction make this rare in
+        # practice, but not impossible if the model ignores the length hint.
+        _logger.info(
+            "gemini response truncated at max_output_tokens", extra={"model": cfg.model_id}
+        )
+        return TRUNCATED_MESSAGE, True
     if not text:
         _logger.info("gemini returned empty text", extra={"model": cfg.model_id})
         return REFUSAL_MESSAGE, True
