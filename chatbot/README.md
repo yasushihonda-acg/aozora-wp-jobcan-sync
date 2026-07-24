@@ -55,12 +55,12 @@ uv run pyright
 すべて Vertex AI 非依存（`create_app(generate_fn=...)` で fake 注入、`sync/tests/test_app.py`
 の `client_factory` DI パターンを踏襲）。
 
-## デプロイ（Phase A: 手動）
+## デプロイ（Phase A: 手動、2026-07-24 デプロイ済み）
 
 `infra/README.md`（`sync/` 用）と同じ GCP プロジェクト・リージョンを使うが、サービス名・
-サービスアカウントは分離する。詳細手順は実装計画（`docs/handoff/` または PR 説明）参照。
+サービスアカウントは分離。
 
-要点:
+- **Service URL**: `https://aozora-chatbot-1084369586348.asia-northeast1.run.app`
 - ランタイム SA `chatbot-run@aozora-wp-jobcan-sync.iam.gserviceaccount.com` に
   `roles/aiplatform.user` のみ（最小権限）
 - `gcloud run deploy aozora-chatbot --source .`（Apple Silicon の arm64/amd64 問題を
@@ -68,6 +68,16 @@ uv run pyright
 - `--allow-unauthenticated` 必須（CORS preflight の `OPTIONS` が IAM 層で弾かれるとブラウザ
   から到達できない）
 - `MODEL_ID` / `VERTEX_LOCATION` / `ALLOWED_ORIGINS` は env 変数で注入、コード変更不要
+- Artifact Registry の自動生成リポジトリ `cloud-run-source-deploy` に cleanup policy
+  （最新2件保持、`infra/cleanup-policy.json`）適用済み
+
+**既知の落とし穴**: `Dockerfile` の `RUN --mount=type=cache,...`（BuildKit機能）は
+`gcloud run deploy --source` が使う Cloud Build のデフォルト docker ビルダー
+（`gcr.io/cloud-builders/docker`）では非対応（"the --mount option requires BuildKit"で
+ビルド失敗、2026-07-24実測）。`sync/Dockerfile` はローカル `docker buildx build`
+（常にBuildKit）でビルド後 push する運用のため問題にならないが、`chatbot/` は
+`--source` 前提のため `--mount=type=cache` を使わない形に変更済み（純粋なビルド速度の
+トレードオフ、機能的な差はなし）。
 
 ## 既知の制約
 

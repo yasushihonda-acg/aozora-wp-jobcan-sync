@@ -24,16 +24,24 @@ WORKDIR /app
 # until pyproject.toml / uv.lock actually change.
 COPY pyproject.toml uv.lock ./
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+# No `--mount=type=cache` here (unlike sync/Dockerfile): that's a BuildKit
+# feature, and `gcloud run deploy --source` invokes Cloud Build's classic
+# `gcr.io/cloud-builders/docker build` step, which does not enable BuildKit
+# by default — confirmed by a failed deploy (2026-07-24) with "the --mount
+# option requires BuildKit". sync/ avoids this by building locally with
+# `docker buildx build` (always BuildKit) and pushing an image instead of
+# using --source; chatbot/ intentionally uses --source to sidestep the
+# Apple Silicon arm64/amd64 cross-build issue documented in infra/README.md
+# §3, so the cache mount has to go instead. Pure build-speed tradeoff, no
+# functional difference.
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Now copy the project source (incl. knowledge/faq.yaml + jobs_summary.json,
 # bundled into the image per Phase A design — see README.md "知識ベースの鮮度")
 # and install the project itself (no deps).
 COPY src/ src/
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev
 
 # ──────────────────────────────── Runtime stage ────────────────────────────
 
