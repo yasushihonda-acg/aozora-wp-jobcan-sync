@@ -30,11 +30,13 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT }}
 
-      - name: Enable Maps JavaScript API
+      - name: Enable Maps JavaScript API + API Keys API
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
         run: |
-          gcloud services enable maps-backend.googleapis.com --project="$GCP_PROJECT"
+          # apikeys.googleapis.com は後続の `gcloud services api-keys ...` の前提API
+          # (未有効化のプロジェクトでは list/create が失敗する、/code-review で検出)。
+          gcloud services enable maps-backend.googleapis.com apikeys.googleapis.com --project="$GCP_PROJECT"
 
       - name: Create referrer-restricted API key (idempotent)
         env:
@@ -49,7 +51,7 @@ jobs:
               --project="$GCP_PROJECT" \
               --display-name="jobs-map-embed" \
               --api-target=service=maps-backend.googleapis.com \
-              --allowed-referrers="https://yasushihonda-acg.github.io/*,http://localhost:8989/*"
+              --allowed-referrers="https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/*,http://localhost:8989/*"
           else
             echo "API key 'jobs-map-embed' already exists (${EXISTING}), skipping creation."
           fi
@@ -69,7 +71,7 @@ jobs:
             echo "$KEY_STRING"
             echo '```'
             echo ""
-            echo "referrer制限: \`https://yasushihonda-acg.github.io/*\`, \`http://localhost:8989/*\`"
+            echo "referrer制限: \`https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/*\`, \`http://localhost:8989/*\`"
             echo ""
             echo "このキーをコピーして \`mockup/jobs.html\` に埋め込んでください(referrer制限済みのクライアントキーのためSecret登録は不要)。"
           } >> "$GITHUB_STEP_SUMMARY"
