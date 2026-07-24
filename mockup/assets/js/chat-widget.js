@@ -313,11 +313,20 @@
     // Enter を送信トリガーとして扱ってしまうと (/code-review 前の実装のバグ)、
     // 意図せずメッセージが送信されてしまう。
     var composing = false;
+    // 一部ブラウザ(Safari等)では、変換確定用のEnterに対して compositionend が
+    // その Enter の keydown より先に発火し、かつその keydown が isComposing=false・
+    // keyCode!==229 で届くことがある (/code-review medium で指摘)。compositionend
+    // 直後の Enter を短時間だけ追加で無視するグレース期間を設け、この抜け穴を防ぐ。
+    var composingJustEnded = false;
     textarea.addEventListener('compositionstart', function () {
       composing = true;
     });
     textarea.addEventListener('compositionend', function () {
       composing = false;
+      composingJustEnded = true;
+      window.setTimeout(function () {
+        composingJustEnded = false;
+      }, 0);
     });
 
     // Enter で送信、Shift+Enter で改行 (map-search.js 同様プレーンJSのみ)。
@@ -326,7 +335,7 @@
     // ブラウザ実装のばらつきに対応するための、広く使われている防御的チェック。
     textarea.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' || e.shiftKey) return;
-      if (composing || e.isComposing || e.keyCode === 229) return;
+      if (composing || composingJustEnded || e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       form.requestSubmit();
     });

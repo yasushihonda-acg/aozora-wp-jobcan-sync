@@ -177,9 +177,12 @@ async def generate_reply(
         _logger.info("gemini returned empty reply text", extra={"model": cfg.model_id})
         return GeneratedReply(reply=REFUSAL_MESSAGE, blocked=True)
 
+    # `GeminiReply` only bounds these at 10 (see its docstring) so that a
+    # 4-item overflow doesn't nuke a good `reply` — the real 3-item cap the
+    # prompt asks for is enforced here instead.
     return GeneratedReply(
         reply=parsed.reply,
-        suggestions=parsed.suggestions,
-        job_ids=parsed.job_ids,
+        suggestions=parsed.suggestions[:3],
+        job_ids=parsed.job_ids[:3],
         blocked=False,
     )

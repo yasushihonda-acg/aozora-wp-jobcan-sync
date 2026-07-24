@@ -24,17 +24,26 @@ _JOBS_JSON = _REPO_ROOT / "mockup" / "assets" / "data" / "jobs.json"
 _OUTPUT = Path(__file__).resolve().parents[1] / "src" / "chatbot" / "knowledge" / "jobs_detail.json"
 
 _LINK_RE = re.compile(r'href="jobs/(?P<id>\d+)\.html"')
-_TITLE_RE = re.compile(r'<h2 class="job-list-card__title">(?P<title>.*?)</h2>')
+# id と title を1つのマッチで一緒に取る — 別々に findall して位置で zip すると、
+# 将来 jobs.html のマークアップ順序が変わった際に件数は一致したまま id と
+# title が静かに入れ替わりうる (件数一致チェックでは検出できない)。同じ
+# job-card 内で href の直後に対応する title が来るという構造上の前提を、
+# 1つの正規表現に閉じ込めることでこの取り違えを構造的に防ぐ。
+_JOB_CARD_RE = re.compile(
+    r'href="jobs/(?P<id>\d+)\.html".*?<h2 class="job-list-card__title">(?P<title>.*?)</h2>',
+    re.DOTALL,
+)
 
 
 def _extract_titles_by_id(html: str) -> dict[str, str]:
-    ids = _LINK_RE.findall(html)
-    titles = _TITLE_RE.findall(html)
-    if len(ids) != len(titles):
+    link_count = len(_LINK_RE.findall(html))
+    matches = list(_JOB_CARD_RE.finditer(html))
+    if len(matches) != link_count:
         raise ValueError(
-            f"jobs.html structure mismatch: {len(ids)} job links vs {len(titles)} titles"
+            f"jobs.html structure mismatch: {link_count} job links vs "
+            f"{len(matches)} link+title pairs matched"
         )
-    return dict(zip(ids, titles, strict=True))
+    return {m.group("id"): m.group("title") for m in matches}
 
 
 def main() -> None:

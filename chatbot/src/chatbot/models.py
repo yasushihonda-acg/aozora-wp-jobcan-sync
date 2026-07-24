@@ -57,11 +57,19 @@ class GeminiReply(BaseModel):
     `job_ids` are raw candidate ids as chosen by the model — still
     unvalidated at this layer. The caller (`app.py`) must resolve them
     through `knowledge.resolve_jobs` before they reach `ChatResponse.jobs`.
+
+    `suggestions`/`job_ids` intentionally allow up to 10 items, not the 3 the
+    prompt asks for: Gemini's constrained decoding doesn't perfectly honor a
+    tight `max_length` on every call, and the SDK discards the *entire*
+    response (including a perfectly good `reply`) when this model fails
+    Pydantic validation (`response.parsed` becomes `None` — see
+    `gemini.py`'s `generate_reply`). A generous ceiling here is a pure
+    request-size sanity guard; `generate_reply` truncates to 3 in code.
     """
 
     reply: str
-    suggestions: list[str] = Field(default_factory=list, max_length=3)
-    job_ids: list[str] = Field(default_factory=list, max_length=3)
+    suggestions: list[str] = Field(default_factory=list, max_length=10)
+    job_ids: list[str] = Field(default_factory=list, max_length=10)
 
 
 class ChatResponse(BaseModel):

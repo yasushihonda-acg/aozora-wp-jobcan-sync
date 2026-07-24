@@ -108,6 +108,30 @@ async def test_generate_reply_returns_suggestions_and_job_ids() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_reply_truncates_suggestions_and_job_ids_to_three() -> None:
+    """Regression test: `GeminiReply` bounds these fields at 10 (not 3) so
+    that constrained decoding slightly overshooting the prompt's "3 max"
+    instruction doesn't fail Pydantic validation and discard a good `reply`
+    entirely (see `GeminiReply`'s docstring and `/code-review medium`
+    finding at gemini.py:170). The real 3-item cap must be enforced here."""
+    parsed = GeminiReply(
+        reply="複数の求人がございます。",
+        suggestions=["Q1", "Q2", "Q3", "Q4", "Q5"],
+        job_ids=["1", "2", "3", "4"],
+    )
+    client = _StubClient(_response_with_text("ignored raw text", parsed=parsed))
+
+    result = await generate_reply(
+        _as_client(client), _config(), system_instruction="system", history=[], message="質問"
+    )
+
+    assert result.reply == "複数の求人がございます。"
+    assert result.suggestions == ["Q1", "Q2", "Q3"]
+    assert result.job_ids == ["1", "2", "3"]
+    assert result.blocked is False
+
+
+@pytest.mark.asyncio
 async def test_generate_reply_requests_structured_json_output() -> None:
     """Regression test: without `response_mime_type`/`response_schema` the
     model returns free-form text and `response.parsed` is never populated by

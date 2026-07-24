@@ -33,7 +33,11 @@ def _load_jobs_summary() -> dict:
     return json.loads((_KNOWLEDGE_DIR / "jobs_summary.json").read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=1)
 def _load_jobs_detail() -> list[dict]:
+    """Cached: `_jobs_by_id()` and `build_context()` (each `lru_cache`d
+    separately) both call this at process start — without this cache the
+    same file would be read and parsed from disk twice."""
     return json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
 
 
@@ -45,19 +49,14 @@ def _jobs_by_id() -> dict[str, JobCard]:
     ChatGPT-style structured-output call can name an id that doesn't exist
     (stale training data, mis-copied digit), so the client must never render
     a job the server hasn't independently confirmed.
+
+    `JobCard(**job)` works because `jobs_detail.json`'s keys are a superset
+    of `JobCard`'s fields (it also carries `area`, which `JobCard` doesn't
+    need) — pydantic ignores extra keys by default (verified against the
+    installed version), so this stays correct without hand-copying each
+    field.
     """
-    return {
-        job["id"]: JobCard(
-            id=job["id"],
-            title=job["title"],
-            url=job["url"],
-            category=job["category"],
-            employment=job["employment"],
-            facility=job["facility"],
-            city=job["city"],
-        )
-        for job in _load_jobs_detail()
-    }
+    return {job["id"]: JobCard(**job) for job in _load_jobs_detail()}
 
 
 def resolve_jobs(job_ids: list[str]) -> list[JobCard]:
