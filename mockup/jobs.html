@@ -65,7 +65,16 @@
 </div>
 <div class="job-search-layout" id="job-search-layout">
 <div class="job-map-wrap" hidden="" id="job-map-wrap">
-<div class="job-map-diagram" id="job-map-diagram"></div>
+<div class="job-map-panels" id="job-map-panels">
+<div class="job-map-panel">
+<p class="job-map-panel__label">福岡エリア</p>
+<div class="job-map-diagram" data-area="fukuoka"></div>
+</div>
+<div class="job-map-panel">
+<p class="job-map-panel__label">鹿児島エリア</p>
+<div class="job-map-diagram" data-area="kagoshima"></div>
+</div>
+</div>
 </div>
 <div class="job-search-list-col" id="job-search-list-col">
 <div class="job-search-facility-filter" hidden="" id="job-search-facility-filter">
@@ -738,6 +747,31 @@
   </p>
 </footer>
 </main>
+<script>
+  // Google Maps JavaScript API 公式ブートストラップローダー(google.maps.importLibrary方式)。
+  // APIキーはHTTPリファラー制限(https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/*,
+  // http://localhost:8989/*)付きのクライアントキーで、ブラウザに露出する前提のもの
+  // (Secretではない、docs/runbooks/wif-setup.md参照)。
+  (g => {
+    var h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__", m = document, b = window;
+    b = b[c] || (b[c] = {});
+    var d = b.maps || (b.maps = {}), r = new Set, e = new URLSearchParams, u = () => h || (h = new Promise(async (f, n) => {
+      await (a = m.createElement("script"));
+      e.set("libraries", [...r] + "");
+      for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]);
+      e.set("callback", c + ".maps." + q);
+      a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+      d[q] = f;
+      a.onerror = () => h = n(Error(p + " could not load."));
+      a.nonce = m.querySelector("script[nonce]")?.nonce || "";
+      m.head.append(a)
+    }));
+    d[l] ? console.warn(p + " only loads once. Ignoring:", g) : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n))
+  })({
+    key: "AIzaSyAoOpz0Z_SSE_7xOAF98SGcu5QcmQmj5S8",
+    v: "weekly",
+  });
+</script>
 <script src="assets/js/map-search.js"></script>
 </body>
 </html>

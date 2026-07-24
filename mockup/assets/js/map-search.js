@@ -6,7 +6,7 @@
 
   var panel = document.getElementById('job-search-panel');
   var mapWrap = document.getElementById('job-map-wrap');
-  var diagramEl = document.getElementById('job-map-diagram');
+  var mapPanelsEl = document.getElementById('job-map-panels');
   var listCol = document.getElementById('job-search-list-col');
   var countEl = document.getElementById('job-search-count');
   var freewordEl = document.getElementById('job-search-freeword');
@@ -18,7 +18,16 @@
   var facilityFilterClear = document.getElementById('job-search-facility-filter-clear');
   var emptyMessage = document.getElementById('job-search-empty');
 
-  if (!panel || !mapWrap || !diagramEl || !listCol || !countEl) return;
+  // エリア(福岡/鹿児島)ごとに独立したGoogle Mapsパネルを表示するため、
+  // 地図の描画先はエリア別の複数要素になる。
+  var diagramEls = {};
+  if (mapPanelsEl) {
+    Array.prototype.forEach.call(mapPanelsEl.querySelectorAll('.job-map-diagram'), function (el) {
+      diagramEls[el.getAttribute('data-area')] = el;
+    });
+  }
+
+  if (!panel || !mapWrap || !mapPanelsEl || !listCol || !countEl) return;
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -115,9 +124,7 @@
         restoreOriginalOrder();
         setFacilityFilter(null);
         clearHighlight();
-        diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
-          p.classList.remove('is-nearest');
-        });
+        applyNearestMarkerHighlight();
         applyFilters();
       });
     }
@@ -222,221 +229,204 @@
 
       countEl.textContent = visibleCount + ' 件を表示中';
       if (emptyMessage) emptyMessage.hidden = visibleCount !== 0;
-      updatePins(visibleFacilityKeys);
+      updateMarkers(visibleFacilityKeys);
     }
 
-    // --- 九州シルエット地図(2026-07-23決裁者フィードバック対応) ---
-    // 第1弾(Leaflet+地理院タイル→白地図)でも「実地図画像である限りスタイリッシュな
-    // トンマナと合わない」との指摘を受け、実地図を完全に廃止。assets/img/kyushu-map.svg
-    // (geolonia/japanese-prefectures 由来、九州7県のみ抽出した簡略化シルエット)を
-    // フラット単色の背景として使う。
-    //
-    // ピン配置(2026-07-24改訂): 初版は該当県(福岡=40/鹿児島=46)の重心1点に全拠点を
-    // 団子状にまとめていたが「雑になった」との指摘を受け、拠点の実緯度経度(GPS距離
-    // 計算に既に使っている値)を県ポリゴンの外接矩形(viewBoxに対する%、kyushu-map.svg
-    // から算出しビルド時に一度だけハードコード)へ線形マッピングし、拠点ごとの相対位置
-    // を反映する。ただし本当に近接した拠点(徒歩圏内)まで個別ピンにすると26px幅の
-    // ピン同士が重なって押しづらくなるため、しきい値未満はクラスタチップにまとめる
-    // (既存の.job-map-pin-clusterスタイルを流用、位置のみ動的算出に変更)。
+    // --- Google Maps 埋め込み(2026-07-24) ---
+    // 実地図(Leaflet+地理院タイル) → 抽象ブロブ図 → 九州シルエットSVG(県重心1点→拠点別
+    // 拡大2パネル)と決裁者フィードバックを受けて刷新を重ねた末、「理想はGoogleマップで
+    // 対応できないか」との明示指示によりGoogle Maps JavaScript APIの実地図埋め込みへ
+    // 最終的に刷新(過去の「実地図はトンマナと合わない」という却下判断を、この指示に
+    // 基づき明示的に上書きする形で再度実地図を採用)。福岡/鹿児島の2エリアはそれぞれ
+    // 独立したgoogle.maps.Mapインスタンスとして拡大表示し、各拠点の実緯度経度に
+    // fitBoundsで自動フィットする。ピンは既存の職種カテゴリ配色を再現したカスタム
+    // アイコン(白縁取り、地図の色と衝突しないよう)。POI/交通機関/道路ラベルは
+    // styles配列で非表示にしブランドカラーに寄せることで、雑多な実地図情報を削ぎ落とし
+    // つつスタイリッシュな見た目に近づける。実地図はユーザー自身がズーム操作できるため、
+    // 過去バージョンで実装していた近接拠点の独自クラスタリングロジックは不要になった。
     var AREA_ORDER = ['fukuoka', 'kagoshima'];
-    // 各県ポリゴンの外接矩形 (kyushu-map.svg の viewBox "36 692 200 298" に対するパーセント位置)
-    var AREA_BOUNDS = {
-      fukuoka: { left: 43.5, right: 73.5, top: 20.1, bottom: 39.6 },
-      kagoshima: { left: 41.0, right: 70.0, top: 56.7, bottom: 81.5 },
+    var CATEGORY_COLOR = {
+      care: '#0a52b8',
+      nurse: '#1f7a6a',
+      office: '#b06a1f',
+      it: '#5a3ea8',
     };
-    var AREA_BOUNDS_INSET = 0.18; // 県境ぎりぎりにピンが乗らないよう外接矩形の内側に取る余白
-    var CLUSTER_MERGE_PX = 30; // この距離未満のピンは1つのクラスタチップにまとめる(ピン幅26px)
-    var CLUSTER_REF_WIDTH = 360; // %→pxの概算換算基準 (.job-map-diagram の max-width)
-    var CLUSTER_REF_HEIGHT = (CLUSTER_REF_WIDTH * 298) / 200;
-    var popupEl = null;
+    var MIXED_COLOR = '#6b7280';
+    var CUSTOM_MAP_STYLE = [
+      { elementType: 'geometry', stylers: [{ color: '#f8f5ee' }] },
+      { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#575656' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+      { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#d9e8fd' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+      { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+      { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#d9e8fd' }] },
+      { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#d9e8fd' }] },
+    ];
 
-    function computeFacilityPositions() {
-      var positions = {};
-      AREA_ORDER.forEach(function (area) {
-        var bounds = AREA_BOUNDS[area];
-        var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
-        if (!keys.length || !bounds) return;
+    var maps = {}; // area -> google.maps.Map
+    var markers = {}; // facilityKey -> google.maps.Marker
+    var infoWindow = null;
+    var nearestMarkerKey = null;
 
-        var lats = keys.map(function (k) { return facilities[k].lat; });
-        var lngs = keys.map(function (k) { return facilities[k].lng; });
-        var latMin = Math.min.apply(null, lats);
-        var latMax = Math.max.apply(null, lats);
-        var lngMin = Math.min.apply(null, lngs);
-        var lngMax = Math.max.apply(null, lngs);
-
-        var w = bounds.right - bounds.left;
-        var h = bounds.bottom - bounds.top;
-        var x0 = bounds.left + w * AREA_BOUNDS_INSET;
-        var x1 = bounds.right - w * AREA_BOUNDS_INSET;
-        var y0 = bounds.top + h * AREA_BOUNDS_INSET;
-        var y1 = bounds.bottom - h * AREA_BOUNDS_INSET;
-
-        keys.forEach(function (key) {
-          var f = facilities[key];
-          var tx = lngMax === lngMin ? 0.5 : (f.lng - lngMin) / (lngMax - lngMin);
-          var ty = latMax === latMin ? 0.5 : (latMax - f.lat) / (latMax - latMin); // 北(緯度大)が上
-          positions[key] = { area: area, left: x0 + tx * (x1 - x0), top: y0 + ty * (y1 - y0) };
-        });
-      });
-      return positions;
+    function categoryColor(cats) {
+      if (!cats || cats.length !== 1) return MIXED_COLOR;
+      return CATEGORY_COLOR[cats[0]] || MIXED_COLOR;
     }
 
-    function clusterFacilityPositions(positions) {
-      var clusters = [];
-      Object.keys(positions).forEach(function (key) {
-        var pos = positions[key];
-        var target = null;
-        for (var i = 0; i < clusters.length; i++) {
-          var c = clusters[i];
-          if (c.area !== pos.area) continue;
-          var dx = ((c.left - pos.left) / 100) * CLUSTER_REF_WIDTH;
-          var dy = ((c.top - pos.top) / 100) * CLUSTER_REF_HEIGHT;
-          if (Math.sqrt(dx * dx + dy * dy) < CLUSTER_MERGE_PX) {
-            target = c;
-            break;
-          }
-        }
-        if (target) target.keys.push(key);
-        else clusters.push({ area: pos.area, left: pos.left, top: pos.top, keys: [key] });
-      });
-      return clusters;
+    function pinIconUrl(color) {
+      var svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">' +
+        '<path d="M15 0C6.7 0 0 6.7 0 15c0 11.3 15 25 15 25s15-13.7 15-25C30 6.7 23.3 0 15 0z" fill="' + color + '" stroke="#fff" stroke-width="2"/>' +
+        '<circle cx="15" cy="15" r="6" fill="#fff"/></svg>';
+      return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
     }
 
-    function categoryClass(cats) {
-      if (!cats || cats.length !== 1) return 'job-map-pin--mixed';
-      return 'job-map-pin--' + cats[0];
+    function markerIcon(color, isNearest) {
+      var scale = isNearest ? 1.3 : 1;
+      return {
+        url: pinIconUrl(color),
+        scaledSize: new google.maps.Size(30 * scale, 40 * scale),
+        anchor: new google.maps.Point(15 * scale, 40 * scale),
+      };
     }
 
-    function updatePins(visibleFacilityKeys) {
-      diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
-        var key = pin.getAttribute('data-facility-key');
-        pin.classList.toggle('is-dimmed', !visibleFacilityKeys[key]);
-      });
+    function closeInfoWindow() {
+      if (infoWindow) infoWindow.close();
     }
 
-    function closePopup() {
-      if (popupEl) {
-        popupEl.remove();
-        popupEl = null;
-      }
-    }
+    // google.maps.InfoWindow は閉じるボタン・別InfoWindowを開く操作以外では自動的に
+    // 閉じない(地図の外側をクリックしても開いたまま残る、/code-review high で検出)ため、
+    // 旧実装同様に外側クリック・Escapeキーで閉じる挙動を明示的に用意する。
+    document.addEventListener('click', function (e) {
+      if (!infoWindow) return;
+      if (mapPanelsEl.contains(e.target)) return;
+      closeInfoWindow();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeInfoWindow();
+    });
 
-    function showPopup(key, pinEl) {
-      closePopup();
+    function showInfoWindow(key, marker) {
       var f = facilities[key];
       if (!f) return;
-      var diagramRect = diagramEl.getBoundingClientRect();
-      var pinRect = pinEl.getBoundingClientRect();
+      if (!infoWindow) infoWindow = new google.maps.InfoWindow();
 
-      popupEl = document.createElement('div');
-      popupEl.className = 'job-map-popup';
-      popupEl.innerHTML =
-        '<button type="button" class="job-map-popup__close" aria-label="閉じる">×</button>' +
+      var content = document.createElement('div');
+      content.className = 'job-map-popup';
+      content.innerHTML =
         '<p class="job-map-popup__title">' + escapeHtml(f.name) + '</p>' +
         '<p class="job-map-popup__count">' + f.jobCount + ' 件の求人 ／ ' + escapeHtml(f.city) + '</p>' +
-        '<button type="button" class="job-map-popup__link" data-facility-key="' + key + '">この拠点の求人だけ表示</button>';
-      diagramEl.appendChild(popupEl);
-
-      var left = pinRect.left - diagramRect.left + pinRect.width / 2 - popupEl.offsetWidth / 2;
-      var maxLeft = diagramRect.width - popupEl.offsetWidth - 8;
-      popupEl.style.left = Math.max(8, Math.min(left, maxLeft)) + 'px';
-
-      // 下段(鹿児島エリア等)のピンでは pin の下に表示すると .job-map-wrap の
-      // overflow:hidden で吹き出しが切れて見えなくなるため、下に十分な余白が
-      // ない場合は pin の上側に表示する(実機検証で発覚)。
-      var top = pinRect.top - diagramRect.top + pinRect.height + 8;
-      var popupHeight = popupEl.offsetHeight;
-      if (top + popupHeight > diagramRect.height - 8) {
-        top = Math.max(8, pinRect.top - diagramRect.top - popupHeight - 8);
-      }
-      popupEl.style.top = top + 'px';
-
-      popupEl.querySelector('.job-map-popup__close').addEventListener('click', closePopup);
-      popupEl.querySelector('.job-map-popup__link').addEventListener('click', function () {
+        '<button type="button" class="job-map-popup__link">この拠点の求人だけ表示</button>';
+      content.querySelector('.job-map-popup__link').addEventListener('click', function () {
         state.facility = key;
         setFacilityFilter(key);
         applyFilters();
         highlightFacility(key);
-        closePopup();
+        closeInfoWindow();
+      });
+
+      infoWindow.setContent(content);
+      infoWindow.open({ map: marker.getMap(), anchor: marker });
+    }
+
+    function updateMarkers(visibleFacilityKeys) {
+      Object.keys(markers).forEach(function (key) {
+        markers[key].setOpacity(visibleFacilityKeys[key] ? 1 : 0.3);
       });
     }
 
-    document.addEventListener('click', function (e) {
-      if (!popupEl) return;
-      if (popupEl.contains(e.target) || e.target.closest('.job-map-pin')) return;
-      closePopup();
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closePopup();
-    });
-
-    function buildPinClusters() {
-      // 拠点の実緯度経度から算出した位置をもとに、近接する拠点だけをクラスタチップへ
-      // まとめる(空エリア・単独拠点はそのまま1ピンのチップになる)。
-      var positions = computeFacilityPositions();
-      var clusters = clusterFacilityPositions(positions);
-      var clustersHtml = clusters.map(function (cluster) {
-        var html = '<div class="job-map-pin-cluster" data-area="' + cluster.area + '" style="left:' + cluster.left + '%;top:' + cluster.top + '%">';
-        cluster.keys.forEach(function (key) {
-          var f = facilities[key];
-          html +=
-            '<button type="button" class="job-map-pin ' + categoryClass(f.categories) + '" ' +
-            'data-facility-key="' + key + '" aria-label="' + escapeHtml(f.name) + '"></button>';
-        });
-        html += '</div>';
-        return html;
-      }).join('');
-
-      var wrap = document.createElement('div');
-      wrap.innerHTML = clustersHtml;
-      Array.prototype.slice.call(wrap.children).forEach(function (cluster) {
-        diagramEl.appendChild(cluster);
-      });
-
-      diagramEl.querySelectorAll('.job-map-pin').forEach(function (pin) {
-        pin.addEventListener('click', function (e) {
-          e.stopPropagation();
-          var key = pin.getAttribute('data-facility-key');
-          showPopup(key, pin);
-          highlightFacility(key);
-        });
-      });
-
-      // 地図SVGの取得は非同期のため、ピン生成が完了するより前にフィルタ操作や
-      // GPSボタンのクリックが起きているケースがある(実機検証で発覚)。その間に
-      // 生成された状態(絞り込み結果・現在地からの最寄り拠点)をピン生成直後に
-      // 反映し直す。
-      applyNearestPinHighlight();
-      applyFilters();
-    }
-
-    function applyNearestPinHighlight() {
+    function applyNearestMarkerHighlight() {
+      if (nearestMarkerKey && markers[nearestMarkerKey]) {
+        var prev = facilities[nearestMarkerKey];
+        markers[nearestMarkerKey].setIcon(markerIcon(categoryColor(prev.categories), false));
+        markers[nearestMarkerKey].setZIndex(null);
+      }
+      nearestMarkerKey = null;
       if (!state.distances) return;
-      diagramEl.querySelectorAll('.job-map-pin.is-nearest').forEach(function (p) {
-        p.classList.remove('is-nearest');
-      });
+
       var nearestKey = Object.keys(state.distances).sort(function (a, b) {
         return state.distances[a] - state.distances[b];
       })[0];
-      if (!nearestKey) return;
-      var nearestPin = diagramEl.querySelector('[data-facility-key="' + nearestKey + '"]');
-      if (nearestPin) nearestPin.classList.add('is-nearest');
+      if (!nearestKey || !markers[nearestKey]) return;
+
+      nearestMarkerKey = nearestKey;
+      markers[nearestKey].setIcon(markerIcon(categoryColor(facilities[nearestKey].categories), true));
+      markers[nearestKey].setZIndex(999);
     }
 
-    function initDiagram() {
-      fetch('assets/img/kyushu-map.svg')
-        .then(function (res) {
-          if (!res.ok) throw new Error('kyushu-map.svg fetch failed: ' + res.status);
-          return res.text();
-        })
-        .then(function (svgText) {
-          diagramEl.innerHTML = svgText;
-          buildPinClusters();
-          mapWrap.hidden = false;
-        })
-        .catch(function () {
-          // 地図画像の取得・描画に失敗した場合は非表示のまま(フィルタ・求人一覧は影響を受けない)。
+    async function initMaps() {
+      try {
+        await google.maps.importLibrary('maps');
+      } catch (e) {
+        // 地図の読み込みに失敗した場合は非表示のまま(フィルタ・求人一覧は影響を受けない)。
+        return;
+      }
+
+      // 拠点が1件も無いエリアはパネルごと非表示にする(空の地図ボックスが残るのを防ぐ、
+      // /code-review high で検出)。
+      var activeAreas = AREA_ORDER.filter(function (area) {
+        return Object.keys(facilities).some(function (k) { return facilities[k].area === area; });
+      });
+      AREA_ORDER.forEach(function (area) {
+        var target = diagramEls[area];
+        if (!target) return;
+        var panelEl = target.closest('.job-map-panel');
+        if (panelEl) panelEl.hidden = activeAreas.indexOf(area) === -1;
+      });
+      if (!activeAreas.length) return;
+
+      // fitBounds は描画先要素が実サイズを持っている必要があるため、hidden 解除直後の
+      // 同一同期タスク内では要素が未レイアウトのままになりうる(0×0基準の誤ったズームに
+      // なるケースがある、/code-review high で検出)。1フレーム待ってからMapを生成する。
+      mapWrap.hidden = false;
+      await new Promise(function (resolve) { requestAnimationFrame(resolve); });
+
+      activeAreas.forEach(function (area) {
+        var target = diagramEls[area];
+        var keys = Object.keys(facilities).filter(function (k) { return facilities[k].area === area; });
+
+        var bounds = new google.maps.LatLngBounds();
+        keys.forEach(function (k) {
+          bounds.extend({ lat: facilities[k].lat, lng: facilities[k].lng });
         });
+
+        var map = new google.maps.Map(target, {
+          styles: CUSTOM_MAP_STYLE,
+          disableDefaultUI: true,
+          zoomControl: true,
+        });
+        map.fitBounds(bounds, 48);
+        // 拠点同士が近く自動フィットで過剰にズームインするケースの保険(実質1点扱いになる場合等)。
+        google.maps.event.addListenerOnce(map, 'bounds_changed', function () {
+          if (map.getZoom() > 15) map.setZoom(15);
+        });
+        maps[area] = map;
+
+        keys.forEach(function (key) {
+          var f = facilities[key];
+          var marker = new google.maps.Marker({
+            position: { lat: f.lat, lng: f.lng },
+            map: map,
+            icon: markerIcon(categoryColor(f.categories), false),
+            title: f.name,
+            // optimized:false はキーボード操作・スクリーンリーダーでのマーカー到達に必須
+            // (公式: マーカーをDOM要素として描画することでbutton相当のセマンティクスを持つ、
+            // /code-review high で検出)。
+            optimized: false,
+          });
+          marker.addListener('click', function () {
+            showInfoWindow(key, marker);
+            highlightFacility(key);
+          });
+          markers[key] = marker;
+        });
+      });
+
+      applyNearestMarkerHighlight();
+      applyFilters();
     }
 
     function highlightFacility(key) {
@@ -484,7 +474,7 @@
             setGpsStatus('現在地から近い順に並び替えました。');
             gpsBtn.disabled = false;
 
-            applyNearestPinHighlight();
+            applyNearestMarkerHighlight();
             applyFilters();
           },
           function (err) {
@@ -502,7 +492,7 @@
       });
     }
 
-    initDiagram();
+    initMaps();
     applyFilters();
   }
 })();
