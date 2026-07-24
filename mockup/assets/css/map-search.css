@@ -171,99 +171,50 @@
   padding: var(--space-6) var(--space-4);
 }
 
-/* --- 九州シルエット地図(2026-07-23 決裁者フィードバック対応) ---
- * 第1弾(Leaflet+地理院タイル→白地図)でも「実地図画像である限り質感が合わない」との
- * 指摘を受け、実地図を完全に廃止。geolonia/japanese-prefectures 由来の簡略化SVG
- * (assets/img/kyushu-map.svg、九州7県のみ抽出・鹿児島は本土+近隣島嶼のみ)を
- * フラット単色+白い県境線のイラスト調地図として採用。ピンは実際の緯度経度ではなく
- * 該当県(福岡/鹿児島)の重心に固定配置したクラスタとして重ねる(GPS距離計算自体は
- * 実緯度経度のHaversine計算のまま)。
- * padding は `.job-map-wrap` 側に持たせる(ここに padding を足すと content-box が
- * 200:298 からずれ、SVG が preserveAspectRatio でレターボックスされてピン位置(%)と
- * 実際の描画位置がわずかにずれるため、実機検証で発覚)。
+/* --- Google Maps 埋め込み(2026-07-24) ---
+ * 九州シルエットSVG(拠点別拡大2パネル版)を経て、「理想はGoogleマップで対応できないか」
+ * との明示指示により実地図(Google Maps JavaScript API)埋め込みへ最終刷新。福岡/鹿児島
+ * 2エリアをそれぞれ独立した地図パネルとして横並び(モバイル幅では自動縦積み)にする。
+ * 地図本体の見た目(道路・POI・ラベル)はJS側の styles 配列でブランドカラーに寄せている
+ * (mockup/assets/js/map-search.js の CUSTOM_MAP_STYLE 参照)。
  */
+.job-map-panels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-5);
+}
+
+.job-map-panel {
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+
+.job-map-panel__label {
+  text-align: center;
+  font-weight: 700;
+  color: var(--color-accent-dark);
+  margin: 0 0 var(--space-2);
+}
+
 .job-map-diagram {
   position: relative;
   width: 100%;
-  max-width: 360px;
-  margin-inline: auto;
-  aspect-ratio: 200 / 298;
-}
-
-.job-map-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.job-map-svg [data-pref] {
-  fill: var(--color-accent-light);
-  stroke: #ffffff;
-  stroke-width: 2.2;
-  stroke-linejoin: round;
-}
-/* 拠点が実在する2県(福岡=40/鹿児島=46)のみ濃いアクセント色で強調 */
-.job-map-svg [data-pref="40"],
-.job-map-svg [data-pref="46"] {
-  fill: var(--color-accent);
-}
-
-.job-map-pin-cluster {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-wrap: wrap;
-  align-content: center;
-  justify-content: center;
-  gap: var(--space-1);
-  max-width: 92px;
-  padding: var(--space-2);
-  background: #fff;
+  aspect-ratio: 4 / 3;
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lift);
+  overflow: hidden;
 }
 
-.job-map-pin {
-  border: 0;
-  padding: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  box-shadow: var(--shadow-soft);
-  transition: transform var(--transition), box-shadow var(--transition);
-  opacity: 1;
-}
-.job-map-pin:hover,
-.job-map-pin:focus-visible {
-  transform: rotate(-45deg) scale(1.15);
-}
-.job-map-pin.is-dimmed { opacity: 0.3; }
-.job-map-pin.is-nearest {
-  box-shadow: 0 0 0 4px var(--color-accent-light), var(--shadow-soft);
-}
-.job-map-pin--care   { background: var(--job-care); }
-.job-map-pin--nurse  { background: var(--job-nurse); }
-.job-map-pin--office { background: var(--job-office); }
-.job-map-pin--it     { background: var(--job-it); }
-.job-map-pin--mixed  { background: var(--color-muted); }
-
-/* 地図ピンクリックで表示する吹き出し */
+/* Google Maps の InfoWindow 内コンテンツ(バブル自体の枠・矢印・閉じるボタンは
+ * InfoWindow 側が描画するため、ここでは中身のタイポグラフィのみ整える)。 */
 .job-map-popup {
-  position: absolute;
-  z-index: 5;
-  min-width: 220px;
-  max-width: 260px;
-  background: #fff;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lift);
-  padding: var(--space-4);
   font-family: var(--font-sans);
+  min-width: 180px;
 }
 .job-map-popup__title {
   font-weight: var(--weight-bold);
   color: var(--color-heading);
   margin: 0 0 var(--space-2);
-  padding-right: var(--space-6);
   font-size: var(--text-sm);
 }
 .job-map-popup__count {
@@ -280,18 +231,6 @@
   background: none;
   padding: 0;
   cursor: pointer;
-}
-.job-map-popup__close {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  border: 0;
-  background: none;
-  color: var(--color-muted);
-  font-size: var(--text-base);
-  line-height: 1;
-  cursor: pointer;
-  padding: var(--space-1);
 }
 
 .job-search-empty {
