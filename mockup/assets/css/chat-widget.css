@@ -1,0 +1,214 @@
+/* =========================================================
+ * Chat Widget — 採用FAQチャットボット (Vertex AI Gemini backend)
+ * Phase A: index.html / jobs.html の2ページに限定して埋め込み。
+ * トークンは tokens.css を参照 (--color-accent 系, --radius, --shadow-lift)。
+ * ========================================================= */
+
+.chat-widget {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 1000;
+  font-family: var(--font-sans);
+}
+
+.chat-widget__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow: var(--shadow-lift);
+  transition: transform var(--transition), background var(--transition);
+}
+.chat-widget__toggle:hover { background: var(--color-accent-dark); }
+.chat-widget__toggle:active { transform: scale(0.96); }
+.chat-widget__toggle svg { width: 26px; height: 26px; }
+
+.chat-widget__panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(56px + var(--space-3));
+  width: min(360px, calc(100vw - 2 * var(--space-5)));
+  height: min(520px, calc(100vh - 140px));
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+.chat-widget__panel[hidden] { display: none; }
+
+.chat-widget__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-accent);
+  color: #fff;
+}
+.chat-widget__header-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  margin: 0;
+}
+.chat-widget__header-sub {
+  font-size: var(--text-xs);
+  opacity: 0.85;
+  margin: 0;
+}
+.chat-widget__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  border-radius: 50%;
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+.chat-widget__close:hover { background: rgba(255, 255, 255, 0.15); }
+
+.chat-widget__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-bg-alt);
+}
+
+.chat-widget__message {
+  max-width: 85%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: var(--lh-snug);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-widget__message--user {
+  align-self: flex-end;
+  background: var(--color-accent);
+  color: #fff;
+  border-bottom-right-radius: var(--radius-sm);
+}
+.chat-widget__message--bot {
+  align-self: flex-start;
+  background: #fff;
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+  border-bottom-left-radius: var(--radius-sm);
+}
+.chat-widget__message--error {
+  align-self: flex-start;
+  background: #fff3f2;
+  color: #9a1f14;
+  border: 1px solid #f3c8c2;
+}
+
+.chat-widget__typing {
+  align-self: flex-start;
+  display: flex;
+  gap: 4px;
+  padding: var(--space-3) var(--space-4);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  border-bottom-left-radius: var(--radius-sm);
+}
+.chat-widget__typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-faint);
+  animation: chat-widget-bounce 1.2s infinite ease-in-out;
+}
+.chat-widget__typing span:nth-child(2) { animation-delay: 0.15s; }
+.chat-widget__typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chat-widget-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-widget__typing span { animation: none; opacity: 0.8; }
+  .chat-widget__toggle { transition: none; }
+}
+
+.chat-widget__form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+.chat-widget__input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  line-height: var(--lh-snug);
+  max-height: 88px;
+  color: var(--color-ink);
+}
+.chat-widget__input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.chat-widget__send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  flex-shrink: 0;
+  transition: background var(--transition), opacity var(--transition);
+}
+.chat-widget__send:hover { background: var(--color-accent-dark); }
+.chat-widget__send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-widget__send svg { width: 18px; height: 18px; }
+
+/* components.css の .entry-cta-bar は <768px で表示される固定80pxの下部バー。
+   ただし index.html / mockup/jobs/*.html にはあるが mockup/jobs.html には無い
+   (/code-review high で指摘: 一律オフセットだとjobs.htmlで不要な隙間ができる)。
+   :has() で実際に .entry-cta-bar が存在するページにのみオフセットを限定する。 */
+@media (max-width: 767px) {
+  body:has(.entry-cta-bar) .chat-widget { bottom: calc(80px + var(--space-3)); }
+}
+
+@media (max-width: 480px) {
+  .chat-widget { right: var(--space-3); }
+  .chat-widget__panel {
+    width: calc(100vw - 2 * var(--space-3));
+    height: min(70vh, 560px);
+  }
+}

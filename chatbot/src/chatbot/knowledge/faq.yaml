@@ -1,0 +1,23 @@
+# Grounding source for the FAQ chatbot — copied verbatim from
+# mockup/index.html `#faq` (5 items, 2026-07 content). Keep this file in
+# sync with index.html by hand; the chatbot does not fetch it live
+# (see chatbot/README.md "知識ベースの鮮度").
+faq:
+  - question: "未経験でも応募できますか？"
+    answer: >-
+      はい、未経験の方を歓迎しています。入職後のOJTと外部研修を組み合わせて、
+      無資格の方には介護職員初任者研修の取得もサポートしています。
+  - question: "勤務地は選べますか？"
+    answer: >-
+      求人ごとに勤務地が決まっています。求人詳細ページで施設名・住所・最寄駅を
+      ご確認のうえご応募ください。希望勤務地のご相談も承ります。
+  - question: "夜勤のない働き方はできますか？"
+    answer: >-
+      デイサービス・訪問介護・事務・本部職種など、日勤のみの仕事もご用意しています。
+      求人検索で「日勤のみ」で絞り込みください。
+  - question: "選考にはどれくらいかかりますか？"
+    answer: >-
+      通常2〜3週間です。お急ぎの場合はご応募時にお知らせください、可能な限り調整いたします。
+  - question: "見学だけでも可能ですか？"
+    answer: >-
+      はい、面接前の現場見学も可能です。応募フォームの備考欄に「見学希望」とご記入ください。
