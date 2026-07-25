@@ -111,10 +111,16 @@ def build_context() -> str:
 
     # job_ids の選択根拠。id はここに載っているものだけが実在する — 応答の
     # job_ids はこの一覧の id からのみ選ぶよう system prompt 側で指示する。
-    lines.append("\n## 応募可能な求人一覧（id | タイトル | エリア/職種/雇用形態）")
+    # サービス種別（デイサービス/訪問介護等）を明示列にしているのは、施設名の
+    # 生テキストだけだとユーザーの指定サービス種別との照合精度が model 任せ
+    # になり、異なるサービス種別の求人が紛れ込む事象が実際に報告されたため。
+    lines.append(
+        "\n## 応募可能な求人一覧（id | タイトル | エリア/職種/雇用形態 | サービス種別）"
+    )
     for job in jobs_detail:
+        service_types = ", ".join(job["service_types"]) or "該当なし"
         lines.append(
             f"- {job['id']} | {job['title']} | {job['area']}/{job['category']}/"
-            f"{', '.join(job['employment'])}"
+            f"{', '.join(job['employment'])} | {service_types}"
         )
     return "\n".join(lines)
