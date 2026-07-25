@@ -9,6 +9,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ博多（デイ・有料）",
     "city": "福岡市博多区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/1777023.html"
   },
   {
@@ -21,6 +25,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ四箇（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2264134.html"
   },
   {
@@ -33,6 +41,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ四箇（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2264135.html"
   },
   {
@@ -46,6 +58,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ四箇（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2264205.html"
   },
   {
@@ -58,6 +74,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ田村（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2199420.html"
   },
   {
@@ -70,6 +90,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ田村（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2199421.html"
   },
   {
@@ -83,6 +107,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ田村（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2199422.html"
   },
   {
@@ -96,6 +124,11 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ下荒田（デイ・有料・GH）",
     "city": "鹿児島市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム",
+      "グループホーム"
+    ],
     "url": "jobs/2103102.html"
   },
   {
@@ -109,6 +142,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ油山（デイ・有料）",
     "city": "那珂川市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2174386.html"
   },
   {
@@ -121,6 +158,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ油山（デイ・有料）",
     "city": "那珂川市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2174595.html"
   },
   {
@@ -133,6 +174,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ油山（デイ・有料）",
     "city": "那珂川市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2174628.html"
   },
   {
@@ -145,6 +190,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ小松原（相談支援・就労・GH）",
     "city": "鹿児島市",
+    "service_types": [
+      "相談支援"
+    ],
     "url": "jobs/90447.html"
   },
   {
@@ -157,6 +205,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ四箇（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2264252.html"
   },
   {
@@ -169,6 +221,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ四箇（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2264253.html"
   },
   {
@@ -181,6 +237,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ田村（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2199434.html"
   },
   {
@@ -193,6 +253,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ田村（デイ・有料）",
     "city": "福岡市早良区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2199435.html"
   },
   {
@@ -205,6 +269,11 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ南栄（デイ・有料・GH）",
     "city": "鹿児島市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム",
+      "グループホーム"
+    ],
     "url": "jobs/2091005.html"
   },
   {
@@ -217,6 +286,10 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ永吉（デイ・有料）",
     "city": "鹿児島市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/1668696.html"
   },
   {
@@ -229,6 +302,10 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ油山（デイ・有料）",
     "city": "那珂川市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
     "url": "jobs/2174627.html"
   },
   {
@@ -241,6 +318,9 @@
     "area": "fukuoka",
     "facility": "あおぞらケアグループ梅ヶ丘（特養）",
     "city": "太宰府市",
+    "service_types": [
+      "特別養護老人ホーム"
+    ],
     "url": "jobs/1891471.html"
   },
   {
@@ -253,6 +333,7 @@
     "area": "kagoshima",
     "facility": "本社",
     "city": "鹿児島市",
+    "service_types": [],
     "url": "jobs/452341.html"
   },
   {
@@ -265,6 +346,7 @@
     "area": "fukuoka",
     "facility": "福岡支店",
     "city": "福岡市博多区",
+    "service_types": [],
     "url": "jobs/1690435.html"
   },
   {
@@ -277,6 +359,7 @@
     "area": "fukuoka",
     "facility": "福岡支店",
     "city": "福岡市博多区",
+    "service_types": [],
     "url": "jobs/1801181.html"
   },
   {
@@ -289,6 +372,7 @@
     "area": "kagoshima",
     "facility": "本社",
     "city": "鹿児島市",
+    "service_types": [],
     "url": "jobs/2052169.html"
   },
   {
@@ -302,6 +386,7 @@
     "area": "fukuoka",
     "facility": "福岡支店",
     "city": "福岡市博多区",
+    "service_types": [],
     "url": "jobs/2267339.html"
   },
   {
@@ -314,6 +399,7 @@
     "area": "fukuoka",
     "facility": "福岡支店",
     "city": "福岡市博多区",
+    "service_types": [],
     "url": "jobs/2267338.html"
   },
   {
@@ -327,6 +413,7 @@
     "area": "kagoshima",
     "facility": "本社",
     "city": "鹿児島市",
+    "service_types": [],
     "url": "jobs/2267337.html"
   },
   {
@@ -339,6 +426,7 @@
     "area": "kagoshima",
     "facility": "本社",
     "city": "鹿児島市",
+    "service_types": [],
     "url": "jobs/2267327.html"
   },
   {
@@ -351,6 +439,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ鹿児島北（訪問介護）",
     "city": "鹿児島市",
+    "service_types": [
+      "訪問介護"
+    ],
     "url": "jobs/2215700.html"
   },
   {
@@ -364,6 +455,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ鹿児島北（訪問介護）",
     "city": "鹿児島市",
+    "service_types": [
+      "訪問介護"
+    ],
     "url": "jobs/2215699.html"
   },
   {
@@ -376,6 +470,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ鹿児島北（訪問介護）",
     "city": "鹿児島市",
+    "service_types": [
+      "訪問介護"
+    ],
     "url": "jobs/2215694.html"
   },
   {
@@ -388,6 +485,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ鹿児島南（訪問介護）",
     "city": "鹿児島市",
+    "service_types": [
+      "訪問介護"
+    ],
     "url": "jobs/2215705.html"
   },
   {
@@ -400,6 +500,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ鹿児島南（訪問介護）",
     "city": "鹿児島市",
+    "service_types": [
+      "訪問介護"
+    ],
     "url": "jobs/2215707.html"
   },
   {
@@ -413,6 +516,9 @@
     "area": "kagoshima",
     "facility": "あおぞらケアグループ鹿児島南（訪問介護）",
     "city": "鹿児島市",
+    "service_types": [
+      "訪問介護"
+    ],
     "url": "jobs/2215706.html"
   }
 ]

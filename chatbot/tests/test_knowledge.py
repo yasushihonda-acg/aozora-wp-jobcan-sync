@@ -52,6 +52,41 @@ def test_context_includes_job_listing_for_job_id_selection() -> None:
     assert "【社】介護職（博多／デイ・有料）" in context
 
 
+def test_context_includes_service_types_for_job_id_disambiguation() -> None:
+    """Regression test: the job listing must expose service type (デイサービス/
+    訪問介護/etc.) as a distinct column, not just buried inside the free-text
+    title — otherwise the model conflates different service types under the
+    same `category` (e.g. デイサービス vs 訪問介護, both `care`)."""
+    context = build_context()
+
+    assert "サービス種別" in context
+    # 1777023 は「あおぞらケアグループ博多（デイ・有料）」の求人
+    assert "デイサービス, 有料老人ホーム" in context
+    # 鹿児島北の求人は訪問介護のみで、デイサービスを含まない
+    assert "訪問介護" in context
+
+
+def test_jobs_detail_service_types_extracted_from_facility_name() -> None:
+    detail = json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
+    by_id = {job["id"]: job for job in detail}
+
+    assert by_id["1777023"]["service_types"] == ["デイサービス", "有料老人ホーム"]
+    assert by_id["1891471"]["service_types"] == ["特別養護老人ホーム"]
+    # 本社勤務（IT/事務）はサービス種別を持たない
+    assert by_id["452341"]["service_types"] == []
+
+
+def test_jobs_detail_service_types_title_override_for_specialist_role() -> None:
+    """`90447`（相談支援専門員）の施設「小松原（相談支援・就労・GH）」は
+    グループホーム／就労支援も併設するが、この求人自体の職種は相談支援専門員
+    であり GH／就労支援の直接業務ではない。施設タグをそのまま付けると
+    「グループホームの求人」検索に誤って混入する（Codex review-diff 指摘）。"""
+    detail = json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
+    by_id = {job["id"]: job for job in detail}
+
+    assert by_id["90447"]["service_types"] == ["相談支援"]
+
+
 def test_jobs_detail_has_34_entries_matching_jobs_json() -> None:
     """Regression test: `jobs_detail.json` must stay in sync with
     `mockup/assets/data/jobs.json` (same ids) — see
