@@ -82,6 +82,7 @@ mockup 内のキャラ含みイラスト (求人カード + philosophy / flow �
 - フロント: `mockup/assets/js/chat-widget.js` + `.css`、`index.html`/`jobs.html` の2ページに埋め込み (`sync/` の `map-search.js` と同じ「末尾script+専用JS+DOM自己注入」パターン)
 - 知識ベース (FAQ5件+求人サマリー+求人34件詳細) はイメージ同梱、RAGなし。`mockup/assets/data/jobs.json`/`index.html #faq` 更新時は `chatbot/src/chatbot/knowledge/` の手動同期 (`jobs_detail.json` は `chatbot/scripts/build_jobs_detail.py` で再生成可能) +再デプロイが必要
 - **2026-07-24 UX改善 (PR #92)**: 決裁者フィードバックを受け、① Mac IME変換確定Enterでの誤送信を修正 ② Gemini構造化出力 (`response_schema`) でフォローアップ質問サジェストと関連求人カードを毎回動的生成 (求人IDはサーバ側で既知一覧とホワイトリスト照合してから解決、幻覚ID対策) ③ `**太字**`/`- 箇条書き`のみ許可する軽量MarkdownをDOM生成 (innerHTML不使用) でレンダリングし記号露出とXSSを防止。`/code-review medium` で指摘8件中5件を修正 (残り3件は理由付きで対応見送り、詳細はPR #92参照)
+- **2026-07-25 求人レコメンドのサービス種別フィルタ修正 (PR #94)**: 決裁者報告「デイサービスと検索してもデイサービス以外の求人が出る」に対応。`jobs_detail.json`の`category`(care/it/office)だけでは施設の実サービス種別(デイサービス/訪問介護/特養/GH/相談支援/就労支援/有料老人ホーム)を区別できなかったため、`build_jobs_detail.py`で施設名から`service_types`を構造化抽出し、Geminiコンテキスト+システムプロンプトに明示反映。Codex `review-diff`で複合サービス施設の誤タグ付け1件を検出・修正。知識ベース更新時は上記の手動同期フロー通り再デプロイが必要
 - **フォローアップ (未着手)**: 応答ストリーミング・全ページ展開・GHA WIF自動デプロイ・知識ベース自動追従。詳細は `docs/handoff/GOAL.md` ④ 参照
 
 ## 参考プロジェクト
