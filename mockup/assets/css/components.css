@@ -502,7 +502,11 @@
   position: relative;
   /* 白文字との WCAG AA コントラスト比 (5.1:1 〜 12:1) を確保した濃色グラデーション */
   background: linear-gradient(135deg, var(--color-accent-deep) 0%, var(--color-accent-ink) 100%);
-  overflow: hidden;
+  /* overflow: hidden は付けない。::before は inset:0 で自己完結しておりクリップ不要な一方、
+     overflow:hidden はスクロールコンテナ扱いとなり、子要素 .stat の animation-timeline: view()
+     の進捗計算がこの要素基準に壊れ、スクロールしても一切追従しない状態で固まる実害バグを引き起こす
+     (実測: overflow:hidden 時は opacity が 0.83/0.66/0.48/0.30 で完全固定、visible に変えると
+     0→1へ正常に追従)。 */
 }
 .section--band::before {
   content: "";
