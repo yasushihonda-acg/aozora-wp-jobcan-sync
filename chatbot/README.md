@@ -21,15 +21,17 @@ GCP_PROJECT=aozora-wp-jobcan-sync uv run python scripts/probe_model.py
 
 ## 知識ベースの鮮度（既知のトレードオフ）
 
-`src/chatbot/knowledge/faq.yaml` / `jobs_summary.json` / `jobs_detail.json` はコンテナ
-イメージに同梱され、起動時に一度だけ読み込まれる（RAG なし、外部フェッチなし — Phase A の
-求人 34 件・FAQ 5 件という小規模データに対する意図的なシンプル設計）。
+`src/chatbot/knowledge/faq.yaml` / `jobs_detail.json` はコンテナイメージに同梱され、
+起動時に一度だけ読み込まれる（RAG なし、外部フェッチなし — Phase A の求人 34 件・
+FAQ 5 件という小規模データに対する意図的なシンプル設計）。拠点数・求人数等の集計値は
+`jobs_detail.json` から起動時に導出する（`chatbot.knowledge._summarize_jobs`、手動更新の
+別ファイルは廃止済み）。
 
 **`mockup/index.html` の `#faq` や `mockup/assets/data/jobs.json` / `mockup/jobs.html` を
 更新しても、このチャットボットの回答には自動反映されない。** 知識ベースを更新したら
-`uv run python scripts/build_jobs_detail.py` で `jobs_detail.json` を再生成し（`jobs_summary.json`
-は引き続き手動更新）、再デプロイすること。将来的に鮮度が問題になった場合は、起動時に
-GitHub Pages の `jobs.json` を fetch する設計への切り替えを検討（follow-up、未実装）。
+`uv run python scripts/build_jobs_detail.py` で `jobs_detail.json` を再生成し、再デプロイ
+すること。将来的に鮮度が問題になった場合は、起動時に GitHub Pages の `jobs.json` を
+fetch する設計への切り替えを検討（follow-up、未実装）。
 
 ## レスポンス形式（構造化出力、2026-07-24 拡張）
 

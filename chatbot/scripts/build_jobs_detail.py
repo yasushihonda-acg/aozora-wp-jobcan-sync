@@ -1,8 +1,10 @@
 """Regenerate `src/chatbot/knowledge/jobs_detail.json` from the mockup source data.
 
 Run by hand after `mockup/jobs.html` / `mockup/assets/data/jobs.json` change
-materially (same manual-sync tradeoff as `jobs_summary.json`, see
-chatbot/README.md "知識ベースの鮮度"). No BeautifulSoup dependency — `jobs.html`
+materially (see chatbot/README.md "知識ベースの鮮度"). The facility/job
+aggregate summary the chatbot uses is derived from this file at load time
+(`chatbot.knowledge._summarize_jobs`), so no separate summary file needs
+regenerating. No BeautifulSoup dependency — `jobs.html`
 is machine-generated static markup with one `<h2 class="job-list-card__title">`
 per `<a class="job-list-card__link" href="jobs/{id}.html">` in matching
 document order, so a plain regex pairing is reliable and avoids adding a

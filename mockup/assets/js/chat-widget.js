@@ -209,6 +209,14 @@
     var sending = false;
     var greeted = false;
 
+    // messages.scrollTop の読み取りは強制レイアウト(reflow)を伴う。bot応答は
+    // メッセージ本文/求人カード/サジェストを連続追加するため、各add*関数内で
+    // 個別にスクロールすると同一tick内で3回reflowが発生する。呼び出し側で
+    // 追加が一段落したタイミングにまとめて1回呼ぶ (/catchup 2026-07-26 技術的負債整理)。
+    function scrollToBottom() {
+      messages.scrollTop = messages.scrollHeight;
+    }
+
     function addMessage(text, kind) {
       var bubble = el('div', 'chat-widget__message chat-widget__message--' + kind);
       if (kind === 'bot') {
@@ -217,7 +225,6 @@
         bubble.textContent = text; // user/error は常にプレーンテキスト
       }
       messages.appendChild(bubble);
-      messages.scrollTop = messages.scrollHeight;
       return bubble;
     }
 
@@ -244,7 +251,6 @@
         wrap.appendChild(card);
       });
       messages.appendChild(wrap);
-      messages.scrollTop = messages.scrollHeight;
     }
 
     function addSuggestions(suggestions) {
@@ -262,7 +268,6 @@
         wrap.appendChild(chip);
       });
       messages.appendChild(wrap);
-      messages.scrollTop = messages.scrollHeight;
     }
 
     function addTypingIndicator() {
@@ -271,7 +276,7 @@
       typing.appendChild(document.createElement('span'));
       typing.appendChild(document.createElement('span'));
       messages.appendChild(typing);
-      messages.scrollTop = messages.scrollHeight;
+      scrollToBottom();
       return typing;
     }
 
@@ -285,6 +290,7 @@
           'bot'
         );
         addSuggestions(STARTER_SUGGESTIONS);
+        scrollToBottom();
       }
       window.requestAnimationFrame(function () {
         textarea.focus();
@@ -348,6 +354,7 @@
       if (!message) return;
 
       addMessage(message, 'user');
+      scrollToBottom();
       textarea.value = '';
       sending = true;
       sendBtn.disabled = true;
@@ -382,6 +389,7 @@
           addMessage(data.reply, 'bot');
           addJobCards(data.jobs);
           addSuggestions(data.suggestions);
+          scrollToBottom();
           history.push({ role: 'user', content: message });
           history.push({ role: 'model', content: data.reply });
           history = history.slice(-MAX_HISTORY_TURNS);
