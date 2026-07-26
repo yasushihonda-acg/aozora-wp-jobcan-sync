@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from chatbot import knowledge
 from chatbot.app import create_app
 from chatbot.config import AppConfig
 from chatbot.gemini import GeneratedReply
@@ -30,6 +31,10 @@ def _config(**overrides: Any) -> AppConfig:
         max_output_tokens=512,
         rate_limit_window_seconds=60,
         rate_limit_max_requests=20,
+        # Empty by default so no test ever hits GitHub Pages even if it
+        # later switches to `with TestClient(app)` (which runs lifespan).
+        jobs_detail_url="",
+        knowledge_fetch_timeout_seconds=3.0,
     )
     base.update(overrides)
     return AppConfig(**base)
@@ -84,9 +89,14 @@ def _client_with(
 def test_health_returns_200() -> None:
     client = _client_with(_FakeGenerate())
     response = client.get("/health")
+    body = response.json()
 
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert body["status"] == "healthy"
+    # Non-`with` TestClient never runs lifespan startup (see
+    # `tests/test_startup_refresh.py`), so the knowledge base is always the
+    # bundled fallback here.
+    assert body["knowledge"] == {"source": "bundled", "job_count": 34}
 
 
 def test_health_has_security_headers() -> None:
@@ -337,6 +347,8 @@ def test_app_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         "ALLOWED_ORIGINS",
         "MAX_INPUT_CHARS",
         "MAX_HISTORY_TURNS",
+        "JOBS_DETAIL_URL",
+        "KNOWLEDGE_FETCH_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -346,6 +358,21 @@ def test_app_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.model_id == "gemini-3.5-flash-lite"
     assert config.max_input_chars == 500
     assert "https://yasushihonda-acg.github.io" in config.allowed_origins
+    assert config.jobs_detail_url == knowledge.DEFAULT_JOBS_DETAIL_URL
+    assert config.knowledge_fetch_timeout_seconds == 3.0
+
+
+def test_app_config_from_env_empty_jobs_detail_url_disables_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit empty string must stay empty (the fetch kill switch), not
+    fall back to the default URL — `os.environ.get(..., DEFAULT)` only
+    substitutes when the variable is unset, not when it's set to `""`."""
+    monkeypatch.setenv("JOBS_DETAIL_URL", "")
+
+    config = AppConfig.from_env()
+
+    assert config.jobs_detail_url == ""
 
 
 def test_app_config_from_env_parses_allowed_origins(monkeypatch: pytest.MonkeyPatch) -> None:

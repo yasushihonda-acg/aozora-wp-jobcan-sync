@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from .knowledge import DEFAULT_JOBS_DETAIL_URL
+
 
 def _parse_csv_env(value: str) -> tuple[str, ...]:
     """Parse a comma-separated env var into a tuple of trimmed entries.
@@ -33,6 +35,14 @@ class AppConfig:
     max_output_tokens: int
     rate_limit_window_seconds: int
     rate_limit_max_requests: int
+    # Defaulted fields must come last (dataclass field-ordering rule) so
+    # existing keyword-only `AppConfig(...)` call sites (tests) don't break.
+    # Empty string disables the startup knowledge refresh entirely (used by
+    # every test — see `chatbot/tests/test_app.py`'s `_config()` — and as a
+    # production kill switch via `gcloud run services update
+    # --update-env-vars JOBS_DETAIL_URL=`).
+    jobs_detail_url: str = DEFAULT_JOBS_DETAIL_URL
+    knowledge_fetch_timeout_seconds: float = 3.0
 
     @classmethod
     def from_env(cls) -> AppConfig:
@@ -57,4 +67,11 @@ class AppConfig:
             max_output_tokens=int(os.environ.get("MAX_OUTPUT_TOKENS", "768")),
             rate_limit_window_seconds=int(os.environ.get("RATE_LIMIT_WINDOW_SECONDS", "60")),
             rate_limit_max_requests=int(os.environ.get("RATE_LIMIT_MAX_REQUESTS", "20")),
+            # `.get(..., DEFAULT)`, not `or DEFAULT`: an explicit empty string
+            # must stay empty (the fetch kill switch), not fall back to the
+            # default URL.
+            jobs_detail_url=os.environ.get("JOBS_DETAIL_URL", DEFAULT_JOBS_DETAIL_URL),
+            knowledge_fetch_timeout_seconds=float(
+                os.environ.get("KNOWLEDGE_FETCH_TIMEOUT_SECONDS", "3.0")
+            ),
         )
