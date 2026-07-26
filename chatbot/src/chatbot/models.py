@@ -38,7 +38,7 @@ class ChatRequest(BaseModel):
 
 class JobCard(BaseModel):
     """A single recommended job, resolved server-side from a Gemini-suggested
-    id against the known job list (`knowledge.resolve_jobs`) — never built
+    id against the known job list (`KnowledgeBase.resolve_jobs`) — never built
     directly from model output, so a hallucinated id/title can't reach the
     client."""
 
@@ -51,12 +51,33 @@ class JobCard(BaseModel):
     city: str
 
 
+class JobDetail(JobCard):
+    """One record of `knowledge/jobs_detail.json`, as parsed from either the
+    bundled file or a fetched payload.
+
+    Deliberately a superset of `JobCard`: the grounding-context builder
+    additionally needs `area` (facility aggregation in `_summarize_jobs`)
+    and `service_types` (the デイサービス/訪問介護 disambiguation column
+    added in PR #94). Validating a fetched payload against `JobCard` alone
+    would admit a record missing those and then `KeyError` deep inside the
+    context builder — during lifespan startup, which uvicorn turns into a
+    process exit (see `knowledge.fetch_knowledge` docstring).
+
+    `url` is still declared (inherited) so a fetched payload with a
+    malicious `url` fails no validation here — `knowledge.parse_jobs_detail`
+    is what discards the fetched value and recomputes it from `id`.
+    """
+
+    area: str
+    service_types: list[str]
+
+
 class GeminiReply(BaseModel):
     """Structured output schema passed to Gemini as `response_schema`.
 
     `job_ids` are raw candidate ids as chosen by the model — still
     unvalidated at this layer. The caller (`app.py`) must resolve them
-    through `knowledge.resolve_jobs` before they reach `ChatResponse.jobs`.
+    through `KnowledgeBase.resolve_jobs` before they reach `ChatResponse.jobs`.
 
     `suggestions`/`job_ids` intentionally allow up to 10 items, not the 3 the
     prompt asks for: Gemini's constrained decoding doesn't perfectly honor a

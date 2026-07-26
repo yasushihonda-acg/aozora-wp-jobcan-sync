@@ -29,7 +29,7 @@ class GeneratedReply:
     """Result of one `generate_reply` call.
 
     `job_ids` are still raw, unvalidated candidate ids from the model — the
-    caller (`app.py`) must resolve them through `knowledge.resolve_jobs`
+    caller (`app.py`) must resolve them through `KnowledgeBase.resolve_jobs`
     before they reach a client. Keeping that resolution out of this module
     means `gemini.py` has no dependency on `knowledge.py`.
     """

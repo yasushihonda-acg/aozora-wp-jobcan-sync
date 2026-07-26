@@ -10,6 +10,13 @@ per `<a class="job-list-card__link" href="jobs/{id}.html">` in matching
 document order, so a plain regex pairing is reliable and avoids adding a
 parser dependency to this service for a one-off script.
 
+The output path doubles as a public URL contract: GitHub Pages serves this
+repo verbatim, so the file this script writes is also what the chatbot
+fetches at startup (`chatbot.knowledge.DEFAULT_JOBS_DETAIL_URL`). Running
+this script and `git push`ing is now sufficient to update the chatbot's
+knowledge — no redeploy required, just the reach-and-cache-latency caveats
+documented in chatbot/README.md.
+
 Usage:
     cd chatbot && uv run python scripts/build_jobs_detail.py
 """

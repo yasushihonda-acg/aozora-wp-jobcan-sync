@@ -12,9 +12,11 @@ sidesteps the known issue.
 
 # DI
 
-`create_app(*, config=None, generate_fn=None, rate_limiter=None)` lets tests
-swap in a fake Gemini call so the suite never touches Vertex AI — mirrors the
-`client_factory` DI in `sync/src/sync/app.py`.
+`create_app(*, config=None, generate_fn=None, rate_limiter=None,
+http_transport=None)` lets tests swap in a fake Gemini call so the suite
+never touches Vertex AI — mirrors the `client_factory` DI in
+`sync/src/sync/app.py`. `http_transport` does the same for the startup
+knowledge refresh (`httpx.MockTransport` instead of GitHub Pages).
 
 # Lazy Vertex client
 
@@ -33,13 +35,14 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 
+from . import knowledge
 from .config import AppConfig
 from .gemini import GeneratedReply, build_client, generate_reply
-from .knowledge import build_context, resolve_jobs
 from .models import ChatMessage, ChatRequest, ChatResponse
 from .prompts import build_system_instruction
 from .ratelimit import RateLimiter
@@ -104,18 +107,79 @@ def create_app(
     config: AppConfig | None = None,
     generate_fn: GenerateFn | None = None,
     rate_limiter: RateLimiter | None = None,
+    http_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     """Construct the FastAPI app.
 
     Dependency-injection-friendly: tests pass a fake `generate_fn` and a
     fresh `RateLimiter`; production builds everything from env vars.
+    `http_transport` lets tests replace the knowledge-refresh HTTP client
+    with `httpx.MockTransport` instead of touching GitHub Pages
+    (`knowledge.fetch_knowledge`'s `transport` parameter).
+
+    No network I/O happens here: `create_app()` runs at every test module's
+    import time (this module's own `app = create_app()` below), so the
+    knowledge refresh is deferred to `_lifespan` startup instead — which
+    Starlette's `TestClient` only runs when used as a context manager (see
+    `tests/test_startup_refresh.py`), so the existing test suite stays
+    offline.
     """
     app_config = config or AppConfig.from_env()
     limiter = rate_limiter or RateLimiter(
         window_seconds=app_config.rate_limit_window_seconds,
         max_requests=app_config.rate_limit_max_requests,
     )
-    system_instruction = build_system_instruction(build_context())
+    knowledge_base = knowledge.bundled_knowledge()
+    system_instruction = build_system_instruction(knowledge_base.context)
+
+    def _install(new_base: knowledge.KnowledgeBase) -> None:
+        """The only writer of the two names above.
+
+        Updating both in one place guarantees the system prompt and the job
+        whitelist always describe the same job set — never a context
+        listing an id the whitelist doesn't know, or vice versa. Safe to
+        write as two separate statements because this only runs during
+        lifespan startup, before uvicorn binds its listen socket: no
+        request can ever observe the moment between the two assignments.
+        """
+        nonlocal knowledge_base, system_instruction
+        knowledge_base = new_base
+        system_instruction = build_system_instruction(new_base.context)
+
+    async def _refresh_knowledge() -> None:
+        """Startup-only knowledge refresh from GitHub Pages.
+
+        Every failure path keeps the image-bundled data and lets the app
+        start — this is not politeness, it's required: uvicorn calls
+        `sys.exit(STARTUP_FAILURE)` if a lifespan startup handler raises
+        (uvicorn/server.py), so one escaped exception here would turn a
+        transient GitHub Pages blip into a Cloud Run crash loop. Catches
+        `Exception`, not `BaseException` — `asyncio.CancelledError` (e.g.
+        Cloud Run shutting the instance down mid-startup) must still
+        propagate.
+        """
+        if not app_config.jobs_detail_url:
+            _logger.info("knowledge refresh disabled (JOBS_DETAIL_URL is empty)")
+            return
+        try:
+            refreshed = await knowledge.fetch_knowledge(
+                app_config.jobs_detail_url,
+                timeout_seconds=app_config.knowledge_fetch_timeout_seconds,
+                transport=http_transport,
+            )
+        except Exception:
+            _logger.warning(
+                "knowledge refresh failed; serving image-bundled data",
+                exc_info=True,
+                extra={"url": app_config.jobs_detail_url},
+            )
+            return
+        _install(refreshed)
+        _logger.info(
+            "knowledge refreshed from %s (%d jobs)",
+            app_config.jobs_detail_url,
+            len(refreshed.jobs_by_id),
+        )
 
     # Holds the lazily-built real client (empty when `generate_fn` was
     # injected, i.e. every test) so `_lifespan` below can close it on
@@ -148,6 +212,7 @@ def create_app(
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        await _refresh_knowledge()
         try:
             yield
         finally:
@@ -175,8 +240,14 @@ def create_app(
         return _apply_security_headers(response)
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "healthy"}
+    async def health() -> dict[str, object]:
+        return {
+            "status": "healthy",
+            "knowledge": {
+                "source": knowledge_base.source,
+                "job_count": len(knowledge_base.jobs_by_id),
+            },
+        }
 
     @app.post("/chat", response_model=ChatResponse)
     async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
@@ -211,7 +282,7 @@ def create_app(
         # `resolve_jobs` is the whitelist check — a hallucinated/stale id
         # from the model is silently dropped here rather than reaching the
         # client (see knowledge.py docstring).
-        jobs = resolve_jobs(generated.job_ids)
+        jobs = knowledge_base.resolve_jobs(generated.job_ids)
         return ChatResponse(
             reply=generated.reply,
             blocked=generated.blocked,

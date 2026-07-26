@@ -19,19 +19,39 @@ gcloud auth application-default login
 GCP_PROJECT=aozora-wp-jobcan-sync uv run python scripts/probe_model.py
 ```
 
-## 知識ベースの鮮度（既知のトレードオフ）
+## 知識ベースの鮮度（2026-07-26 起動時リフレッシュを実装）
 
-`src/chatbot/knowledge/faq.yaml` / `jobs_detail.json` はコンテナイメージに同梱され、
-起動時に一度だけ読み込まれる（RAG なし、外部フェッチなし — Phase A の求人 34 件・
-FAQ 5 件という小規模データに対する意図的なシンプル設計）。拠点数・求人数等の集計値は
-`jobs_detail.json` から起動時に導出する（`chatbot.knowledge._summarize_jobs`、手動更新の
-別ファイルは廃止済み）。
+`src/chatbot/knowledge/faq.yaml` / `jobs_detail.json` はコンテナイメージに同梱される
+（RAG なし）。**`jobs_detail.json` はこれに加えて、起動時に 1 回だけ GitHub Pages
+（`DEFAULT_JOBS_DETAIL_URL`、実体はこのファイル自身の公開 URL）から再取得を試みる**
+（`knowledge.fetch_knowledge`、`app.py` の lifespan startup で実行）。取得に成功すれば
+それを採用し、ネットワークエラー・タイムアウト・404・不正 JSON・スキーマ不一致・空配列
+のいずれでも**同梱データにフォールバックしてアプリは起動を継続する**（`/health` の
+`knowledge.source` が `"fetched"` / `"bundled"` のどちらだったかを返す）。`faq.yaml` は
+対象外（更新頻度がほぼゼロで、フェッチ対象を増やすと失敗モードが増えるだけのため）。
 
-**`mockup/index.html` の `#faq` や `mockup/assets/data/jobs.json` / `mockup/jobs.html` を
-更新しても、このチャットボットの回答には自動反映されない。** 知識ベースを更新したら
-`uv run python scripts/build_jobs_detail.py` で `jobs_detail.json` を再生成し、再デプロイ
-すること。将来的に鮮度が問題になった場合は、起動時に GitHub Pages の `jobs.json` を
-fetch する設計への切り替えを検討（follow-up、未実装）。
+**反映フロー（再デプロイ不要）**: `mockup/assets/data/jobs.json` / `mockup/jobs.html` を
+更新したら `uv run python scripts/build_jobs_detail.py` で `jobs_detail.json` を再生成し、
+`git push` するだけでよい。次に起動する Cloud Run インスタンスが新しいデータを取得する。
+
+**反映タイミングの注意（即時ではない）**:
+- GitHub Pages のビルド（~20-60 秒）+ CDN キャッシュ（`cache-control: max-age=600`、
+  実測で最大約 10 分）の後でないと、新しい内容が配信されない
+- 起動時 1 回だけの取得なので、**新しいインスタンスが起動するまで反映されない**
+  （min-instances=0 かつ低トラフィックなら次のコールドスタート、常時起動中のインスタンスは
+  再起動するまで古いデータを保持し続ける）
+- **確実に即時反映したい場合は、これまで通り再デプロイする**
+  （`gcloud run deploy` で新しいリビジョンが起動時に再取得する）
+
+**キルスイッチ**: `JOBS_DETAIL_URL=`（空文字）でこのリフレッシュ自体を無効化できる
+（`gcloud run services update aozora-chatbot --update-env-vars JOBS_DETAIL_URL=`）。ローカル
+開発でオフラインにしたい場合も同様。
+
+**信頼境界**: 取得した JSON は Gemini の system prompt に直接埋め込まれ、`resolve_jobs`
+のホワイトリストにもなるため、`knowledge.parse_jobs_detail` で構造検証する（pydantic、
+`chatbot/tests/test_knowledge.py` / `test_startup_refresh.py` 参照）。特に `url` フィールド
+は取得値を採用せず `id` から `jobs/{id}.html` を再計算する — `chat-widget.js` が
+`job.url` をそのまま `<a href>` に使うため、取得元 JSON を信頼境界の外として扱う。
 
 ## レスポンス形式（構造化出力、2026-07-24 拡張）
 
@@ -86,7 +106,10 @@ uv run pyright
 ```
 
 すべて Vertex AI 非依存（`create_app(generate_fn=...)` で fake 注入、`sync/tests/test_app.py`
-の `client_factory` DI パターンを踏襲）。
+の `client_factory` DI パターンを踏襲）。知識ベースの起動時リフレッシュも同様に
+`create_app(http_transport=...)` へ `httpx.MockTransport` を注入してオフラインでテストする
+（`sync/` は `respx` を使うが、単発 GET 1 本のテストでは httpx 同梱の `MockTransport` で
+十分なため追加依存を避けた）。
 
 ## デプロイ（Phase A: 手動、2026-07-24 デプロイ済み）
 
@@ -101,6 +124,8 @@ uv run pyright
 - `--allow-unauthenticated` 必須（CORS preflight の `OPTIONS` が IAM 層で弾かれるとブラウザ
   から到達できない）
 - `MODEL_ID` / `VERTEX_LOCATION` / `ALLOWED_ORIGINS` は env 変数で注入、コード変更不要
+- `JOBS_DETAIL_URL`（既定値あり、空文字で知識ベースの起動時リフレッシュを無効化）/
+  `KNOWLEDGE_FETCH_TIMEOUT_SECONDS`（既定 `3.0`）も同様に env 変数で注入可能
 - Artifact Registry の自動生成リポジトリ `cloud-run-source-deploy` に cleanup policy
   （最新2件保持、`infra/cleanup-policy.json`）適用済み
 
