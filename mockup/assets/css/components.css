@@ -1566,7 +1566,7 @@
  * ========================================================= */
 .js [data-reveal] {
   opacity: 0;
-  transform: translateY(28px);
+  transform: translateY(44px);
   transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .js [data-reveal].is-visible {
@@ -1591,7 +1591,7 @@
 .js [data-reveal] .flow__step,
 .js [data-reveal] .faq__item {
   opacity: 0;
-  transform: translateY(40px) scale(0.96);
+  transform: translateY(64px) scale(0.88);
   transition: opacity 650ms cubic-bezier(0.16, 1, 0.3, 1), transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .js [data-reveal].is-visible .career-ladder__step,
@@ -1683,9 +1683,50 @@
        (実測: career-ladder__step 780px, faq__item 660px) でゆっくり進行する。 */
     animation-range: cover 0% cover 45%;
   }
+  /* 段差 (stagger) — 上の transition-delay 版と同じ nth-child 構造で、
+     animation-range の開始/終了位置を要素ごとに 8% ずつ後ろへずらす。
+     scroll-driven animation では `animation-delay` を時間指定しても
+     view-timeline 上で意図通りの間隔にならないため (delay の単位変換が
+     spec 上時間軸前提)、代わりに animation-range という「スクロール距離」の
+     単位で直接ずらす。これにより同じ行の複数カードが同時に出現せず、
+     順番に現れる演出になる。 */
+  .js [data-reveal] .career-ladder__step:nth-child(n+5),
+  .js [data-reveal] .mission-card:nth-child(n+5),
+  .js [data-reveal] .stat:nth-child(n+5),
+  .js [data-reveal] .flow__step:nth-child(n+5),
+  .js [data-reveal] .faq__item:nth-child(n+5) { animation-range: cover 32% cover 77%; }
+  .js [data-reveal] .category-card:nth-child(n+6) { animation-range: cover 40% cover 85%; }
+  .js [data-reveal] .career-ladder__step:nth-child(1),
+  .js [data-reveal] .category-card:nth-child(1),
+  .js [data-reveal] .mission-card:nth-child(1),
+  .js [data-reveal] .stat:nth-child(1),
+  .js [data-reveal] .flow__step:nth-child(1),
+  .js [data-reveal] .faq__item:nth-child(1) { animation-range: cover 0% cover 45%; }
+  .js [data-reveal] .career-ladder__step:nth-child(2),
+  .js [data-reveal] .category-card:nth-child(2),
+  .js [data-reveal] .mission-card:nth-child(2),
+  .js [data-reveal] .stat:nth-child(2),
+  .js [data-reveal] .flow__step:nth-child(2),
+  .js [data-reveal] .faq__item:nth-child(2) { animation-range: cover 8% cover 53%; }
+  .js [data-reveal] .career-ladder__step:nth-child(3),
+  .js [data-reveal] .category-card:nth-child(3),
+  .js [data-reveal] .mission-card:nth-child(3),
+  .js [data-reveal] .stat:nth-child(3),
+  .js [data-reveal] .flow__step:nth-child(3),
+  .js [data-reveal] .faq__item:nth-child(3) { animation-range: cover 16% cover 61%; }
+  .js [data-reveal] .career-ladder__step:nth-child(4),
+  .js [data-reveal] .category-card:nth-child(4),
+  .js [data-reveal] .mission-card:nth-child(4),
+  .js [data-reveal] .stat:nth-child(4),
+  .js [data-reveal] .flow__step:nth-child(4),
+  .js [data-reveal] .faq__item:nth-child(4) { animation-range: cover 24% cover 69%; }
+  .js [data-reveal] .career-ladder__step:nth-child(5),
+  .js [data-reveal] .category-card:nth-child(5),
+  .js [data-reveal] .faq__item:nth-child(5) { animation-range: cover 32% cover 77%; }
+  .js [data-reveal] .category-card:nth-child(6) { animation-range: cover 40% cover 85%; }
 }
 @keyframes section-item-view-reveal {
-  from { opacity: 0; transform: translateY(56px) scale(0.92); }
+  from { opacity: 0; transform: translateY(90px) scale(0.82); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
