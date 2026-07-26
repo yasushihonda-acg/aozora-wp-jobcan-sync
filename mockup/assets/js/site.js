@@ -1,5 +1,12 @@
 (function () {
-  var revealEls = document.querySelectorAll('[data-reveal]');
+  // カード単位 (.career-ladder__step 等) も [data-reveal] の親セクションとは
+  // 独立に個別監視する。親セクションだけを監視すると、背の高いセクション
+  // (career-ladder / flow 等) ではセクション先頭が視界に入った瞬間に配下の
+  // カード全部が「表示済み」判定され、実際にカードが画面に現れる頃には
+  // アニメーションがとっくに完了して見える (=何も動いて見えない) 実害があった。
+  var revealEls = document.querySelectorAll(
+    '[data-reveal], .career-ladder__step, .category-card, .mission-card, .stat, .flow__step, .faq__item'
+  );
   if (!revealEls.length) return;
 
   // 万一この関数内で例外が起きても、`.js` 付与で opacity:0 になった要素が
@@ -18,7 +25,7 @@
           observer.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.01, rootMargin: '0px 0px -5% 0px' });
+    }, { threshold: 0.01, rootMargin: '0px 0px -15% 0px' });
 
     revealEls.forEach(function (el) { observer.observe(el); });
   } catch (e) {

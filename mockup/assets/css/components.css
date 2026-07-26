@@ -1586,24 +1586,31 @@
 }
 
 /* Stagger — career-ladder / job categories / mission / stats / flow / faq は
-   要素ごとに 70ms 刻みで遅延させ、順番に現れる演出を追加
-   (親セクションの reveal と独立した transition)。 */
-.js [data-reveal] .career-ladder__step,
-.js [data-reveal] .category-card,
-.js [data-reveal] .mission-card,
-.js [data-reveal] .stat,
-.js [data-reveal] .flow__step,
-.js [data-reveal] .faq__item {
+   カード単体を site.js が個別に IntersectionObserver 監視し (親セクションの
+   reveal とは独立)、視界に入ったら 70ms 刻みで遅延させて順番に現れる演出。
+   スクロール位置に連動して動きを追わせる animation-timeline: view() 版を
+   過去に採用していたが、①スクロールを止めると演出も途中で止まって見える
+   ②親セクション(丈の高い career-ladder/flow 等)を監視する設計だったため、
+   セクション先頭が視界に入った時点で配下カード全部が「表示済み」になり、
+   実際にカードが画面に現れる頃には既にアニメーションが終わっていて何も
+   動いて見えない、という2つの実害があり撤去 (2026-07-26)。時間ベースの
+   transition なら、視界に入った後は途中で止まらず必ず最後まで動ききる。 */
+.js .career-ladder__step,
+.js .category-card,
+.js .mission-card,
+.js .stat,
+.js .flow__step,
+.js .faq__item {
   opacity: 0;
   transform: translateY(64px) scale(0.88);
-  transition: opacity 650ms cubic-bezier(0.16, 1, 0.3, 1), transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 550ms cubic-bezier(0.16, 1, 0.3, 1), transform 550ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.js [data-reveal].is-visible .career-ladder__step,
-.js [data-reveal].is-visible .category-card,
-.js [data-reveal].is-visible .mission-card,
-.js [data-reveal].is-visible .stat,
-.js [data-reveal].is-visible .flow__step,
-.js [data-reveal].is-visible .faq__item {
+.js .career-ladder__step.is-visible,
+.js .category-card.is-visible,
+.js .mission-card.is-visible,
+.js .stat.is-visible,
+.js .flow__step.is-visible,
+.js .faq__item.is-visible {
   opacity: 1;
   transform: none;
 }
@@ -1612,138 +1619,49 @@
    5番目=280ms、category-card は6番目=350ms が最後の明示delayなので値が異なる点に
    注意。mission-card / stat / flow__step は4個までのため catch-all 不要だが、
    将来項目が増えても飛び出さないよう career-ladder と同じ 280ms の catch-all に含める)。 */
-.js [data-reveal].is-visible .career-ladder__step:nth-child(n+5),
-.js [data-reveal].is-visible .mission-card:nth-child(n+5),
-.js [data-reveal].is-visible .stat:nth-child(n+5),
-.js [data-reveal].is-visible .flow__step:nth-child(n+5),
-.js [data-reveal].is-visible .faq__item:nth-child(n+5) { transition-delay: 280ms; }
-.js [data-reveal].is-visible .category-card:nth-child(n+6) { transition-delay: 350ms; }
-.js [data-reveal].is-visible .career-ladder__step:nth-child(1),
-.js [data-reveal].is-visible .category-card:nth-child(1),
-.js [data-reveal].is-visible .mission-card:nth-child(1),
-.js [data-reveal].is-visible .stat:nth-child(1),
-.js [data-reveal].is-visible .flow__step:nth-child(1),
-.js [data-reveal].is-visible .faq__item:nth-child(1) { transition-delay: 0ms; }
-.js [data-reveal].is-visible .career-ladder__step:nth-child(2),
-.js [data-reveal].is-visible .category-card:nth-child(2),
-.js [data-reveal].is-visible .mission-card:nth-child(2),
-.js [data-reveal].is-visible .stat:nth-child(2),
-.js [data-reveal].is-visible .flow__step:nth-child(2),
-.js [data-reveal].is-visible .faq__item:nth-child(2) { transition-delay: 70ms; }
-.js [data-reveal].is-visible .career-ladder__step:nth-child(3),
-.js [data-reveal].is-visible .category-card:nth-child(3),
-.js [data-reveal].is-visible .mission-card:nth-child(3),
-.js [data-reveal].is-visible .stat:nth-child(3),
-.js [data-reveal].is-visible .flow__step:nth-child(3),
-.js [data-reveal].is-visible .faq__item:nth-child(3) { transition-delay: 140ms; }
-.js [data-reveal].is-visible .career-ladder__step:nth-child(4),
-.js [data-reveal].is-visible .category-card:nth-child(4),
-.js [data-reveal].is-visible .mission-card:nth-child(4),
-.js [data-reveal].is-visible .stat:nth-child(4),
-.js [data-reveal].is-visible .flow__step:nth-child(4),
-.js [data-reveal].is-visible .faq__item:nth-child(4) { transition-delay: 210ms; }
-.js [data-reveal].is-visible .career-ladder__step:nth-child(5),
-.js [data-reveal].is-visible .category-card:nth-child(5),
-.js [data-reveal].is-visible .faq__item:nth-child(5) { transition-delay: 280ms; }
-.js [data-reveal].is-visible .category-card:nth-child(6) { transition-delay: 350ms; }
+.js .career-ladder__step.is-visible:nth-child(n+5),
+.js .mission-card.is-visible:nth-child(n+5),
+.js .stat.is-visible:nth-child(n+5),
+.js .flow__step.is-visible:nth-child(n+5),
+.js .faq__item.is-visible:nth-child(n+5) { transition-delay: 280ms; }
+.js .category-card.is-visible:nth-child(n+6) { transition-delay: 350ms; }
+.js .career-ladder__step.is-visible:nth-child(1),
+.js .category-card.is-visible:nth-child(1),
+.js .mission-card.is-visible:nth-child(1),
+.js .stat.is-visible:nth-child(1),
+.js .flow__step.is-visible:nth-child(1),
+.js .faq__item.is-visible:nth-child(1) { transition-delay: 0ms; }
+.js .career-ladder__step.is-visible:nth-child(2),
+.js .category-card.is-visible:nth-child(2),
+.js .mission-card.is-visible:nth-child(2),
+.js .stat.is-visible:nth-child(2),
+.js .flow__step.is-visible:nth-child(2),
+.js .faq__item.is-visible:nth-child(2) { transition-delay: 70ms; }
+.js .career-ladder__step.is-visible:nth-child(3),
+.js .category-card.is-visible:nth-child(3),
+.js .mission-card.is-visible:nth-child(3),
+.js .stat.is-visible:nth-child(3),
+.js .flow__step.is-visible:nth-child(3),
+.js .faq__item.is-visible:nth-child(3) { transition-delay: 140ms; }
+.js .career-ladder__step.is-visible:nth-child(4),
+.js .category-card.is-visible:nth-child(4),
+.js .mission-card.is-visible:nth-child(4),
+.js .stat.is-visible:nth-child(4),
+.js .flow__step.is-visible:nth-child(4),
+.js .faq__item.is-visible:nth-child(4) { transition-delay: 210ms; }
+.js .career-ladder__step.is-visible:nth-child(5),
+.js .category-card.is-visible:nth-child(5),
+.js .faq__item.is-visible:nth-child(5) { transition-delay: 280ms; }
+.js .category-card.is-visible:nth-child(6) { transition-delay: 350ms; }
 @media (prefers-reduced-motion: reduce) {
-  .js [data-reveal] .career-ladder__step,
-  .js [data-reveal] .category-card,
-  .js [data-reveal] .mission-card,
-  .js [data-reveal] .stat,
-  .js [data-reveal] .flow__step,
-  .js [data-reveal] .faq__item {
+  .js .career-ladder__step,
+  .js .category-card,
+  .js .mission-card,
+  .js .stat,
+  .js .flow__step,
+  .js .faq__item {
     opacity: 1;
     transform: none;
     transition: none;
-  }
-}
-
-/* =========================================================
- * Scroll-driven view animation (対応ブラウザのみ、progressive enhancement)
- * 上記の IntersectionObserver 版は「一度だけ・時間ベース」の reveal だが、
- * animation-timeline: view() 対応ブラウザ (Chrome/Edge/Safari) では
- * スクロール位置そのものを進捗として使い、要素がビューポートへ入ってくる
- * 過程にリアルタイムで追従して変形させる (スクロールを戻せば逆再生もされる)。
- * @supports が false の環境 (2026-07 時点の Firefox 安定版など) では
- * このブロックが丸ごと無視され、上記の IntersectionObserver 版が
- * そのままフォールバックとして機能する。
- * ========================================================= */
-@supports (animation-timeline: view()) {
-  .js [data-reveal] .career-ladder__step,
-  .js [data-reveal] .category-card,
-  .js [data-reveal] .mission-card,
-  .js [data-reveal] .stat,
-  .js [data-reveal] .flow__step,
-  .js [data-reveal] .faq__item {
-    opacity: 1;
-    transform: none;
-    transition: none;
-    animation: section-item-view-reveal 1s linear both;
-    animation-timeline: view();
-    /* entry (要素の高さ基準) だと faq__item のような薄い要素で一瞬で完了し
-       「速すぎる」と感じられたため、cover (ビューポート高さ+要素高さ基準) に
-       変更。要素の高さのばらつきに関わらず、安定して長めのスクロール距離
-       (実測: career-ladder__step 780px, faq__item 660px) でゆっくり進行する。 */
-    animation-range: cover 0% cover 45%;
-  }
-  /* 段差 (stagger) — 上の transition-delay 版と同じ nth-child 構造で、
-     animation-range の開始/終了位置を要素ごとに 8% ずつ後ろへずらす。
-     scroll-driven animation では `animation-delay` を時間指定しても
-     view-timeline 上で意図通りの間隔にならないため (delay の単位変換が
-     spec 上時間軸前提)、代わりに animation-range という「スクロール距離」の
-     単位で直接ずらす。これにより同じ行の複数カードが同時に出現せず、
-     順番に現れる演出になる。 */
-  .js [data-reveal] .career-ladder__step:nth-child(n+5),
-  .js [data-reveal] .mission-card:nth-child(n+5),
-  .js [data-reveal] .stat:nth-child(n+5),
-  .js [data-reveal] .flow__step:nth-child(n+5),
-  .js [data-reveal] .faq__item:nth-child(n+5) { animation-range: cover 32% cover 77%; }
-  .js [data-reveal] .category-card:nth-child(n+6) { animation-range: cover 40% cover 85%; }
-  .js [data-reveal] .career-ladder__step:nth-child(1),
-  .js [data-reveal] .category-card:nth-child(1),
-  .js [data-reveal] .mission-card:nth-child(1),
-  .js [data-reveal] .stat:nth-child(1),
-  .js [data-reveal] .flow__step:nth-child(1),
-  .js [data-reveal] .faq__item:nth-child(1) { animation-range: cover 0% cover 45%; }
-  .js [data-reveal] .career-ladder__step:nth-child(2),
-  .js [data-reveal] .category-card:nth-child(2),
-  .js [data-reveal] .mission-card:nth-child(2),
-  .js [data-reveal] .stat:nth-child(2),
-  .js [data-reveal] .flow__step:nth-child(2),
-  .js [data-reveal] .faq__item:nth-child(2) { animation-range: cover 8% cover 53%; }
-  .js [data-reveal] .career-ladder__step:nth-child(3),
-  .js [data-reveal] .category-card:nth-child(3),
-  .js [data-reveal] .mission-card:nth-child(3),
-  .js [data-reveal] .stat:nth-child(3),
-  .js [data-reveal] .flow__step:nth-child(3),
-  .js [data-reveal] .faq__item:nth-child(3) { animation-range: cover 16% cover 61%; }
-  .js [data-reveal] .career-ladder__step:nth-child(4),
-  .js [data-reveal] .category-card:nth-child(4),
-  .js [data-reveal] .mission-card:nth-child(4),
-  .js [data-reveal] .stat:nth-child(4),
-  .js [data-reveal] .flow__step:nth-child(4),
-  .js [data-reveal] .faq__item:nth-child(4) { animation-range: cover 24% cover 69%; }
-  .js [data-reveal] .career-ladder__step:nth-child(5),
-  .js [data-reveal] .category-card:nth-child(5),
-  .js [data-reveal] .faq__item:nth-child(5) { animation-range: cover 32% cover 77%; }
-  .js [data-reveal] .category-card:nth-child(6) { animation-range: cover 40% cover 85%; }
-}
-@keyframes section-item-view-reveal {
-  from { opacity: 0; transform: translateY(90px) scale(0.82); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  @supports (animation-timeline: view()) {
-    .js [data-reveal] .career-ladder__step,
-    .js [data-reveal] .category-card,
-    .js [data-reveal] .mission-card,
-    .js [data-reveal] .stat,
-    .js [data-reveal] .flow__step,
-    .js [data-reveal] .faq__item {
-      animation: none;
-      opacity: 1;
-      transform: none;
-    }
   }
 }
