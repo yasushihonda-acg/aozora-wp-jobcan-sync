@@ -25,10 +25,11 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import httpx
 import yaml
-from pydantic import TypeAdapter, field_validator
+from pydantic import Field, TypeAdapter, field_validator
 
 from .models import JobCard, JobDetail
 
@@ -78,6 +79,15 @@ class _StrictJobDetail(JobDetail):
     shape) so the forbidden-character rule is scoped to knowledge ingestion,
     not every consumer of the model.
     """
+
+    # `id` is interpolated into the same pipe-delimited context row as
+    # `title` (unescaped) and is used verbatim to rebuild `url`
+    # (`jobs/{id}.html`) — the whole reason `url` itself is discarded and
+    # recomputed. A forbidden character in `id` would forge a fake context
+    # row exactly like an unvalidated `title` would, and would also corrupt
+    # the very `url` recomputation meant to be the safe alternative. All 34
+    # current ids are purely numeric, so pinning the shape is free today.
+    id: str = Field(pattern=r"^[0-9]+$")
 
     @field_validator("title", "category", "area", "facility", "city", mode="after")
     @classmethod
@@ -183,10 +193,17 @@ class KnowledgeBase:
     the reverse: a known job the model can never be told to mention).
     Bundling them into one object makes that skew unrepresentable rather
     than merely unlikely.
+
+    `source` is carried explicitly (rather than having `/health` compare
+    `is bundled_knowledge()`) so the reported source stays correct even if
+    something ever clears `bundled_knowledge`'s `lru_cache` — an identity
+    check would silently start reporting "fetched" for a freshly-recomputed
+    bundled snapshot in that case.
     """
 
     context: str
     jobs_by_id: dict[str, JobCard]
+    source: Literal["bundled", "fetched"]
 
     def resolve_jobs(self, job_ids: list[str]) -> list[JobCard]:
         """Resolve model-suggested ids to `JobCard`s, dropping anything unknown.
@@ -233,14 +250,26 @@ def parse_jobs_detail(raw: object) -> list[dict]:
         # recommends a job again. That's exactly the failure the bundled
         # fallback exists to prevent, so treat it as an error, not a refresh.
         raise ValueError("jobs_detail payload contains no records")
+    ids = [job.id for job in jobs]
+    if len(ids) != len(set(ids)):
+        # `build_knowledge`'s `{job["id"]: JobCard(**job) ...}` dict
+        # comprehension would otherwise let two records sharing an id
+        # collide silently: the context still lists both rows, but
+        # `resolve_jobs` can only ever return whichever one wins the
+        # dict-key collision — exactly the context/whitelist skew
+        # `KnowledgeBase` exists to make impossible.
+        raise ValueError("jobs_detail payload contains duplicate ids")
     return [{**job.model_dump(), "url": f"jobs/{job.id}.html"} for job in jobs]
 
 
-def build_knowledge(jobs_detail: list[dict]) -> KnowledgeBase:
+def build_knowledge(
+    jobs_detail: list[dict], *, source: Literal["bundled", "fetched"]
+) -> KnowledgeBase:
     faq = _load_faq()
     return KnowledgeBase(
         context=_render_context(faq, jobs_detail),
         jobs_by_id={job["id"]: JobCard(**job) for job in jobs_detail},
+        source=source,
     )
 
 
@@ -253,7 +282,7 @@ def bundled_knowledge() -> KnowledgeBase:
     would otherwise re-read and re-parse the file on every import.
     """
     raw = json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
-    return build_knowledge(parse_jobs_detail(raw))
+    return build_knowledge(parse_jobs_detail(raw), source="bundled")
 
 
 async def fetch_knowledge(
@@ -278,4 +307,4 @@ async def fetch_knowledge(
             response = await client.get(url)
             response.raise_for_status()
             payload = response.json()
-    return build_knowledge(parse_jobs_detail(payload))
+    return build_knowledge(parse_jobs_detail(payload), source="fetched")

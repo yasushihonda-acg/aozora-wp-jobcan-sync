@@ -38,7 +38,7 @@ class ChatRequest(BaseModel):
 
 class JobCard(BaseModel):
     """A single recommended job, resolved server-side from a Gemini-suggested
-    id against the known job list (`knowledge.resolve_jobs`) — never built
+    id against the known job list (`KnowledgeBase.resolve_jobs`) — never built
     directly from model output, so a hallucinated id/title can't reach the
     client."""
 
@@ -77,7 +77,7 @@ class GeminiReply(BaseModel):
 
     `job_ids` are raw candidate ids as chosen by the model — still
     unvalidated at this layer. The caller (`app.py`) must resolve them
-    through `knowledge.resolve_jobs` before they reach `ChatResponse.jobs`.
+    through `KnowledgeBase.resolve_jobs` before they reach `ChatResponse.jobs`.
 
     `suggestions`/`job_ids` intentionally allow up to 10 items, not the 3 the
     prompt asks for: Gemini's constrained decoding doesn't perfectly honor a

@@ -157,6 +157,60 @@ def test_parse_jobs_detail_rejects_empty_list() -> None:
         raise AssertionError("expected ValueError for empty payload")
 
 
+def test_parse_jobs_detail_rejects_non_numeric_id() -> None:
+    """Regression: `id` is interpolated unescaped into the same
+    pipe-delimited context row `title` is, and is used verbatim to rebuild
+    `url` (`jobs/{id}.html`) — a forbidden character here could forge a
+    fake context row AND corrupt the recomputed url (`/code-review` #102
+    finding, reproduced: `id="1 | FAKE ROW"` was previously accepted)."""
+    import pydantic
+
+    record = {
+        "id": "1 | FAKE ROW",
+        "title": "テスト求人",
+        "url": "jobs/1.html",
+        "category": "care",
+        "employment": ["正社員"],
+        "facility": "テスト施設",
+        "city": "福岡市",
+        "area": "fukuoka",
+        "service_types": [],
+    }
+    try:
+        parse_jobs_detail([record])
+    except pydantic.ValidationError:
+        pass
+    else:
+        raise AssertionError("expected ValidationError for a non-numeric id")
+
+
+def test_parse_jobs_detail_rejects_duplicate_ids() -> None:
+    """Regression: `build_knowledge`'s `{job["id"]: JobCard(**job) ...}`
+    dict comprehension silently lets the second record win a same-id
+    collision while `context` still lists both rows (`/code-review` #102
+    finding, reproduced: `resolve_jobs` returned only the second record's
+    title even though the context table listed both)."""
+    record_a = {
+        "id": "1",
+        "title": "求人A",
+        "url": "jobs/1.html",
+        "category": "care",
+        "employment": ["正社員"],
+        "facility": "施設A",
+        "city": "福岡市",
+        "area": "fukuoka",
+        "service_types": [],
+    }
+    record_b = {**record_a, "title": "求人B", "facility": "施設B"}
+
+    try:
+        parse_jobs_detail([record_a, record_b])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for duplicate ids")
+
+
 def test_parse_jobs_detail_rejects_non_list() -> None:
     import pydantic
 
@@ -320,7 +374,7 @@ def test_build_knowledge_replaces_bundled_jobs_entirely() -> None:
         "service_types": [],
     }
 
-    kb = build_knowledge(parse_jobs_detail([record]))
+    kb = build_knowledge(parse_jobs_detail([record]), source="fetched")
 
     assert "999999" in kb.context
     assert kb.resolve_jobs(["999999"])[0].id == "999999"

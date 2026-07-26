@@ -241,13 +241,12 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict[str, object]:
-        # Identity comparison against the (lru_cache'd, so always the same
-        # object) bundled snapshot — cheaper and simpler than carrying a
-        # separate "source" field on `KnowledgeBase` just for this endpoint.
-        source = "bundled" if knowledge_base is knowledge.bundled_knowledge() else "fetched"
         return {
             "status": "healthy",
-            "knowledge": {"source": source, "job_count": len(knowledge_base.jobs_by_id)},
+            "knowledge": {
+                "source": knowledge_base.source,
+                "job_count": len(knowledge_base.jobs_by_id),
+            },
         }
 
     @app.post("/chat", response_model=ChatResponse)

@@ -375,6 +375,22 @@ def test_app_config_from_env_empty_jobs_detail_url_disables_fetch(
     assert config.jobs_detail_url == ""
 
 
+def test_app_config_from_env_empty_timeout_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: unlike `JOBS_DETAIL_URL`, an empty string has no meaning
+    for a timeout — `float("")` raises `ValueError`, which previously
+    crashed `AppConfig.from_env()` (called at module import time, before
+    uvicorn binds its listen socket) for an operator who copied the
+    `JOBS_DETAIL_URL=` empty-string kill-switch pattern by analogy
+    (`/code-review` #102 finding, reproduced)."""
+    monkeypatch.setenv("KNOWLEDGE_FETCH_TIMEOUT_SECONDS", "")
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_fetch_timeout_seconds == 3.0
+
+
 def test_app_config_from_env_parses_allowed_origins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ALLOWED_ORIGINS", "https://a.example.com, https://b.example.com")
 

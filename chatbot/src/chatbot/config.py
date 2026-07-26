@@ -71,7 +71,14 @@ class AppConfig:
             # must stay empty (the fetch kill switch), not fall back to the
             # default URL.
             jobs_detail_url=os.environ.get("JOBS_DETAIL_URL", DEFAULT_JOBS_DETAIL_URL),
+            # Unlike `jobs_detail_url`, an empty string has no meaning here
+            # (there's no "disabled timeout") — `or "3.0"` falls back to the
+            # default instead of `float("")` raising `ValueError` and
+            # crashing the whole container at import time (this runs before
+            # uvicorn binds its listen socket). An operator who copies the
+            # `JOBS_DETAIL_URL=` empty-string pattern by analogy for this
+            # sibling env var must not get a crash loop for it.
             knowledge_fetch_timeout_seconds=float(
-                os.environ.get("KNOWLEDGE_FETCH_TIMEOUT_SECONDS", "3.0")
+                os.environ.get("KNOWLEDGE_FETCH_TIMEOUT_SECONDS") or "3.0"
             ),
         )
