@@ -51,6 +51,30 @@
 
   var ENDPOINT = resolveEndpoint();
 
+  // knowledge.py が返す job.url は "jobs/{id}.html" というサイトルート相対パス
+  // (`recruit.aozora-cg.com/jobs/{id}.html` を想定した相対表記)。index.html /
+  // jobs.html 等ルート直下のページではそのままの相対パスで解決できるが、
+  // 求人詳細ページ (`mockup/jobs/{id}.html`) 自身に埋め込まれた場合は
+  // カレントディレクトリ相対で解決されてしまい `jobs/jobs/{id}.html` の
+  // 404 を引き起こす。currentScript.src はどちらの埋め込み方でも常に
+  // `.../mockup/assets/js/chat-widget.js` という同じ絶対URLに解決されるため、
+  // それを起点にサイトルートを逆算し job.url を絶対URL化する。
+  function resolveBaseHref() {
+    var src = currentScript && currentScript.src;
+    var idx = src ? src.indexOf('assets/js/chat-widget.js') : -1;
+    return idx !== -1 ? src.slice(0, idx) : document.baseURI;
+  }
+
+  var BASE_HREF = resolveBaseHref();
+
+  function resolveJobHref(url) {
+    try {
+      return new URL(url, BASE_HREF).href;
+    } catch (e) {
+      return url;
+    }
+  }
+
   function escapeForLog(str) {
     return String(str).slice(0, 200);
   }
@@ -234,7 +258,7 @@
       jobs.forEach(function (job) {
         // 求人詳細は別タブで開く — 同タブ遷移だとチャットの会話が失われるため。
         var card = el('a', 'chat-widget__job-card', {
-          href: job.url,
+          href: resolveJobHref(job.url),
           target: '_blank',
           rel: 'noopener',
         });
