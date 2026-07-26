@@ -1,5 +1,6 @@
-"""Tests that the grounding context assembled from faq.yaml + jobs_summary.json
-actually contains what the system prompt promises the model it will find."""
+"""Tests that the grounding context assembled from faq.yaml + jobs_detail.json
+(facility/job summary derived from the latter) actually contains what the
+system prompt promises the model it will find."""
 
 from __future__ import annotations
 

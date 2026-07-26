@@ -1,12 +1,15 @@
 """Builds the single grounding context string injected into the system prompt.
 
 Phase A design: FAQ + job knowledge is bundled into the container image
-(`knowledge/faq.yaml`, `knowledge/jobs_summary.json`, `knowledge/jobs_detail.json`)
-and assembled once, cached for the process lifetime — no RAG, no external
-fetch. This means the chatbot's answers (and job recommendations) go stale if
-`mockup/index.html` `#faq` or `mockup/assets/data/jobs.json` change without a
-matching update+redeploy here (documented tradeoff, see chatbot/README.md).
-`jobs_detail.json` is regenerated via `scripts/build_jobs_detail.py`.
+(`knowledge/faq.yaml`, `knowledge/jobs_detail.json`) and assembled once,
+cached for the process lifetime — no RAG, no external fetch. This means the
+chatbot's answers (and job recommendations) go stale if `mockup/index.html`
+`#faq` or `mockup/assets/data/jobs.json` change without a matching
+update+redeploy here (documented tradeoff, see chatbot/README.md).
+`jobs_detail.json` is regenerated via `scripts/build_jobs_detail.py`; the
+facility/job aggregate summary is derived from it at load time (previously a
+hand-maintained `jobs_summary.json` duplicated these stats and had no build
+script to keep it in sync, see git history for the removed file).
 """
 
 from __future__ import annotations
@@ -29,8 +32,40 @@ def _load_faq() -> list[dict[str, str]]:
     return data["faq"]
 
 
-def _load_jobs_summary() -> dict:
-    return json.loads((_KNOWLEDGE_DIR / "jobs_summary.json").read_text(encoding="utf-8"))
+def _summarize_jobs(jobs_detail: list[dict]) -> dict:
+    """Derive facility/job aggregate stats from `jobs_detail.json`.
+
+    Every field here (areas, categories, employment types, per-facility job
+    counts) is a straightforward aggregation over job records — deriving it
+    at load time removes the manual-sync step a separate summary file would
+    require.
+    """
+    facilities: dict[str, dict] = {}
+    employment_types: set[str] = set()
+    for job in jobs_detail:
+        employment_types.update(job["employment"])
+        facility = facilities.setdefault(
+            job["facility"],
+            {
+                "name": job["facility"],
+                "city": job["city"],
+                "area": job["area"],
+                "job_count": 0,
+                "categories": [],
+            },
+        )
+        facility["job_count"] += 1
+        if job["category"] not in facility["categories"]:
+            facility["categories"].append(job["category"])
+
+    return {
+        "areas": sorted({job["area"] for job in jobs_detail}),
+        "categories": sorted({job["category"] for job in jobs_detail}),
+        "employment_types": sorted(employment_types),
+        "facility_count": len(facilities),
+        "job_count": len(jobs_detail),
+        "facilities": list(facilities.values()),
+    }
 
 
 @lru_cache(maxsize=1)
@@ -91,8 +126,8 @@ def build_context() -> str:
     two small files on every request would be pure overhead.
     """
     faq = _load_faq()
-    jobs = _load_jobs_summary()
     jobs_detail = _load_jobs_detail()
+    jobs = _summarize_jobs(jobs_detail)
 
     lines = ["## よくある質問"]
     for item in faq:
