@@ -142,4 +142,3 @@ uv run pyright
 - レート制限（`src/chatbot/ratelimit.py`）はインスタンス単位の in-memory カウンタ。コスト
   暴走の粗いブレーキであり、真の防御ではない（`--max-instances` が実質的な上限）
 - 応答はストリーミングでなく一括（Phase A のシンプル化判断、follow-up で SSE 化を検討）
-- 全ページ展開はせず `index.html` / `jobs.html` の2ページのみ（follow-up）
