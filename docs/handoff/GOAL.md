@@ -41,6 +41,20 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 
 いずれも Playwright 実機検証(通常スクロール・`prefers-reduced-motion: reduce`・本番 GitHub Pages)を実施し、決裁者のフィードバックを受けて次PRへ反映するサイクルで進めた。次に決裁者が実機で確認し、体感速度・強度が適切か追加フィードバックを待つ状態(2026-07-15時点で最新フィードバック未着)。
 
+## Stage 2 追加改善 (2026-07-26 決裁者フィードバック対応、PR #106〜#109・全完了・本番確認済み)
+2026-07-15時点で「最新フィードバック未着」だった状態から間を置いて決裁者が本番を確認し、フィードバック4件を受け同日中に段階的に実装・検証・マージ:
+1. 「スクロールアニメーションが中途半端で動いたか分かりにくい」→ 実測の結果 ①Chrome/Edge/Safari等`animation-timeline: view()`対応ブラウザで`transition: none`が`transition-delay`を巻き添えで無効化し、意図していた70ms刻みの段差演出が完全に機能していなかったバグ ②変化量(translateY/scale)自体が小さすぎる、の2点を特定・修正 (PR #106)
+2. 決裁者スクリーンショット報告「数字で見るセクションのスクロールアニメーションが壊れている」→ `.section--band`の`overflow: hidden`が子要素`.stat`の`animation-timeline: view()`の進捗計算を破壊し、スクロールしても固定値のまま一切追従しない実害バグと判明・修正 (PR #107)
+3. 「モッサリしていて、スクロールの特定の位置に来たら途中で止まらず動ききってほしい」→ `animation-timeline: view()`のscroll-scrub方式は仕組み上「スクロールを止めると演出も途中で止まる」ため要件と技術的に両立不可と判断し撤去。加えて表示トリガーが親セクション単位(丈の高いセクションで先頭が視界に入った瞬間に配下カード全部が表示済み判定される構造的バグ)だったことも判明・修正。カード単体をIntersectionObserverで個別監視し、時間ベースのCSS transitionで確実に完了する方式に統一 (PR #108)。`/codex review-diff`(Bash版、effort=high)で「site.js読み込み失敗フォールバックが新しい個別カードセレクタを対象外にしており、JS障害時に主要コンテンツが非表示のまま固まる」P1バグを検出、同PR内で即修正・Playwright再検証
+4. 「いいですね。速度が速すぎるので、もっとじわっとゆったりした動きで一気に動くのが良い」→ 初速が非常に速いease-out-expo系カーブ(0.16,1,0.3,1)+550msを、初速の穏やかなease-out-cubic系(0.33,1,0.68,1)+1100msへ変更。段差も70ms→130ms刻みへ比例調整 (PR #109)
+
+- [x] タスクI: `transition: none`が`transition-delay`を無効化するバグ修正+変化量拡大 (PR #106)
+- [x] タスクJ: `.section--band`の`overflow: hidden`がview-timelineを破壊するバグ修正 (PR #107)
+- [x] タスクK: scroll-scrub方式撤去、カード個別IntersectionObserver監視+時間ベースtransitionへ全面刷新、`onerror`フォールバック追従 (PR #108)
+- [x] タスクL: easing/durationをより緩やかな質感へ調整 (PR #109)
+
+いずれもPlaywright実機検証(通常スクロール・`prefers-reduced-motion: reduce`・モバイル375px・JS読み込み失敗シミュレーション)を実施し、キャッシュ起因の誤検証を`page.route`によるキャッシュ完全回避で都度排除した上で判定した。次に決裁者が実機で確認し、追加フィードバックを待つ状態(2026-07-26時点で最新フィードバック未着)。
+
 ## Stage 1 (完了・2026-07-15 PR #64) 履歴
 配色システムの再定義(tokens.css/components.css新パレット、career-ladderコントラスト調整、CLAUDE.md更新)完了・本番確認済み。詳細diffは PR #64 参照。
 
