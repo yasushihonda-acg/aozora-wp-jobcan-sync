@@ -1,51 +1,41 @@
-# Handoff — 2026-07-25 (チャットボット求人レコメンドのサービス種別フィルタ修正)
+# Handoff — 2026-07-26 (GOAL.md事実訂正 + 採用FAQチャットボット全38ページ展開)
 
 ## TL;DR
 
-**決裁者報告「デイサービスと検索してもデイサービス以外の求人が出る」に対応。原因は`category`(care/it/office)のみでは施設内の実際のサービス種別(デイサービス/訪問介護/特養/GH/相談支援等)を区別できず、Geminiが施設名テキストの緩い照合でjob_idsを選んでいたこと。施設名からservice_typesを構造化データとして抽出し知識ベース+システムプロンプトを強化。Codex `review-diff`セカンドオピニオンで複合サービス施設の実害バグを1件検出・修正。PR #94マージ・本番デプロイ・実機確認まで完了。本セッションでは`/code-review`(引数なし・`low`いずれも)が機能しない事象が発生し、前回セッション(PR #92)に続き2回目の再発として記録した。**
+**セッション冒頭、前回セッション記録の未コミット差分（`/code-review`ハング事象の所要時間記述「20分以上」→実測「約1時間30分」への事後訂正）をコミット(PR #96)。decision-makerから次アクションを打診され、AskUserQuestionで提示した条件待ちタスクのうち「チャットボット全ページ展開」を選択。plan modeで対象範囲を調査した結果、想定より広い38ページ（カテゴリ別一覧4件+求人詳細34件）が対象と判明し、正式な計画を提示して承認を得た上で実装。全ファイル同一パターンの機械的2行追記（CSS+scriptタグ）のみでバックエンド・ウィジェット本体は無変更。`/code-review low main...HEAD`で指摘0件、Playwright実機確認（送受信・モバイル幅でのentry-cta-bar非重複）を経てPR #97マージ・GitHub Pages本番反映確認済み。GOAL.mdへの完了記録もPR #98で反映済み。**
 
 🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 🔗 チャットボットAPI: https://aozora-chatbot-1084369586348.asia-northeast1.run.app
 
 ## 今セッションで完了したこと
 
-### マージ済 PR (1件)
+### マージ済 PR (3件)
 
 | PR | タイトル | 内容 |
 |---|---|---|
-| #94 | `fix(chatbot): 求人レコメンドをサービス種別で厳密に絞り込み` | 施設名からservice_types抽出(`build_jobs_detail.py`)、`jobs_detail.json`再生成、Geminiコンテキスト+システムプロンプト強化。バックエンド50テストPASS・ruff/pyright PASS |
+| #96 | `chore(handoff): code-reviewハング事象の所要時間記述を事後訂正` | 前セッションの未コミット差分をコミット。「20分以上」→実測タイムスタンプに基づく「約1時間30分」へ訂正 |
+| #97 | `feat(chatbot): 採用FAQチャットボットを全38ページへ展開` | `jobs-{care,it,nurse,office}.html`(4件)+`jobs/*.html`(34件)にchat-widget CSS/JS参照を追記。`job-preview.html`(参照0件の生成サンプル)は対象外 |
+| #98 | `chore(handoff): チャットボット全ページ展開(PR #97)完了をGOAL.mdへ記録` | GOAL.md④のフォローアップ一覧から「全ページ展開」を除去し完了記録を追記 |
 
-### 実装内容
+### 実装内容（PR #97 詳細）
 
-- **原因**: `jobs_detail.json`の`category`は`care`/`it`/`office`の3分類のみで、施設の実際のサービス種別(デイサービス/訪問介護/特養/GH/相談支援/就労支援/有料老人ホーム)を区別する構造化フィールドが存在しなかった。施設名の文字列(例:「あおぞらケアグループ四箇（デイ・有料）」)にテキストとして埋め込まれているのみで、システムプロンプトにも厳密照合の指示がなく、Geminiが緩い基準(介護系だから関連ありそう)でjob_idsを選んでいた
-- **修正**: `build_jobs_detail.py`に施設名の括弧内トークンからservice_typesを抽出するロジックを追加、`knowledge.py`のGeminiコンテキストに「サービス種別」列を明示追加、`prompts.py`にサービス種別絞り込みルールを追加
-- **Codex `review-diff`指摘(1件、P2、同意して修正)**: 複合サービス施設(小松原「相談支援・就労・GH」)に属する求人`90447`(相談支援専門員)が、施設タグをそのまま引き継ぐとグループホーム/就労支援検索に誤って混入する。タイトルに「相談支援専門員」を含む求人は職種名からservice_typesを上書きする例外ルールを追加して解消
-- **実機確認**: ローカル・本番双方でVertex AI実呼び出しにより「デイサービス」「訪問介護」「グループホーム」の3クエリで絞り込み結果を確認、意図通り
+- **背景**: チャットボットは`index.html`/`jobs.html`の2ページのみに埋め込まれており、Phase Aスコープを絞る判断で「全ページ展開」はフォローアップとして見送られていた。今回decision-maker指示で着手
+- **調査（plan mode）**: 当初「候補は4ファイル程度」と見立てていたが、`jobs.html`の求人カードが`jobs/*.html`(34件)にリンクしている実態が判明し、対象は38ページへ拡大。plan mode入り→Exploreエージェントで`chat-widget.js`の相対パス依存・z-index競合・モバイル幅でのentry-cta-bar重なりを事前検証（いずれも問題なし、既存CSSの`:has(.entry-cta-bar)`ルールが自動適用されることを確認）→正式プラン提示→承認
+- **除外判断**: `mockup/job-preview.html`はsync Phase 0 PoCの生成サンプルで、リポジトリ全体から参照0件・公開導線なしと判明したため対象外とした
+- **実装**: スクラッチパッド上のPythonワンショットスクリプトで38ファイルへ機械的に2行挿入（`</head>`直前にCSSリンク、`</body>`直前にscriptタグ）。`jobs/*.html`は1階層下のため`../assets/...`、同階層4ファイルは`assets/...`
+- **検証**: 件数アサーション（挿入前chat-widget参照0件→挿入後38件、`git diff --stat`が`38 files changed, 76 insertions(+)`と完全一致）、Playwright実機確認（`jobs/1777023.html`でチャット起動→メッセージ送信→Cloud Run本番から動的応答受信、375x812のモバイル幅でentry-cta-barとの重なりなし、`jobs-care.html`でコンソールエラー0件）
+- **本番反映確認**: マージ後、GitHub Pages再ビルドをバックグラウンドポーリングで待機し`jobs-care.html`にchat-widget参照が反映されたことを確認
 
-### `/code-review`運用トラブル(2回目の再発、重要)
-
-前回セッション(PR #92、2026-07-24)で`/code-review`(large tier、10並列)の探索エージェント1件が87分ハングした事象が既にGOAL.mdに記録されていたが、本セッションで同種の問題が再発した。
-
-1. `/code-review`(引数なし)実行 → 6 finder agents + 監視エージェント構成で20分以上未完了、ユーザーが手動でエージェントを停止
-2. ユーザーへ規模連動のeffort指定(`/code-review low`)を提案、再実行 → ユーザー観察によれば実質何も処理していなかった(TaskListでも内部サブエージェントは確認不能)
-3. 代替として`/codex review-diff`(`codex review --uncommitted`, effort=high)を実行 → 正常完了、複合サービス施設の実害バグを1件検出。以降の品質担保はこちらで代替
-4. hook `post-pr-review.sh`がPR #94をmedium tier判定しレビュー必須をブロック→Codexの実施結果を品質担保として扱う方針をユーザーに確認の上、マージへ進んだ
-
-**教訓**: `/code-review`のPR規模連動並列探索エージェント方式が2セッション連続でハング/未完了となった。`/codex review-diff`は2回とも正常完了し実害バグを検出できている。次回`/code-review`依頼時は10-20分で進捗が見えなければ早めに`/codex review-diff`への切替を提案すべき(詳細: `docs/handoff/GOAL.md` ④のフォローアップ参照)。3回目の再発時はCLAUDE.mdの「同じエラーで3回失敗→/codexで委譲」基準に従い運用切替をdecision-makerに提案する。
-
-### 決裁者への確認ポイント(すべて明示合意済み)
+### 決裁者への確認ポイント（すべて明示合意済み）
 
 | タイミング | 確認内容 | 決定 |
 |---|---|---|
-| `/code-review low`未完了時 | もう少し待つ/打ち切ってスキップ/原因調査 | 「打ち切ってスキップする」選択 |
-| PR #94のレビュー扱い | Codexの結果を品質担保として扱う/再度code-review/保留 | 「Codexの結果を品質担保として扱う」選択 |
-| PR #94マージ前 | 番号単位の明示認可 | 承認 |
-| デプロイ方式 | 手動デプロイ/GHA新規構築 | 「今回は手動デプロイ」選択(GHA化は別途plan mode) |
-| デプロイ実行前 | Cloud Run再デプロイの実行確認 | 承認、その後デプロイ完了 |
-
-### 本番デプロイ・実機確認
-
-`gcloud run deploy aozora-chatbot --source .`でリビジョン`aozora-chatbot-00003-qzl`をデプロイ、100%トラフィック確認。本番Vertex AIで「デイサービスの求人はありますか？」を送信し、返った3件すべてデイサービス施設のみであることを確認。フロントはコード変更なし(バックエンドのみの修正)。
+| セッション冒頭 | GOAL.md未コミット差分のコミット可否 | 「コミットする」選択 |
+| catchup後 | 次に取り組むタスク（AskUserQuestionで4択提示） | 「チャットボット全ページ展開」選択 |
+| plan mode調査後 | 展開範囲（4ファイルのみ/34ファイルのみ/全38ページ） | 「全38ページ」選択 |
+| plan提示後 | ExitPlanModeによる実装計画の承認 | 承認 |
+| PR #97 | 番号単位の明示認可 | 承認 |
+| PR #98 | 番号単位の明示認可 | 承認 |
 
 ## 次のアクション
 
@@ -58,13 +48,12 @@
 |---|------|------------------|--------------|
 | 1 | ③ 外国人採用特設ページ | decision-makerが法務/人事部門確認の上で着手指示 | 内容仕様のヒアリング→plan mode |
 | 2 | ⑤ スタッフインタビュー再考 | decision-makerが2026-07-14廃止決定の再考について指示 | 復活する場合、イニシャル+AI生成画像の仕様を軽量プランで提示 |
-| 3 | チャットボットの全ページ展開(`jobs-care/nurse/office/it.html`等) | decision-makerから展開指示 | `chat-widget.js`のscriptタグ追加のみ(バックエンド変更不要) |
-| 4 | 知識ベース自動追従化 | 鮮度の問題が実運用で顕在化した場合 | 起動時に`jobs.json`をfetchするTTLキャッシュ方式へ変更検討 |
-| 5 | GHA WIF自動デプロイ化 | 手動デプロイの頻度が増え自動化ROIが見合うと判断された場合、またはgcloud認証切れの手間が続く場合 | `.github/workflows/deploy-chatbot.yml`新設(本セッションでユーザーから打診あり、スコープ大のためplan mode必須と回答済み) |
-| 6 | `google.maps.Marker`→`AdvancedMarkerElement`移行 | decision-makerから移行指示、またはレガシーMarkerの将来的な廃止アナウンス | Map ID発行+Cloud Console側スタイル設定を追加した上で移行 |
-| 7 | `chat-widget.js`の3回reflow最適化 | UX改善の優先度が上がった場合(現状は実害なしと判断) | `scrollToBottom`ヘルパーへの統合 |
-| 8 | 求人データ3ファイル分散の解消(jobs_summary.json自動導出化) | 知識ベース鮮度問題が実際に顕在化した場合 | `jobs_detail.json`からサマリー統計を実行時算出しjobs_summary.json自体を廃止する設計を検討 |
-| 9 | `/code-review`ハング問題の原因調査 | 3回目の再発、またはdecision-makerから調査指示 | bundled skillの内部実装はブラックボックスのため、Anthropicへの報告可否も含めdecision-makerと相談 |
+| 3 | 知識ベース自動追従化 | 鮮度の問題が実運用で顕在化した場合 | 起動時に`jobs.json`をfetchするTTLキャッシュ方式へ変更検討 |
+| 4 | GHA WIF自動デプロイ化 | 手動デプロイの頻度が増え自動化ROIが見合うと判断された場合、またはgcloud認証切れの手間が続く場合 | `.github/workflows/deploy-chatbot.yml`新設（スコープ大のためplan mode必須） |
+| 5 | `google.maps.Marker`→`AdvancedMarkerElement`移行 | decision-makerから移行指示、またはレガシーMarkerの将来的な廃止アナウンス | Map ID発行+Cloud Console側スタイル設定を追加した上で移行 |
+| 6 | `chat-widget.js`の3回reflow最適化 | UX改善の優先度が上がった場合（現状は実害なしと判断） | `scrollToBottom`ヘルパーへの統合 |
+| 7 | 求人データ3ファイル分散の解消(jobs_summary.json自動導出化) | 知識ベース鮮度問題が実際に顕在化した場合 | `jobs_detail.json`からサマリー統計を実行時算出しjobs_summary.json自体を廃止する設計を検討 |
+| 8 | `/code-review`ハング問題の原因調査 | 3回目の再発、またはdecision-makerから調査指示 | bundled skillの内部実装はブラックボックスのため、Anthropicへの報告可否も含めdecision-makerと相談 |
 
 ### 却下候補（記録のみ）
 却下候補なし
@@ -74,14 +63,19 @@
 
 ---
 
+## Issue Net 変化
+- Close 数: 0 件
+- 起票数: 0 件
+- Net: 0 件（本セッションはIssue非経由の直接タスクのみ）
+
 ## 最終結論
 
 ✅ **セッション終了可** — 残作業ゼロ、クリーン状態達成
 
 - OPEN PR: 0件 / active Issue: 0件
-- Git: clean、main、リモートと同期済み(headSha `91c62d0`)
-- 即着手タスク: 0件 / 条件待ち: 9件（すべてdecision-maker判断待ちまたは低優先度で見送り済み）
+- Git: clean、main、リモートと同期済み(headSha `6c2d163`)
+- 即着手タスク: 0件 / 条件待ち: 8件（すべてdecision-maker判断待ちまたは低優先度で見送り済み）
 - 残留プロセス: なし
 - 既知の blocker: なし
-- 同根再発スキャン(§4.6): コード側候補0件（過去7日archiveに関連キーワードなし）。運用問題としては`/code-review`ハングが2セッション連続で再発（上記参照、GOAL.md追記済み）
-- 対症療法判定(§4.7): 該当なし（施設名からの構造化データ抽出という根本原因への対処、Vertex AI実機・ローカル/本番双方で動作確認済み）
+- 同根再発スキャン(§4.6): 本セッションに`fix:`系修正PRなし（`chore:`/`feat:`のみ）のためスキップ対象
+- 対症療法判定(§4.7): 該当なし（修正PRなし、既存ウィジェットへの参照追加のみで根本原因対応の対象外）
