@@ -32,7 +32,7 @@ ACG 採用サイトのフロントを WordPress で独自構築、バックは�
 - HTML 構造は WordPress ブロックエディタの構造 (`<section><div class="container">...`) に寄せる
 - ダミーデータは `recruit.jobcan.jp/aozora` から職種・勤務地・雇用形態のばらつきを反映した実求人 10 件をサンプリング
 - 画像は `<img>` 直書き (`<picture>` の webp `<source>` は webp ファイル未生成のため Safari で broken。alt 必須)
-- 採用トップのセクション順: hero → philosophy → categories → career (入社からのキャリアアップモデル、2026-07-15 追加) → numbers → flow → faq → entry-cta (tcy.co.jp/recruit 参考)。**スタッフ紹介・育休ブログ・お知らせ/コラムの各セクションは 2026-07-14 決裁者指示で廃止**(スタッフ紹介は実写ポートレートがイラスト主体のポスタートンマナと不整合、育休ブログ/お知らせ・コラムはトップページの情報を絞り込む方針のため)
+- 採用トップのセクション順: hero → philosophy → categories → career (入社からのキャリアアップモデル、2026-07-15 追加) → flow → faq → entry-cta (tcy.co.jp/recruit 参考)。**スタッフ紹介・育休ブログ・お知らせ/コラムの各セクションは 2026-07-14 決裁者指示で廃止**(スタッフ紹介は実写ポートレートがイラスト主体のポスタートンマナと不整合、育休ブログ/お知らせ・コラムはトップページの情報を絞り込む方針のため)。**「数字で見る、あおぞら」(Numbers) セクションは 2026-08-04 決裁者指示で廃止**(`.stats`/`.stat*`/`.section--band` の関連 CSS・reveal 演出セレクタも合わせて削除。`illust-numbers.jpg` の新画風再生成バックログ [SCENE #17, `docs/specs/chatgpt-ui-prompts.md`] はセクション自体が無くなったため対象喪失、着手不要)
 
 ### イラスト方針 (統一 — 2026-07-02 決裁者最終指示、ChatGPT UI 経路 + 黒ポロシャツ制服 spec)
 mockup 内のキャラ含みイラスト (求人カード + philosophy / flow 挿絵 + スタッフ紹介・ブログ挿絵の将来分) は、**すべて ChatGPT UI で生成する** (`docs/specs/chatgpt-ui-prompts.md` の PREAMBLE + SCENE ブロック運用)。旧 API `v1/images/edits` 経路 (Phase 1〜1.5、aozora-illust スキル) は identity 保持限界で character-critical illustration では非採用。

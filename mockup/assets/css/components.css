@@ -453,77 +453,6 @@
 }
 
 /* =========================================================
- * Stats
- * ========================================================= */
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-6);
-  background: #fff;
-  border-radius: var(--radius-lg);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-soft);
-}
-.stat {
-  text-align: center;
-  padding: var(--space-3) 0;
-}
-.stat__num {
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 1.8rem + 3.5vw, 3.75rem);
-  font-weight: var(--weight-black);
-  color: var(--color-accent);
-  line-height: 1;
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--space-1);
-  font-feature-settings: "tnum";
-}
-.stat__num small {
-  font-size: var(--text-base);
-  font-weight: var(--weight-bold);
-  color: var(--color-heading);
-}
-.stat__label {
-  margin-top: var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--color-muted);
-  font-weight: var(--weight-medium);
-}
-@media (min-width: 768px) {
-  .stats { grid-template-columns: repeat(4, 1fr); padding: var(--space-10) var(--space-8); }
-}
-
-/* セクション全面をブランドカラーの色面にする帯レイアウト (g-s.dev 的な大胆な配色ブロック) */
-.section--band {
-  position: relative;
-  /* 白文字との WCAG AA コントラスト比 (5.1:1 〜 12:1) を確保した濃色グラデーション */
-  background: linear-gradient(135deg, var(--color-accent-deep) 0%, var(--color-accent-ink) 100%);
-  /* overflow: hidden は付けない。::before は inset:0 で自己完結しておりクリップ不要な一方、
-     overflow:hidden はスクロールコンテナ扱いとなり、子要素 .stat の animation-timeline: view()
-     の進捗計算がこの要素基準に壊れ、スクロールしても一切追従しない状態で固まる実害バグを引き起こす
-     (実測: overflow:hidden 時は opacity が 0.83/0.66/0.48/0.30 で完全固定、visible に変えると
-     0→1へ正常に追従)。 */
-}
-.section--band::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px);
-  background-size: 64px 100%;
-  opacity: 0.5;
-  pointer-events: none;
-}
-.section--band .section__en,
-.section--band .section__title,
-.section--band .section__lead { color: #fff; }
-.section--band .section__en::after { background: #fff; }
-.section--band .stats { box-shadow: 0 20px 50px rgba(0, 60, 65, 0.25); }
-
-/* =========================================================
  * Career Ladder — 入社からのキャリアアップモデル
  * ========================================================= */
 
@@ -1606,7 +1535,7 @@
   }
 }
 
-/* Stagger — career-ladder / job categories / mission / stats / flow / faq は
+/* Stagger — career-ladder / job categories / mission / flow / faq は
    カード単体を site.js が個別に IntersectionObserver 監視し (親セクションの
    reveal とは独立)、視界に入ったら 70ms 刻みで遅延させて順番に現れる演出。
    スクロール位置に連動して動きを追わせる animation-timeline: view() 版を
@@ -1619,7 +1548,6 @@
 .js .career-ladder__step,
 .js .category-card,
 .js .mission-card,
-.js .stat,
 .js .flow__step,
 .js .faq__item {
   opacity: 0;
@@ -1635,7 +1563,6 @@
 .js .career-ladder__step.is-visible,
 .js .category-card.is-visible,
 .js .mission-card.is-visible,
-.js .stat.is-visible,
 .js .flow__step.is-visible,
 .js .faq__item.is-visible {
   opacity: 1;
@@ -1644,36 +1571,31 @@
 /* 項目数が増えても遅延なしで飛び出さないよう、最後の明示delayを引き継ぐ
    catch-allを先に置き、個別指定を後段で上書きする (career-ladder / faq__item は
    5番目=280ms、category-card は6番目=350ms が最後の明示delayなので値が異なる点に
-   注意。mission-card / stat / flow__step は4個までのため catch-all 不要だが、
+   注意。mission-card / flow__step は4個までのため catch-all 不要だが、
    将来項目が増えても飛び出さないよう career-ladder と同じ 280ms の catch-all に含める)。 */
 .js .career-ladder__step.is-visible:nth-child(n+5),
 .js .mission-card.is-visible:nth-child(n+5),
-.js .stat.is-visible:nth-child(n+5),
 .js .flow__step.is-visible:nth-child(n+5),
 .js .faq__item.is-visible:nth-child(n+5) { transition-delay: 520ms; }
 .js .category-card.is-visible:nth-child(n+6) { transition-delay: 650ms; }
 .js .career-ladder__step.is-visible:nth-child(1),
 .js .category-card.is-visible:nth-child(1),
 .js .mission-card.is-visible:nth-child(1),
-.js .stat.is-visible:nth-child(1),
 .js .flow__step.is-visible:nth-child(1),
 .js .faq__item.is-visible:nth-child(1) { transition-delay: 0ms; }
 .js .career-ladder__step.is-visible:nth-child(2),
 .js .category-card.is-visible:nth-child(2),
 .js .mission-card.is-visible:nth-child(2),
-.js .stat.is-visible:nth-child(2),
 .js .flow__step.is-visible:nth-child(2),
 .js .faq__item.is-visible:nth-child(2) { transition-delay: 130ms; }
 .js .career-ladder__step.is-visible:nth-child(3),
 .js .category-card.is-visible:nth-child(3),
 .js .mission-card.is-visible:nth-child(3),
-.js .stat.is-visible:nth-child(3),
 .js .flow__step.is-visible:nth-child(3),
 .js .faq__item.is-visible:nth-child(3) { transition-delay: 260ms; }
 .js .career-ladder__step.is-visible:nth-child(4),
 .js .category-card.is-visible:nth-child(4),
 .js .mission-card.is-visible:nth-child(4),
-.js .stat.is-visible:nth-child(4),
 .js .flow__step.is-visible:nth-child(4),
 .js .faq__item.is-visible:nth-child(4) { transition-delay: 390ms; }
 .js .career-ladder__step.is-visible:nth-child(5),
@@ -1684,7 +1606,6 @@
   .js .career-ladder__step,
   .js .category-card,
   .js .mission-card,
-  .js .stat,
   .js .flow__step,
   .js .faq__item {
     opacity: 1;
