@@ -192,7 +192,10 @@
     </section>
 
     <!-- CAREER LADDER (入社からのキャリアアップモデル) -->
-    <!-- Phase A ダミーデータ: 役職名・年数・年収帯(Lv.2〜4)は仮の目安値。年収帯 Lv.1/Lv.5 は 2026-08-02 決裁者提供の給与比較スプレッドシート(市場比較202602シート、施設介護/施設長候補・正社員の拠点別最低額)で実データ化済み。中間3段階は対応する給与データがシート内に存在せず未確定、実データ確定後に決裁者確認のうえ差し替え -->
+    <!-- 2026-08-04 決裁者(社長)提供の給与比較スプレッドシートに基づき全面刷新。
+         職種別(介護施設・介護スタッフ / 訪問介護・ホームヘルパー)にキャリアパスを分離し、役職名・想定年収帯を実データ化。
+         年数目安・実践スキルはスプレッドシートに記載がないため削除(未記載事項の憶測追加を避ける)。
+         訪問介護 ⑤エリアマネジャーの「年収800円〜」は単位の誤記と判断し 800万円〜 として反映(決裁者確認済み)。 -->
     <section class="section" id="career" data-reveal>
       <div class="container">
         <div class="section__head">
@@ -201,79 +204,98 @@
           <p class="section__lead">未経験からでも、着実にキャリアを積み重ねられるしくみがあります。<br>年功ではなく、実践と学びの積み重ねでステップアップします。</p>
         </div>
 
-        <ol class="career-ladder">
-          <li class="career-ladder__step career-ladder__step--level-1">
-            <span class="career-ladder__num">01</span>
-            <div class="career-ladder__body">
-              <div class="career-ladder__head">
-                <h3 class="career-ladder__role">入職 (未経験・初任者研修中)</h3>
-                <span class="career-ladder__years">目安 〜1年目</span>
+        <div class="career-tabs" role="tablist" aria-label="キャリアモデルの職種切替">
+          <button type="button" class="career-tabs__btn" id="career-tab-facility" role="tab" aria-selected="true" aria-controls="career-panel-facility">介護施設・介護スタッフ</button>
+          <button type="button" class="career-tabs__btn" id="career-tab-visit" role="tab" aria-selected="false" aria-controls="career-panel-visit" tabindex="-1">訪問介護・ホームヘルパー</button>
+        </div>
+
+        <div class="career-panel" id="career-panel-facility" role="tabpanel" aria-labelledby="career-tab-facility">
+          <ol class="career-ladder">
+            <li class="career-ladder__step career-ladder__step--level-1">
+              <span class="career-ladder__num">01</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">入職 (未経験者)</h3>
+                <p class="career-ladder__salary">想定年収帯 301万円〜</p>
               </div>
-              <p class="career-ladder__salary">想定年収帯 301.2万円〜</p>
-              <ul class="career-ladder__skills">
-                <li>基本の介護技術</li>
-                <li>チームでの動き方</li>
-              </ul>
-            </div>
-          </li>
-          <li class="career-ladder__step career-ladder__step--level-2">
-            <span class="career-ladder__num">02</span>
-            <div class="career-ladder__body">
-              <div class="career-ladder__head">
-                <h3 class="career-ladder__role">実務者研修修了・現場リーダー</h3>
-                <span class="career-ladder__years">目安 2〜3年目</span>
+            </li>
+            <li class="career-ladder__step career-ladder__step--level-2">
+              <span class="career-ladder__num">02</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">現場リーダー</h3>
+                <p class="career-ladder__salary">想定年収帯 365万円〜</p>
               </div>
-              <p class="career-ladder__salary">想定年収帯 320万円〜</p>
-              <ul class="career-ladder__skills">
-                <li>実践的なケア技術</li>
-                <li>新人のOJT指導</li>
-              </ul>
-            </div>
-          </li>
-          <li class="career-ladder__step career-ladder__step--level-3">
-            <span class="career-ladder__num">03</span>
-            <div class="career-ladder__body">
-              <div class="career-ladder__head">
-                <h3 class="career-ladder__role">介護福祉士・主任</h3>
-                <span class="career-ladder__years">目安 4〜6年目</span>
+            </li>
+            <li class="career-ladder__step career-ladder__step--level-3">
+              <span class="career-ladder__num">03</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">施設長</h3>
+                <p class="career-ladder__salary">想定年収帯 450万円〜520万円</p>
               </div>
-              <p class="career-ladder__salary">想定年収帯 360万円〜</p>
-              <ul class="career-ladder__skills">
-                <li>個別ケアプランの理解</li>
-                <li>後輩育成</li>
-              </ul>
-            </div>
-          </li>
-          <li class="career-ladder__step career-ladder__step--level-4">
-            <span class="career-ladder__num">04</span>
-            <div class="career-ladder__body">
-              <div class="career-ladder__head">
-                <h3 class="career-ladder__role">エリアリーダー候補・ケアマネジャー</h3>
-                <span class="career-ladder__years">目安 7〜9年目</span>
+            </li>
+            <li class="career-ladder__step career-ladder__step--level-4">
+              <span class="career-ladder__num">04</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">エリアマネジャー</h3>
+                <p class="career-ladder__salary">想定年収帯 620万円〜750万円</p>
               </div>
-              <p class="career-ladder__salary">想定年収帯 400万円〜</p>
-              <ul class="career-ladder__skills">
-                <li>多職種連携</li>
-                <li>シフト・労務管理</li>
-              </ul>
-            </div>
-          </li>
-          <li class="career-ladder__step career-ladder__step--level-5">
-            <span class="career-ladder__num">05</span>
-            <div class="career-ladder__body">
-              <div class="career-ladder__head">
-                <h3 class="career-ladder__role">施設長・マネージャー</h3>
-                <span class="career-ladder__years">目安 10年目〜</span>
+            </li>
+            <li class="career-ladder__step career-ladder__step--level-5">
+              <span class="career-ladder__num">05</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">ケアサービス本部長</h3>
+                <p class="career-ladder__salary">想定年収帯 800万円〜1000万円</p>
               </div>
-              <p class="career-ladder__salary">想定年収帯 445.2万円〜</p>
-              <ul class="career-ladder__skills">
-                <li>拠点運営</li>
-                <li>経営視点でのマネジメント</li>
-              </ul>
-            </div>
-          </li>
-        </ol>
-        <p class="career-ladder__note">※ 年数・年収帯は目安イメージです。経験・資格・配属先により異なります。</p>
+            </li>
+          </ol>
+        </div>
+
+        <div class="career-panel" id="career-panel-visit" role="tabpanel" aria-labelledby="career-tab-visit" hidden>
+          <ol class="career-ladder">
+            <li class="career-ladder__step career-ladder__step--b1">
+              <span class="career-ladder__num">01</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">入職 (未経験者)</h3>
+                <p class="career-ladder__salary">想定年収帯 400万円〜</p>
+              </div>
+            </li>
+            <li class="career-ladder__step career-ladder__step--b2">
+              <span class="career-ladder__num">02</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">ヘルパーリーダー</h3>
+                <p class="career-ladder__salary">想定年収帯 454万円〜</p>
+              </div>
+            </li>
+            <li class="career-ladder__step career-ladder__step--b3">
+              <span class="career-ladder__num">03</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">サービス提供責任者</h3>
+                <p class="career-ladder__salary">想定年収帯 540万円〜620万円</p>
+              </div>
+            </li>
+            <li class="career-ladder__step career-ladder__step--b4">
+              <span class="career-ladder__num">04</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">管理者</h3>
+                <p class="career-ladder__salary">想定年収帯 620万円〜720万円</p>
+              </div>
+            </li>
+            <li class="career-ladder__step career-ladder__step--b5">
+              <span class="career-ladder__num">05</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">エリアマネジャー</h3>
+                <p class="career-ladder__salary">想定年収帯 800万円〜</p>
+              </div>
+            </li>
+            <li class="career-ladder__step career-ladder__step--b6">
+              <span class="career-ladder__num">06</span>
+              <div class="career-ladder__body">
+                <h3 class="career-ladder__role">ケアサービス本部長</h3>
+                <p class="career-ladder__salary">想定年収帯 800万円〜1000万円</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+        <p class="career-ladder__note">※ 想定年収帯は目安イメージです。経験・資格・配属先により異なります。</p>
       </div>
     </section>
 

@@ -152,3 +152,40 @@
     resizeTimer = setTimeout(recheckSafety, 200);
   }, { passive: true });
 })();
+
+(function () {
+  // キャリアモデルの職種タブ切替 (介護施設・介護スタッフ / 訪問介護・ホームヘルパー)。
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.career-tabs__btn'));
+  if (!tabs.length) return;
+
+  function activate(tab) {
+    tabs.forEach(function (t) {
+      var selected = t === tab;
+      t.setAttribute('aria-selected', selected ? 'true' : 'false');
+      t.tabIndex = selected ? 0 : -1;
+      var panel = document.getElementById(t.getAttribute('aria-controls'));
+      if (!panel) return;
+      panel.hidden = !selected;
+      if (selected) {
+        // hidden 中はカードが IntersectionObserver に検知されず reveal 演出が
+        // 発火しない場合があるため、タブ切替時は表示済み扱いにして確実に見せる。
+        panel.querySelectorAll('.career-ladder__step').forEach(function (el) {
+          el.classList.add('is-visible');
+        });
+      }
+    });
+    tab.focus();
+  }
+
+  tabs.forEach(function (tab, index) {
+    tab.addEventListener('click', function () { activate(tab); });
+    tab.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      e.preventDefault();
+      var next = e.key === 'ArrowRight'
+        ? tabs[(index + 1) % tabs.length]
+        : tabs[(index - 1 + tabs.length) % tabs.length];
+      activate(next);
+    });
+  });
+})();
