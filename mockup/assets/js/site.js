@@ -5,7 +5,7 @@
   // カード全部が「表示済み」判定され、実際にカードが画面に現れる頃には
   // アニメーションがとっくに完了して見える (=何も動いて見えない) 実害があった。
   var revealEls = document.querySelectorAll(
-    '[data-reveal], .career-ladder__step, .category-card, .mission-card, .stat, .flow__step, .faq__item'
+    '[data-reveal], .career-ladder__step, .category-card, .mission-card, .flow__step, .faq__item'
   );
   if (!revealEls.length) return;
 
