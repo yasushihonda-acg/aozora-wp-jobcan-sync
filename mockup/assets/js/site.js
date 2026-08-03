@@ -155,6 +155,9 @@
 
 (function () {
   // キャリアモデルの職種タブ切替 (介護施設・介護スタッフ / 訪問介護・ホームヘルパー)。
+  // 非選択パネルの hidden 化はこの JS が初期化された時点で行う (HTML に hidden を
+  // 静的記述すると JS 無効/失敗時に訪問介護側が完全に閲覧不能になるため、
+  // JS が動く場合のみタブ切替として振る舞い、動かない場合は両パネルとも静的表示のまま残す)。
   var tabs = Array.prototype.slice.call(document.querySelectorAll('.career-tabs__btn'));
   if (!tabs.length) return;
 
@@ -187,5 +190,12 @@
         : tabs[(index - 1 + tabs.length) % tabs.length];
       activate(next);
     });
+  });
+
+  var initialTab = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0] || tabs[0];
+  tabs.forEach(function (t) {
+    var panel = document.getElementById(t.getAttribute('aria-controls'));
+    if (panel && t !== initialTab) panel.hidden = true;
+    if (t !== initialTab) t.tabIndex = -1;
   });
 })();

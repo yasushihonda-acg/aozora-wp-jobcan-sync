@@ -583,7 +583,13 @@
 .career-ladder__step--b1 { background: var(--color-accent-light); color: var(--color-ink); }
 .career-ladder__step--b2 { background: var(--color-accent); color: #fff; }
 .career-ladder__step--b3 { background: var(--color-accent-dark); color: #fff; }
-.career-ladder__step--b4 { background: color-mix(in srgb, var(--color-accent-dark), var(--color-accent-deep) 50%); color: #fff; }
+.career-ladder__step--b4 {
+  /* color-mix() 非対応ブラウザ (Safari 16.1 以前等) では下の宣言が無視されるため、
+     accent-dark/accent-deep の中間値を静的 hex でフォールバック指定しておく */
+  background: #043272;
+  background: color-mix(in srgb, var(--color-accent-dark), var(--color-accent-deep) 50%);
+  color: #fff;
+}
 .career-ladder__step--b5 { background: var(--color-accent-deep); color: #fff; }
 .career-ladder__step--b6 { background: var(--color-accent-ink); color: #fff; }
 

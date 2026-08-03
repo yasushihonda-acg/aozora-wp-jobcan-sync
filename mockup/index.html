@@ -249,7 +249,9 @@
           </ol>
         </div>
 
-        <div class="career-panel" id="career-panel-visit" role="tabpanel" aria-labelledby="career-tab-visit" hidden>
+        <!-- hidden 属性は付与しない: JS 無効時は両パネルを静的表示するフォールバック
+             (site.js 初期化時に非選択パネルを hidden 化する、下記 site.js 参照) -->
+        <div class="career-panel" id="career-panel-visit" role="tabpanel" aria-labelledby="career-tab-visit">
           <ol class="career-ladder">
             <li class="career-ladder__step career-ladder__step--b1">
               <span class="career-ladder__num">01</span>
