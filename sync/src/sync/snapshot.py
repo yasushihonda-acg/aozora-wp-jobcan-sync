@@ -1,9 +1,16 @@
 """`job_cache/{job_id}` snapshot model (Phase B Firestore schema).
 
-Schema per `docs/specs/sync-strategy.md` §6, plus one field that document
-doesn't have yet: `absence_count` (連続不在カウンタ). closed 判定は「2回連続で
+Schema per `docs/specs/sync-strategy.md` §6, plus fields that document
+doesn't have yet: `absence_count` (連続不在カウンタ, B-3) and `offer`/
+`list_item`/`category_ids` (B-8, 配信層統合). closed 判定は「2回連続で
 一覧に不在」で決まる(B-3)ため、1回の不在では消えない状態を Firestore 側に
-保持する必要がある — この場は snapshot の schema であり実装は B-3 の担当。
+保持する必要がある。B-8 で `normalized: dict[str,str]` を `offer: JobOffer`
+に置き換えたのは、配信層 (`app.py`) が詳細ページを再描画するのに
+`body_html`/`extra_lines`/`page_title` が必要だが、旧 `normalized` はこれらを
+意図的に持たなかったため(コメント参照、差分検出は content_hash で足りるので
+Firestore ドキュメントを膨らませたくない、という判断)。B-8 実装時点で
+`job_cache` は本番に一件も書かれていない(日次 Cloud Run Job が一度も実行され
+ていない)ため、旧スキーマとの後方互換は考慮していない。
 """
 
 from __future__ import annotations
@@ -13,14 +20,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .models import JobOffer
+from .models import JobListItem, JobOffer
 
 SyncStatus = Literal["active", "closed", "pending_review"]
-
-# `normalized` は一覧・詳細ページの再描画に必要な最小限のフィールドのみを持つ。
-# `body_html` を含めない理由: 差分検出は content_hash で足り、Firestore ドキュメント
-# サイズを不必要に膨らませたくない(sync-strategy.md の設計意図を踏襲)。
-_NORMALIZED_FIELDS = ("title", "address", "label", "location", "salary")
 
 
 class JobSnapshot(BaseModel):
@@ -30,6 +32,17 @@ class JobSnapshot(BaseModel):
     ingestion path); the literal keeps the door open for the `"csv"` / `"api"`
     variants `sync-strategy.md` already documents as fallbacks, without this
     module having to know how to produce them.
+
+    `offer` carries everything `render_job_detail` needs to re-render the
+    detail page without ever touching Jobcan again (B-8). `list_item` is the
+    listing-card view of the same posting (`description`/`labels`/
+    `thumbnail_url` — fields `JobOffer` doesn't have) and is `None` only for
+    snapshots built outside a full catalogue crawl (defensive; every real
+    `crawl_all()` job_id has one). `category_ids` is every category this
+    job_id was seen under this run — a posting can legitimately appear in
+    more than one category (crawler.py dedups job_ids across categories but
+    keeps every category association), which is what `GET /jobs/?category_id=`
+    filters on.
     """
 
     job_id: str = Field(..., description="Jobcan job_offer ID (numeric string)")
@@ -38,8 +51,12 @@ class JobSnapshot(BaseModel):
     apply_url: str
     last_seen_at: datetime = Field(..., description="When this snapshot was last confirmed present")
     source: Literal["html_parse", "csv", "api"] = "html_parse"
-    normalized: dict[str, str] = Field(
-        default_factory=dict, description="Subset of JobOffer fields needed to re-render a card"
+    offer: JobOffer = Field(..., description="Full posting content, for detail-page re-rendering")
+    list_item: JobListItem | None = Field(
+        None, description="Listing-card view of this posting (description/labels/thumbnail)"
+    )
+    category_ids: list[str] = Field(
+        default_factory=list, description="Every category_id this job_id was listed under"
     )
     sync_status: SyncStatus = "active"
     absence_count: int = Field(
@@ -58,6 +75,8 @@ def snapshot_from_offer(
     now: datetime,
     sync_status: SyncStatus = "active",
     absence_count: int = 0,
+    list_item: JobListItem | None = None,
+    category_ids: list[str] | None = None,
 ) -> JobSnapshot:
     """Build the Firestore-bound snapshot for a freshly-fetched `JobOffer`.
 
@@ -68,11 +87,12 @@ def snapshot_from_offer(
     explicit `absence_count` only when constructing a snapshot for a job that
     was *not* re-fetched this run.
     """
-    normalized = {field: getattr(offer, field) for field in _NORMALIZED_FIELDS}
     return JobSnapshot(
         job_id=offer.job_id,
         content_hash=offer.content_hash,
-        normalized=normalized,
+        offer=offer,
+        list_item=list_item,
+        category_ids=list(category_ids) if category_ids else [],
         source_url=offer.source_url,
         apply_url=offer.apply_url,
         last_seen_at=now,

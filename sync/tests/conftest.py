@@ -25,11 +25,12 @@ def broken_html() -> str:
 
 
 class _FakeDocSnapshot:
-    def __init__(self, doc_id: str, data: dict) -> None:
+    def __init__(self, doc_id: str, data: dict | None) -> None:
         self.id = doc_id
         self._data = data
+        self.exists = data is not None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict | None:
         return self._data
 
 
@@ -40,6 +41,9 @@ class _FakeDocRef:
 
     def set(self, data: dict) -> None:
         self._store[self.id] = data
+
+    def get(self) -> _FakeDocSnapshot:
+        return _FakeDocSnapshot(self.id, self._store.get(self.id))
 
 
 class _FakeCollection:

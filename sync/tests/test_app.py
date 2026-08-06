@@ -1,119 +1,92 @@
 """Tests for the FastAPI proxy app.
 
-These tests intentionally never touch the real Jobcan endpoint — every
-JobcanClient call is intercepted at the factory boundary by passing a
-stub class to `create_app(client_factory=...)`. This keeps the test
-surface aligned with the Phase 2A.2 promise that "the app implementation
-is verifiable without making a single outbound Jobcan request".
+B-8: the proxy serves every request from a `JobCacheRepository` — no Jobcan
+HTTP call is possible from within `app.py` anymore, so these tests build a
+`JobCacheRepository` against the shared `FakeFirestoreClient` (conftest.py)
+and seed it directly with `JobSnapshot`s instead of mocking any network call.
 """
 
 from __future__ import annotations
 
 import time
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 
-from sync.app import AppConfig, create_app
+from sync.app import create_app
 from sync.cache import CacheConfig, InMemoryCache
-from sync.jobcan_client import JobcanClient
-from sync.models import JobcanClientError
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures" / "jobcan_responses"
-
-
-class _StubClient:
-    """Drop-in JobcanClient stub that returns a canned response.
-
-    Implements __enter__/__exit__ so it slots into the `with JobcanClient()`
-    pattern in `_fetch_and_render_detail`. `fetch_count` lets tests assert
-    "the second request was a cache hit, the client was not called twice".
-    """
-
-    detail_html: str = ""
-    list_html: str = ""
-    detail_raises: BaseException | None = None
-    list_raises: BaseException | None = None
-    fetch_count: int = 0
-
-    def __init__(self, *_a: Any, **_kw: Any) -> None:
-        # NO reset here: fetch_count lives at the class level and accumulates
-        # across the per-request `JobcanClient()` instantiations that happen
-        # inside `_do_fetch`. `_make_stub_client` zeroes the counter on the
-        # generated subclass; tests assert the final accumulated value.
-        return None
-
-    def __enter__(self) -> _StubClient:
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        return None
-
-    def fetch_job_detail(self, job_id: str | int) -> tuple[str, str]:
-        type(self).fetch_count += 1
-        if type(self).detail_raises is not None:
-            raise type(self).detail_raises
-        url = (
-            f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}"
-            "?hide_breadcrumb=true&hide_search=true"
-        )
-        return url, type(self).detail_html
-
-    def fetch_job_list(self, category_id: str | int) -> tuple[str, str]:
-        type(self).fetch_count += 1
-        if type(self).list_raises is not None:
-            raise type(self).list_raises
-        url = (
-            f"https://recruit.jobcan.jp/aozora/list"
-            f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
-        )
-        return url, type(self).list_html
+from sync.firestore_repo import JobCacheRepository
+from sync.models import JobListItem, JobOffer
+from sync.snapshot import JobSnapshot, snapshot_from_offer
+from tests.conftest import FakeFirestoreClient
 
 
-def _make_stub_client(
+def _offer(job_id: str, **overrides: Any) -> JobOffer:
+    fields: dict[str, Any] = {
+        "job_id": job_id,
+        "title": "介護職員",
+        "body_html": "<p>本文</p>",
+        "address": "福岡事業所",
+        "label": "介護職 正社員",
+        "location": "福岡県福岡市",
+        "salary": "¥250,000",
+        "apply_url": f"https://recruit.jobcan.jp/aozora/entry/new/{job_id}",
+        "source_url": f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}",
+        "page_title": None,
+    }
+    fields.update(overrides)
+    return JobOffer(**fields)
+
+
+def _list_item(job_id: str) -> JobListItem:
+    return JobListItem(
+        job_id=job_id,
+        title="介護職員",
+        address="福岡事業所",
+        description="excerpt",
+        thumbnail_url=None,
+        source_thumbnail_url=None,
+        detail_url=f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}",
+    )
+
+
+def _repo_with(*snapshots: JobSnapshot) -> JobCacheRepository:
+    repo = JobCacheRepository(FakeFirestoreClient())
+    if snapshots:
+        repo.set_many(list(snapshots))
+    return repo
+
+
+_UNSET: Any = object()
+
+
+def _snapshot(
+    job_id: str,
     *,
-    detail_html: str = "",
-    list_html: str = "",
-    detail_raises: BaseException | None = None,
-    list_raises: BaseException | None = None,
-) -> type[JobcanClient]:
-    """Create a fresh stub class per test so fetch_count is isolated."""
-
-    class Stub(_StubClient):
-        pass
-
-    Stub.detail_html = detail_html
-    Stub.list_html = list_html
-    Stub.detail_raises = detail_raises
-    Stub.list_raises = list_raises
-    Stub.fetch_count = 0
-    return Stub  # type: ignore[return-value]
-
-
-@pytest.fixture
-def sample_detail_html() -> str:
-    return (FIXTURES_DIR / "job_1777023.html").read_text(encoding="utf-8")
+    sync_status: str = "active",
+    category_ids: list[str] | None = None,
+    list_item: JobListItem | None = _UNSET,
+) -> JobSnapshot:
+    """`list_item=_UNSET` (the default) defaults to a populated card;
+    `list_item=None` is honoured as an explicit "no card" — a plain `None`
+    default couldn't distinguish the two, which previously made it
+    impossible to construct the `list_item=None` case this file needs to
+    test (2026-08-07 second-opinion review finding)."""
+    return snapshot_from_offer(
+        _offer(job_id),
+        now=datetime(2026, 8, 7, tzinfo=UTC),
+        sync_status=sync_status,  # type: ignore[arg-type]
+        list_item=_list_item(job_id) if list_item is _UNSET else list_item,
+        category_ids=category_ids if category_ids is not None else ["18773"],
+    )
 
 
-@pytest.fixture
-def sample_list_html() -> str:
-    return (FIXTURES_DIR / "list_care.html").read_text(encoding="utf-8")
-
-
-def _client_with(stub: type[JobcanClient], config: AppConfig | None = None) -> TestClient:
+def _client_with(repo: JobCacheRepository) -> TestClient:
     cache = InMemoryCache(
-        CacheConfig(
-            detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time
-        )
+        CacheConfig(detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time)
     )
-    config = config or AppConfig(
-        fetch_enabled=True,
-        job_id_allowlist=frozenset(),
-        category_id_allowlist=frozenset(),
-    )
-    app = create_app(config=config, cache=cache, client_factory=stub)
+    app = create_app(cache=cache, repo=repo)
     return TestClient(app)
 
 
@@ -121,8 +94,7 @@ def _client_with(stub: type[JobcanClient], config: AppConfig | None = None) -> T
 
 
 def test_healthz_returns_200() -> None:
-    stub = _make_stub_client()
-    client = _client_with(stub)
+    client = _client_with(_repo_with())
     response = client.get("/healthz")
 
     assert response.status_code == 200
@@ -130,13 +102,7 @@ def test_healthz_returns_200() -> None:
 
 
 def test_healthz_has_security_headers() -> None:
-    """Every response — even success — must carry the proxy headers.
-
-    `X-Robots-Tag` keeps the Cloud Run dev URL out of search indexes; the
-    middleware should not skip the healthcheck.
-    """
-    stub = _make_stub_client()
-    client = _client_with(stub)
+    client = _client_with(_repo_with())
     response = client.get("/healthz")
 
     assert response.headers.get("Cache-Control") == "no-store"
@@ -146,468 +112,302 @@ def test_healthz_has_security_headers() -> None:
 # ───────────────────────────── /jobs/{job_id} ────────────────────────────
 
 
-def test_get_job_detail_cache_miss_fetches_and_renders(sample_detail_html: str) -> None:
-    stub = _make_stub_client(detail_html=sample_detail_html)
-    client = _client_with(stub)
+def test_get_job_detail_active_renders_200() -> None:
+    repo = _repo_with(_snapshot("1"))
+    client = _client_with(repo)
 
-    response = client.get("/jobs/1777023")
+    response = client.get("/jobs/1")
 
     assert response.status_code == 200
-    # rendered job_detail.html template emits <main class="job-detail"> wrapper
     assert "job-detail" in response.text
-    assert stub.fetch_count == 1
+    assert "job-detail__apply-btn" in response.text
 
 
-def test_get_job_detail_cache_hit_does_not_refetch(sample_detail_html: str) -> None:
-    stub = _make_stub_client(detail_html=sample_detail_html)
-    client = _client_with(stub)
-
-    client.get("/jobs/1777023")
-    client.get("/jobs/1777023")
-
-    assert stub.fetch_count == 1
+def test_get_job_detail_unknown_id_returns_404() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/9999999")
+    assert response.status_code == 404
 
 
-def test_get_job_detail_refetches_after_cache_eviction(sample_detail_html: str) -> None:
-    """After the cache loses an entry (TTL expiry or manual flush), the next
-    request must reach JobcanClient again.
+def test_get_job_detail_pending_review_returns_404() -> None:
+    """`REVIEW_BYPASS=true` is always on (B-8 決定), so this never happens in
+    practice — kept as a defensive default in case that flips back."""
+    repo = _repo_with(_snapshot("1", sync_status="pending_review"))
+    client = _client_with(repo)
 
-    TTL semantics are pinned in `test_cache.py` against a direct InMemoryCache.
-    Here we use `cache.clear()` to simulate TTL eviction — the freezegun +
-    async threadpool + TestClient combination does not advance the clock
-    inside the wrapped fetch coroutine reliably, so this test stays focused
-    on "the app respects cache state" rather than "the TTL math works".
-    """
-    stub = _make_stub_client(detail_html=sample_detail_html)
-    cache = InMemoryCache(
-        CacheConfig(
-            detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time
-        )
-    )
-    app = create_app(
-        config=AppConfig(
-            fetch_enabled=True,
-            job_id_allowlist=frozenset(),
-            category_id_allowlist=frozenset(),
-        ),
-        cache=cache,
-        client_factory=stub,
-    )
-    client = TestClient(app)
-
-    client.get("/jobs/1777023")
-    cache.clear()
-    client.get("/jobs/1777023")
-
-    assert stub.fetch_count == 2
+    response = client.get("/jobs/1")
+    assert response.status_code == 404
 
 
-def test_get_job_detail_4xx_redirects_to_jobcan() -> None:
-    """4xx from Jobcan means "not here" — fall back to the canonical page so
-    the user can see the source-of-truth response."""
-    stub = _make_stub_client(
-        detail_raises=JobcanClientError(
-            "HTTP 404 from https://recruit.jobcan.jp/aozora/job_offers/9999999",
-            status_code=404,
-        )
-    )
-    client = _client_with(stub)
+def test_get_job_detail_closed_renders_200_without_apply_cta() -> None:
+    repo = _repo_with(_snapshot("1", sync_status="closed"))
+    client = _client_with(repo)
 
-    response = client.get("/jobs/9999999", follow_redirects=False)
+    response = client.get("/jobs/1")
 
-    assert response.status_code == 302
-    location = response.headers["location"]
-    assert "recruit.jobcan.jp/aozora/job_offers/9999999" in location
+    assert response.status_code == 200
+    assert "job-detail__apply-btn" not in response.text
+    assert "募集は終了しました" in response.text
 
 
-def test_get_job_detail_5xx_returns_503_html_with_fallback_link() -> None:
-    """5xx from Jobcan means upstream is broken — surface it (not hide) so
-    the user knows to retry rather than think the page truly does not exist."""
-    stub = _make_stub_client(
-        detail_raises=JobcanClientError(
-            "Transient HTTP 503 from https://recruit.jobcan.jp/aozora/job_offers/1777023",
-            status_code=503,
-        )
-    )
-    client = _client_with(stub)
+def test_get_job_detail_cache_hit_does_not_re_read_firestore() -> None:
+    repo = _repo_with(_snapshot("1"))
+    client = _client_with(repo)
 
-    response = client.get("/jobs/1777023", follow_redirects=False)
+    client.get("/jobs/1")
+    # Deleting the snapshot from Firestore after the first request simulates
+    # "the underlying data is gone now" — a cache hit must still serve the
+    # previous render without re-reading the repo.
+    repo.delete_many(["1"])
 
-    assert response.status_code == 503
-    assert "Jobcan" in response.text
-    assert "recruit.jobcan.jp/aozora/job_offers/1777023" in response.text
+    response = client.get("/jobs/1")
 
-
-def test_get_job_detail_network_error_returns_503() -> None:
-    """Network exhaustion (httpx failed after retries) maps to the same 503
-    HTML page as 5xx, not a redirect — there is nothing the user can do at
-    the canonical URL if our network can't reach Jobcan at all."""
-    stub = _make_stub_client(
-        detail_raises=JobcanClientError(
-            "Network error after 3 attempts: timeout", status_code=None
-        )
-    )
-    client = _client_with(stub)
-
-    response = client.get("/jobs/1777023", follow_redirects=False)
-
-    assert response.status_code == 503
-
-
-def test_get_job_detail_structure_change_returns_500(broken_html: str) -> None:
-    """When the parser raises JobcanStructureChangeError, the response is a
-    500 HTML page — operators need to see "the parser broke" distinctly
-    from "the upstream returned an error" (logs will diverge)."""
-    stub = _make_stub_client(detail_html=broken_html)
-    client = _client_with(stub)
-
-    response = client.get("/jobs/1777023", follow_redirects=False)
-
-    # broken_html lacks required selectors so parse_job_detail raises
-    # JobcanStructureChangeError; app maps to 500.
-    assert response.status_code == 500
-
-
-def test_get_job_detail_negative_cache_returns_cached_status(
-    sample_detail_html: str,
-) -> None:
-    """After a 4xx, the second request within the negative-cache TTL must NOT
-    hit JobcanClient again — the whole point of negative caching is to absorb
-    upstream pressure during outages."""
-    stub = _make_stub_client(
-        detail_raises=JobcanClientError(
-            "HTTP 404 from https://recruit.jobcan.jp/aozora/job_offers/9999999",
-            status_code=404,
-        )
-    )
-    client = _client_with(stub)
-
-    client.get("/jobs/9999999", follow_redirects=False)
-    response = client.get("/jobs/9999999", follow_redirects=False)
-
-    assert response.status_code == 302
-    assert stub.fetch_count == 1
+    assert response.status_code == 200
+    assert "job-detail" in response.text
 
 
 def test_get_job_detail_rejects_non_ascii_digits() -> None:
-    """`isdigit()` accepts full-width '１２３' and Arabic-Indic digits.
-    Those would 404 at Jobcan with no Japanese on the error page, so the
-    proxy short-circuits with its own 404 instead (no Jobcan touch)."""
-    stub = _make_stub_client()
-    client = _client_with(stub)
-
+    """`isdigit()` accepts full-width '１２３' and Arabic-Indic digits; the
+    proxy short-circuits with its own 404 instead of a Firestore read."""
+    client = _client_with(_repo_with())
     response = client.get("/jobs/１２３")
-
     assert response.status_code == 404
-    assert stub.fetch_count == 0
 
 
-def test_get_job_detail_allowlist_rejects_unknown_id() -> None:
-    """Phase 2B-1 uses JOB_ID_ALLOWLIST to defeat ID enumeration; this test
-    pins the contract that the app returns 404 (not 403) — enumeration
-    probes cannot distinguish allowlist rejection from a real 404."""
-    stub = _make_stub_client()
-    config = AppConfig(
-        fetch_enabled=True,
-        job_id_allowlist=frozenset({"1777023"}),
-        category_id_allowlist=frozenset(),
-    )
-    client = _client_with(stub, config=config)
+def test_get_job_detail_render_failure_returns_500(monkeypatch: Any) -> None:
+    from sync import app as app_module
 
-    response = client.get("/jobs/9999999")
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
 
-    assert response.status_code == 404
-    assert stub.fetch_count == 0
+    monkeypatch.setattr(app_module, "render_job_detail", _raise)
+    repo = _repo_with(_snapshot("1"))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
+
+    assert response.status_code == 500
+    assert "一時的な問題が発生しました" in response.text
 
 
-def test_get_job_detail_fetch_disabled_returns_503_maintenance(
-    sample_detail_html: str,
-) -> None:
-    """`JOBCAN_FETCH_ENABLED=false` is the Phase 2B-0 deployment mode: the
-    Cloud Run instance is up but does NOT reach out to Jobcan. Requests get
-    a 503 maintenance page; no outbound Jobcan traffic."""
-    stub = _make_stub_client(detail_html=sample_detail_html)
-    config = AppConfig(
-        fetch_enabled=False,
-        job_id_allowlist=frozenset(),
-        category_id_allowlist=frozenset(),
-    )
-    client = _client_with(stub, config=config)
+def test_get_job_detail_firestore_read_failure_returns_503(monkeypatch: Any) -> None:
+    """A repo.get() failure (Firestore outage, malformed doc) must be caught
+    and logged, not propagate as an unhandled exception (2026-08-07
+    second-opinion review finding — this path previously had no try/except
+    at all, unlike the list route)."""
+    repo = _repo_with(_snapshot("1"))
 
-    response = client.get("/jobs/1777023")
+    def _raise(_job_id: str) -> None:
+        raise RuntimeError("simulated Firestore outage")
+
+    monkeypatch.setattr(repo, "get", _raise)
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
 
     assert response.status_code == 503
-    assert stub.fetch_count == 0
+    assert "データの取得に問題が発生している可能性があります" in response.text
 
 
 # ──────────────────────────── /jobs/?category_id= ─────────────────────────
 
 
-def test_get_job_list_cache_miss_fetches_and_renders(sample_list_html: str) -> None:
-    stub = _make_stub_client(list_html=sample_list_html)
-    client = _client_with(stub)
+def test_get_job_list_returns_matching_active_jobs() -> None:
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18988"]),
+    )
+    client = _client_with(repo)
 
     response = client.get("/jobs/?category_id=18773")
 
     assert response.status_code == 200
     assert "job-list" in response.text
-    assert stub.fetch_count == 1
+    assert response.text.count("job-list-card__link") == 1
 
 
-def test_get_job_list_cache_hit_does_not_refetch(sample_list_html: str) -> None:
-    stub = _make_stub_client(list_html=sample_list_html)
-    client = _client_with(stub)
+def test_get_job_list_excludes_closed_jobs() -> None:
+    repo = _repo_with(_snapshot("1", sync_status="closed", category_ids=["18773"]))
+    client = _client_with(repo)
 
-    client.get("/jobs/?category_id=18773")
-    client.get("/jobs/?category_id=18773")
+    response = client.get("/jobs/?category_id=18773")
 
-    assert stub.fetch_count == 1
-
-
-def test_get_job_list_4xx_redirects_to_jobcan() -> None:
-    stub = _make_stub_client(
-        list_raises=JobcanClientError(
-            "HTTP 404 from https://recruit.jobcan.jp/aozora/list?category_id=99999",
-            status_code=404,
-        )
-    )
-    client = _client_with(stub)
-
-    response = client.get("/jobs/?category_id=99999", follow_redirects=False)
-
-    assert response.status_code == 302
-    assert "recruit.jobcan.jp/aozora/list" in response.headers["location"]
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 0
 
 
-def test_get_job_list_fetch_disabled_returns_503() -> None:
-    stub = _make_stub_client(list_html="ignored")
-    config = AppConfig(
-        fetch_enabled=False,
-        job_id_allowlist=frozenset(),
-        category_id_allowlist=frozenset(),
-    )
-    client = _client_with(stub, config=config)
+def test_get_job_list_includes_job_in_multiple_categories() -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773", "18988"]))
+    client = _client_with(repo)
+
+    for category_id in ("18773", "18988"):
+        response = client.get(f"/jobs/?category_id={category_id}")
+        assert response.text.count("job-list-card__link") == 1
+
+
+def test_get_job_list_card_links_to_in_house_detail_route() -> None:
+    """Persisted `JobListItem.detail_url` stays the Jobcan absolute URL, but
+    the rendered card must point at this service's own `/jobs/{id}` route —
+    see `_rewrite_detail_url`'s docstring in app.py."""
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert 'href="/jobs/1"' in response.text
+    # the page's own canonical link legitimately still points at Jobcan
+    # (source-of-truth listing) — only the card's own click target changes.
+    assert 'class="job-list-card__link" href="https://recruit.jobcan.jp' not in response.text
+
+
+def test_get_job_list_empty_category_returns_200_with_no_cards() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_rejects_non_ascii_digits() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/?category_id=１８")
+    assert response.status_code == 404
+
+
+def test_get_job_list_render_failure_returns_500(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
+
+    monkeypatch.setattr(app_module, "render_job_list", _raise)
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 500
+    assert "一時的な問題が発生しました" in response.text
+
+
+def test_get_job_list_excludes_pending_review_jobs() -> None:
+    """Low practical urgency (`REVIEW_BYPASS=true` always on per B-8), but
+    the schema/filter still supports the state and should stay verified."""
+    repo = _repo_with(_snapshot("1", sync_status="pending_review", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_skips_snapshot_with_no_list_item() -> None:
+    """`list_item=None` should be defensive-only (every real `crawl_all()`
+    job_id has one), but if it's ever missing the card must be silently
+    skipped rather than blow up `_rewrite_detail_url` and 500 the whole
+    category (2026-08-07 second-opinion review finding — previously untested)."""
+    repo = _repo_with(_snapshot("1", category_ids=["18773"], list_item=None))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_closed_and_multi_category_combo() -> None:
+    """The one state-flag combination not covered elsewhere: a `closed` job
+    that's also cross-listed under two categories must vanish from both,
+    not just one."""
+    repo = _repo_with(_snapshot("1", sync_status="closed", category_ids=["18773", "18988"]))
+    client = _client_with(repo)
+
+    for category_id in ("18773", "18988"):
+        response = client.get(f"/jobs/?category_id={category_id}")
+        assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_firestore_read_failure_returns_503(monkeypatch: Any) -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+
+    def _raise() -> None:
+        raise RuntimeError("simulated Firestore outage")
+
+    monkeypatch.setattr(repo, "get_all_valid", _raise)
+    client = _client_with(repo)
 
     response = client.get("/jobs/?category_id=18773")
 
     assert response.status_code == 503
-    assert stub.fetch_count == 0
+    assert "データの取得に問題が発生している可能性があります" in response.text
 
 
-def test_get_job_list_structure_change_returns_500() -> None:
-    """A list page that has no `.job-offer-box` raises
-    JobcanStructureChangeError — must map to 500."""
-    stub = _make_stub_client(list_html="<html><body>empty</body></html>")
-    client = _client_with(stub)
+def test_get_job_list_cache_hit_does_not_re_read_firestore() -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    client = _client_with(repo)
 
-    response = client.get("/jobs/?category_id=18773", follow_redirects=False)
+    client.get("/jobs/?category_id=18773")
+    repo.delete_many(["1"])
 
-    # Empty list page surfaces structure change at parse time.
-    assert response.status_code == 500
+    response = client.get("/jobs/?category_id=18773")
 
-
-def test_get_job_list_rejects_non_ascii_digits() -> None:
-    stub = _make_stub_client()
-    client = _client_with(stub)
-
-    response = client.get("/jobs/?category_id=１８")
-
-    assert response.status_code == 404
-    assert stub.fetch_count == 0
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 1
 
 
-# ───────────────────── env-driven AppConfig construction ─────────────────────
+def test_get_job_list_malformed_doc_does_not_take_down_other_jobs() -> None:
+    """A malformed document elsewhere in `job_cache` must not prevent a
+    healthy job's own category listing from rendering — this is the whole
+    point of using `get_all_valid()` instead of `get_all()` in the list
+    route (2026-08-07 second-opinion review finding)."""
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    fake_client: FakeFirestoreClient = repo._client  # type: ignore[assignment]
+    fake_client.store["bad"] = {"job_id": "bad"}  # missing every other field
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 1
 
 
-def test_app_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("JOBCAN_FETCH_ENABLED", raising=False)
-    monkeypatch.delenv("JOB_ID_ALLOWLIST", raising=False)
-    monkeypatch.delenv("CATEGORY_ID_ALLOWLIST", raising=False)
-
-    config = AppConfig.from_env()
-
-    assert config.fetch_enabled is True
-    assert config.job_id_allowlist == frozenset()
-    assert config.category_id_allowlist == frozenset()
+# ─────────────────────── lazy repo resolution (import safety) ───────────────
 
 
-def test_app_config_from_env_disables_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`JOBCAN_FETCH_ENABLED=false` is the kill switch for Phase 2B-0."""
-    monkeypatch.setenv("JOBCAN_FETCH_ENABLED", "false")
-
-    config = AppConfig.from_env()
-
-    assert config.fetch_enabled is False
-
-
-def test_app_config_from_env_parses_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JOB_ID_ALLOWLIST", "1777023, 1668696 ,1690435")
-    monkeypatch.setenv("CATEGORY_ID_ALLOWLIST", "18773")
-
-    config = AppConfig.from_env()
-
-    assert config.job_id_allowlist == frozenset({"1777023", "1668696", "1690435"})
-    assert config.category_id_allowlist == frozenset({"18773"})
+def test_create_app_does_not_require_repo_at_construction_time() -> None:
+    """`create_app()` with no injected `repo` must not construct a real
+    `firestore.Client` eagerly — that would make `import sync.app` itself
+    require GCP credentials (see app.py's `_resolve_repo` docstring)."""
+    app = create_app()
+    assert app is not None
 
 
-# ─────────────────────── exception classification helpers ───────────────────
-
-
-def test_classify_client_error_4xx() -> None:
-    """Phase 2A.3 (#7): JobcanClientError now carries `status_code`. 4xx upstream
-    failures pass the exact status through so the proxy can redirect with the
-    same code Jobcan would have sent."""
-    from sync.app import _classify_client_error
-
-    assert (
-        _classify_client_error(
-            JobcanClientError("HTTP 404 from https://recruit.jobcan.jp/x", status_code=404)
-        )
-        == 404
-    )
-
-
-def test_classify_client_error_5xx_transient() -> None:
-    from sync.app import _classify_client_error
-
-    assert (
-        _classify_client_error(
-            JobcanClientError(
-                "Transient HTTP 503 from https://recruit.jobcan.jp/x", status_code=503
-            )
-        )
-        == 503
-    )
-
-
-def test_classify_client_error_network_returns_503() -> None:
-    """status_code=None (network-level failure) deliberately maps to 503: the
-    canonical Jobcan URL is just as unreachable for the user as for us, so a
-    302 to it would only push the user onto the same broken network."""
-    from sync.app import _classify_client_error
-
-    assert (
-        _classify_client_error(
-            JobcanClientError("Network error after 3 attempts: timeout", status_code=None)
-        )
-        == 503
-    )
-
-
-# ───────────────────────── structure change short-circuit ────────────────────
-
-
-def test_pydantic_validation_error_returns_500_and_caches_negative(
-    sample_detail_html: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Phase 2A.2 code-review #1: parse_job_detail can return a JobOffer whose
-    Pydantic validators raise (e.g. apply_url that the parser's domain check
-    accepted but `_must_be_http_url` rejects, like `javascript:...`).
-
-    Without an explicit `except PydanticValidationError`, the proxy returns
-    FastAPI's default 500 and skips negative caching → connection floods
-    re-fetch on every retry.
-    """
+def test_resolve_repo_builds_the_client_at_most_once(monkeypatch: Any) -> None:
+    """Pins the actual behaviour `_resolve_repo`'s lazy singleton exists for
+    (2026-08-07 second-opinion review finding: this was previously asserted
+    only by "doesn't crash," which would still pass even if the client were
+    rebuilt on every request). `/healthz` must never trigger it; the first
+    `/jobs/...` request must build it exactly once; a second request must
+    reuse it."""
     from sync import app as app_module
 
-    def _raise_pydantic(*_args: Any, **_kwargs: Any) -> None:
-        # Construct a real Pydantic ValidationError by instantiating a model
-        # with a value the validator rejects — simpler than building one by
-        # hand and exercises the exact failure shape app.py sees in prod.
-        from sync.models import JobOffer
+    build_count = 0
 
-        JobOffer(
-            job_id="1777023",
-            title="t",
-            body_html="<p>x</p>",
-            address="a",
-            label="l",
-            location="loc",
-            salary="s",
-            apply_url="javascript:alert(1)",  # not http(s) → ValidationError
-            source_url="https://recruit.jobcan.jp/aozora/job_offers/1777023",
-        )
+    def _fake_get_firestore_client() -> object:
+        nonlocal build_count
+        build_count += 1
+        return FakeFirestoreClient()
 
-    # app.py imports `parse_job_detail` at module load time, so patching the
-    # `sync.parser` module has no effect — the app holds its own bound name.
-    # Replace the binding in `sync.app` instead.
-    monkeypatch.setattr(app_module, "parse_job_detail", _raise_pydantic)
+    monkeypatch.setattr(app_module, "get_firestore_client", _fake_get_firestore_client)
+    app = app_module.create_app()
+    client = TestClient(app)
 
-    stub = _make_stub_client(detail_html=sample_detail_html)
-    cache = InMemoryCache(
-        CacheConfig(
-            detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time
-        )
-    )
-    app = create_app(
-        config=AppConfig(
-            fetch_enabled=True,
-            job_id_allowlist=frozenset(),
-            category_id_allowlist=frozenset(),
-        ),
-        cache=cache,
-        client_factory=stub,
-    )
-    client = TestClient(app, raise_server_exceptions=False)
+    client.get("/healthz")
+    assert build_count == 0
 
-    response = client.get("/jobs/1777023", follow_redirects=False)
+    client.get("/jobs/1")  # 404 (empty repo) — still exercises _resolve_repo
+    assert build_count == 1
 
-    assert response.status_code == 500
-    assert "求人情報の検証に失敗しました" in response.text
-    # Second request hits the negative cache; no re-fetch even though the
-    # stub returns valid HTML — the failure path must absorb retries.
-    client.get("/jobs/1777023", follow_redirects=False)
-    assert stub.fetch_count == 1
-
-
-def test_render_exception_returns_500_and_caches_negative(
-    sample_detail_html: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Phase 2A.2 code-review #2: cli.py wraps render in `except Exception`
-    so Jinja2 TemplateError / AttributeError on malformed offer fields surface
-    as a controlled exit. The proxy must do the same so a template bug does
-    not leak stack traces and force every retry to re-fetch Jobcan."""
-    from sync import app as app_module
-
-    def _raise_jinja(*_args: Any, **_kwargs: Any) -> str:
-        raise RuntimeError("simulated Jinja2 TemplateError")
-
-    monkeypatch.setattr(app_module, "render_job_detail", _raise_jinja)
-
-    stub = _make_stub_client(detail_html=sample_detail_html)
-    cache = InMemoryCache(
-        CacheConfig(
-            detail_ttl=10.0, list_ttl=5.0, negative_ttl=2.0, maxsize=8, timer=time.time
-        )
-    )
-    app = create_app(
-        config=AppConfig(
-            fetch_enabled=True,
-            job_id_allowlist=frozenset(),
-            category_id_allowlist=frozenset(),
-        ),
-        cache=cache,
-        client_factory=stub,
-    )
-    client = TestClient(app, raise_server_exceptions=False)
-
-    response = client.get("/jobs/1777023", follow_redirects=False)
-
-    assert response.status_code == 500
-    assert "一時的な問題が発生しました" in response.text
-    client.get("/jobs/1777023", follow_redirects=False)
-    assert stub.fetch_count == 1
-
-
-def test_structure_change_sets_negative_cache(broken_html: str) -> None:
-    """After a JobcanStructureChangeError, the second request inside the
-    negative-cache TTL should NOT re-attempt the fetch — operators should
-    have time to push a selector fix without amplifying load on Jobcan."""
-    stub = _make_stub_client(detail_html=broken_html)
-    client = _client_with(stub)
-
-    client.get("/jobs/1777023", follow_redirects=False)
-    client.get("/jobs/1777023", follow_redirects=False)
-
-    # Second request hits the negative cache (500 → maintenance page), no refetch.
-    assert stub.fetch_count == 1
+    client.get("/jobs/1")
+    assert build_count == 1

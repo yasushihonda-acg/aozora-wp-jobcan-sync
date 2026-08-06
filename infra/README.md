@@ -33,6 +33,26 @@ Cloud Run の前提として自動有効化されるので明示不要。`firest
 `secretmanager.googleapis.com` / `cloudscheduler.googleapis.com` は Phase B
 (定期同期) 向けに追加 (§1.5、B-6 の Cloud Scheduler 配線で使用)。
 
+**2026-08-07 判明**: このブロックは Phase B 実装 (B-1〜B-7) 時点で一度も実行
+されておらず、`gcloud services list --enabled` で確認したところ
+`artifactregistry` / `datastore` / `run` の3つのみが有効化済みだった
+(`firestore` / `secretmanager` / `cloudscheduler` は未有効化)。**下記 §1a
+(Firestore データベース本体の作成) を含め、§1 全体を配信層統合 (B-8) の
+最初のステップとして実際に実行すること。**
+
+### 1a. Firestore データベース作成 (初回のみ、B-8)
+
+API 有効化だけではデータベース自体は作られない。日本リージョンに Native
+mode で作成する (`.claude/memory/feedback_firestore_default_location_japan.md`
+の日本コンプライアンス方針に従う):
+
+```bash
+gcloud firestore databases create \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1 \
+  --type=firestore-native
+```
+
 ## 1.5 Secret Manager — Slack webhook URL (Phase B、初回のみ)
 
 `sync/src/sync/notifications.py` の `notify_slack()` が読む唯一のシークレット。
@@ -109,38 +129,61 @@ cd ..
 
 ## 4. Cloud Run deploy
 
+**B-8 (2026-08-07) で配信層を Firestore 単一ソースへ書き換えた**ため、
+`JOBCAN_FETCH_ENABLED` は意味を失い削除。代わりに Firestore **読み取り専用**
+権限を持つ専用サービスアカウントと、プロジェクト/DB を指す env var が必要。
+デフォルトの Compute Engine SA (これまでの実運用アカウント) へは付与しない
+— 最小権限の原則で専用 SA を切る。
+
 ```bash
+# 4a. 専用サービスアカウント作成 (初回のみ、Web サービス用 — B-6 の
+#     aozora-sync-job とは別物。Job は read/write、Web は read-only)
+gcloud iam service-accounts create aozora-sync-web \
+  --project=aozora-wp-jobcan-sync \
+  --display-name="aozora-sync Cloud Run Service (Firestore read-only proxy)"
+
+gcloud projects add-iam-policy-binding aozora-wp-jobcan-sync \
+  --member="serviceAccount:aozora-sync-web@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
+  --role="roles/datastore.viewer"
+
+# 4b. デプロイ
 CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run deploy aozora-sync \
   --project=aozora-wp-jobcan-sync \
   --region=asia-northeast1 \
   --image=asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest \
   --platform=managed \
   --allow-unauthenticated \
+  --service-account=aozora-sync-web@aozora-wp-jobcan-sync.iam.gserviceaccount.com \
   --min-instances=0 \
   --max-instances=1 \
   --memory=512Mi \
   --cpu=1 \
   --concurrency=10 \
   --timeout=30s \
-  --set-env-vars=JOBCAN_FETCH_ENABLED=true
+  --set-env-vars=GCP_PROJECT_ID=aozora-wp-jobcan-sync,FIRESTORE_DATABASE="(default)"
 ```
 
 設定根拠:
 - `min-instances=0`: 検証用、cold start を受け入れる代わりにアイドル課金ゼロ
-- `max-instances=1`: ID 総当たり攻撃時の Jobcan 側負荷を低レベルに固定
-- `memory=512Mi`: uvicorn + httpx + BeautifulSoup の安定動作下限
+- `max-instances=1`: 求人34件程度の規模を踏まえた低コスト固定 (Firestore read
+  のみで Jobcan への負荷は既に存在しない)
+- `memory=512Mi`: uvicorn + Jinja2 の安定動作下限
 - `cpu=1`: Cloud Run 仕様 `cpu < 1 は concurrency > 1 と組み合わせ不可` への対応 (2026-06-19 deploy 時に検出)
 - `concurrency=10`: cachetools の `threading.Lock` 直列実行を踏まえた現実値
-- `timeout=30s`: Jobcan fetch + parse + render の上限想定
-- `JOBCAN_FETCH_ENABLED=true`: live mode (WP からの fetch を実機構成で受ける)
+- `timeout=30s`: Firestore read + render の上限想定 (旧 Jobcan fetch 前提より大幅に余裕あり)
+- `service-account=aozora-sync-web@...` + `GCP_PROJECT_ID`/`FIRESTORE_DATABASE`: B-8 で Firestore 読み取りが必要になったための追加
 - `allow-unauthenticated`: 採用サイトは public、自社契約 ATS の自社利用範囲
-  ([feedback_saas_self_use_no_clearance.md](../.claude/memory/feedback_saas_self_use_no_clearance.md))
+  ([feedback_saas_self_use_no_clearance.md](../.claude/memory/feedback_saas_self_use_no_clearance.md))。Firestore への書き込み権限を持たない read-only SA なので、公開エンドポイントであること自体のリスクは変わらず低い
 
 deploy 完了後、コマンド出力末尾に Service URL が出る:
 `https://aozora-sync-XXXX-an.a.run.app` (新形式) または
 `https://aozora-sync-1084369586348.asia-northeast1.run.app` (project number 形式、両方とも有効)。
 
 ## 5. 動作確認
+
+**B-8 以降、`/jobs/{id}` と `/jobs/?category_id=` は Firestore `job_cache` に
+実際にドキュメントが存在しないと空振りする** (404 または0件の一覧)。§8 の
+Cloud Run Job を最低1回実行して Firestore を populate してから確認すること。
 
 ```bash
 SERVICE_URL=$(CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run services describe aozora-sync \
@@ -153,11 +196,12 @@ curl "${SERVICE_URL}/healthz"
 # → 期待値: {"status":"healthy"}
 # → 実測値 (2026-06-19): HTTP 404 (GFE で intercepted、Cloud Run app に届かない)
 
-# 5b. 詳細ページ (Jobcan の実データ取得)
-curl -o /tmp/job.html "${SERVICE_URL}/jobs/1777023"
+# 5b. 詳細ページ (§8 の Job 実行後、実在する job_id に差し替えて実行)
+curl -s -o /tmp/job.html -w "%{http_code} %{time_total}s\n" "${SERVICE_URL}/jobs/<job_id>"
 grep "sync-job-detail" /tmp/job.html  # 自社 BEM class 確認
+# → 200 かつ 1秒未満のはず (Jobcan への往復が無いため、旧実装より明確に速い)
 
-# 5c. 一覧ページ
+# 5c. 一覧ページ (§8 の Job 実行後、実在する category_id に差し替えて実行)
 curl -o /tmp/list.html "${SERVICE_URL}/jobs/?category_id=18773"
 grep "sync-job-list" /tmp/list.html
 ```
@@ -210,6 +254,33 @@ gcloud secrets add-iam-policy-binding slack-webhook-url \
   --role="roles/secretmanager.secretAccessor"
 ```
 
+### 8.1b クローラ dry-run 検証 (B-8、初回のみ、8.2 の前に必ず実施)
+
+このクローラ (ページネーション walk・`.pagination-number` 検算) は**実
+ジョブカンに対して実行された実績がゼロ** (フィクスチャ解析から書き起こした
+コードのみ、2026-08-07 時点)。Firestore への書き込みなしで一度動作を目視
+確認してから Job を作成する:
+
+```bash
+cd sync
+uv run python -c "
+from sync.crawler import crawl_all
+from sync.jobcan_client import JobcanClient
+
+with JobcanClient() as client:
+    result = crawl_all(client)
+
+print(f'offers={len(result.offers)} errors={len(result.errors)}')
+print(f'expected_total={result.expected_total} collected_total={result.collected_total}')
+print(f'fully_listed={result.fully_listed}')
+"
+```
+
+期待値: `expected_total == collected_total`、`fully_listed=True`、
+`errors=0`。件数がジョブカン実サイトの表示件数と一致することも目視で確認
+する。ここで想定外の差異が出た場合、配信は現行の GitHub Pages 静的モック
+のまま (このコマンドは Firestore に一切書き込まないため無害) で止まれる。
+
 ### 8.2 Cloud Run Job 作成 + デプロイ
 
 §3 で push した同じイメージを使う (`app.py` の FastAPI サーバーではなく
@@ -223,22 +294,29 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run jobs create aozora-
   --command=python \
   --args="-m,sync,sync-run" \
   --service-account=aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com \
-  --set-env-vars=REVIEW_BYPASS=false \
+  --set-env-vars=REVIEW_BYPASS=true \
   --memory=512Mi \
   --cpu=1 \
   --max-retries=0 \
-  --task-timeout=600s
+  --task-timeout=3600s
 ```
 
 設定根拠:
-- `REVIEW_BYPASS=false`: CLAUDE.md の運用計画通り初期は半自動 (`pending_review`
-  → Slack 通知経由で人間承認)。運用が安定したら `gcloud run jobs update` で
-  `true` に切替 (`approval.py` のフラグ、コード変更不要)
+- `REVIEW_BYPASS=true`: **2026-08-07 決裁者判断で完全自動化に確定**
+  (人間承認ステップを恒久的に挟まない)。当初計画していた「初期1ヶ月は
+  半自動→安定後に自動化」の段階運用は不採用。`approval.py` の
+  `pending_review` ゲート自体はコードとして残すが、この env var が `true`
+  である限り実際には発生しない (`compute_target_sync_status` の既存実装)
 - `max-retries=0`: 失敗時に自動リトライしない — 翌日の Cloud Scheduler 実行が
   実質的な再試行になるため、同日中の多重実行は避ける
-- `task-timeout=600s`: 全カテゴリ (17件、うち複数ページ) のクロール + Firestore
-  書込みを想定した上限。既存 FastAPI サービスの `timeout=30s` (単一リクエスト
-  想定) とは無関係
+- `task-timeout=3600s`: 全17カテゴリ・複数ページを crawl_delay 3秒で巡回する
+  実所要時間は、計画段階のPlan agent報告(実ジョブカンへの読み取り専用
+  crawl、本田様への事前報告なし)によれば実求人382件・47リストページで
+  約21.4分(1,287秒)。**この数値は本セッションで独立に再検証していない**
+  (§8.1b の dry-run で決裁者確認のうえ確定させること)。Cloud Run Job の
+  課金は実実行時間のみで timeout 上限を上げてもコストは増えないため、
+  数値の不確実性を踏まえ安全側に1時間へ設定。既存 FastAPI サービスの
+  `timeout=30s` (単一リクエスト想定) とは無関係
 
 新イメージを push した後、Job にも反映するには (Cloud Run Job は Service と違い
 自動で最新イメージを追わない):
@@ -299,6 +377,18 @@ gcloud logging read \
   --format=json
 ```
 
+## B-8 初回ロールアウト順序 (この順を守る)
+
+Phase B のインフラは 2026-08-07 時点で何も存在しない状態から作る (§1 冒頭の
+注記参照)。番号は本ドキュメントの節番号:
+
+1. §3 でコードをビルド・push
+2. §1 (API有効化) → §1a (Firestore DB作成) → §1.5 (Secret作成) → §4a (Web用 SA + IAM) → §8.1 (Job用 SA + IAM) を実行
+3. §8.1b でクローラを実ジョブカンに対して dry-run 検証 (Firestore 書き込みなし)
+4. §8.2 で Cloud Run Job を `REVIEW_BYPASS=true` で作成し、§8.4 の手動トリガーで **1回実行** → Firestore に全求人が `active` で入る
+5. `python -m sync` 相当で Firestore の中身を確認してから §4 で Service をデプロイ (この時点で初めて配信が Firestore 由来になる)
+6. §8.3 で Cloud Scheduler を作成し、以降は日次自動運用
+
 ## ロールバック
 
 新 image deploy 後に旧 revision に traffic を戻したい場合:
@@ -316,6 +406,11 @@ gcloud run services update-traffic aozora-sync \
   --region=asia-northeast1 \
   --to-revisions=aozora-sync-XXXXX-yyy=100
 ```
+
+B-8 (Firestore 単一ソース化) 後にロールバックする場合、B-8 より前の revision
+はジョブカン直接フェッチのコードなので Firestore の状態に依存せず即座に復旧
+する。逆方向 (B-8 後の revision へ再度切替) も安全 — Firestore の内容は Job
+の実行結果であり、Service のデプロイでは変化しない。
 
 ## サービス削除 (検証停止時)
 

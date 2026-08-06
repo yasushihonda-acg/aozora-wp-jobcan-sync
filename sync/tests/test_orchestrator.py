@@ -119,6 +119,32 @@ def test_run_sync_review_bypass_true_writes_jobs_active(monkeypatch: pytest.Monk
 
 
 @respx.mock
+def test_run_sync_stores_list_item_and_category_ids_on_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B-8: `app.py` serves category listings straight from the Firestore
+    snapshot, so `run_sync` must actually persist `list_item`/`category_ids`
+    end to end (crawler -> closed_detection -> Firestore), not just compute
+    them and drop them."""
+    from sync.crawler import KNOWN_CATEGORY_IDS
+
+    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    _mock_all_categories_return(["1"])
+    repo = JobCacheRepository(FakeFirestoreClient())
+
+    with _client() as client:
+        orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
+
+    snap = repo.get_all()["1"]
+    assert snap.list_item is not None
+    assert snap.list_item.job_id == "1"
+    # every mocked category listed job_id "1" (`_mock_all_categories_return`
+    # mocks the same listing HTML for every category_id), so it must be
+    # associated with all of them, not just the first one seen.
+    assert set(snap.category_ids) == set(KNOWN_CATEGORY_IDS)
+
+
+@respx.mock
 def test_run_sync_second_run_promotes_unchanged_job_bookkeeping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

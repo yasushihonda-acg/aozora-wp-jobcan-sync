@@ -117,6 +117,8 @@ def run_sync(
         previous_snapshots,
         now=now,
         skip_absence_bookkeeping=not crawl_result.fully_listed or reconciliation_mismatch,
+        list_items=crawl_result.list_items,
+        category_ids=crawl_result.category_ids,
     )
 
     if closed_result.circuit_breaker_tripped:

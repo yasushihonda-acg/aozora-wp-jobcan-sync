@@ -13,9 +13,28 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+import pytest
+from pydantic import ValidationError
+
 from sync.firestore_repo import JobCacheRepository, _convert_dates_to_datetimes
+from sync.models import JobOffer
 from sync.snapshot import JobSnapshot
 from tests.conftest import FakeFirestoreClient as _FakeFirestoreClient
+
+
+def _offer(job_id: str) -> JobOffer:
+    return JobOffer(
+        job_id=job_id,
+        title=f"求人 {job_id}",
+        body_html="<p>本文</p>",
+        address="福岡事業所",
+        label="介護職 正社員",
+        location="福岡県福岡市",
+        salary="¥250,000",
+        apply_url=f"https://recruit.jobcan.jp/aozora/entry/new/{job_id}",
+        source_url=f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}",
+        page_title=None,
+    )
 
 
 def _snapshot(job_id: str, *, last_seen_at: datetime | None = None) -> JobSnapshot:
@@ -24,10 +43,12 @@ def _snapshot(job_id: str, *, last_seen_at: datetime | None = None) -> JobSnapsh
     # codebase's baseline (see test_app.py's identical "page_title missing"
     # false positive on JobOffer) flags Field()-defaulted params as required
     # when omitted from a call site.
+    offer = _offer(job_id)
     return JobSnapshot(
         job_id=job_id,
         content_hash="x" * 64,
-        normalized={"title": f"求人 {job_id}"},
+        offer=offer,
+        list_item=None,
         source_url=f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}",
         apply_url=f"https://recruit.jobcan.jp/aozora/entry/new/{job_id}",
         last_seen_at=last_seen_at or datetime(2026, 8, 7, tzinfo=UTC),
@@ -181,3 +202,57 @@ def test_convert_dates_to_datetimes_recurses_into_nested_lists_and_dicts() -> No
     payload = {"outer": [{"inner_date": date(2026, 1, 1)}, "unrelated"]}
     converted = _convert_dates_to_datetimes(payload)
     assert converted == {"outer": [{"inner_date": datetime(2026, 1, 1, tzinfo=UTC)}, "unrelated"]}
+
+
+def test_get_returns_the_matching_snapshot() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1"), _snapshot("2")])
+
+    result = repo.get("1")
+
+    assert result is not None
+    assert result.job_id == "1"
+
+
+def test_get_returns_none_for_missing_job_id() -> None:
+    repo = JobCacheRepository(_FakeFirestoreClient())
+    assert repo.get("nonexistent") is None
+
+
+def test_get_all_raises_on_a_single_malformed_doc() -> None:
+    """The sync path (`orchestrator.run_sync`) must fail loudly rather than
+    silently narrow its `previous_snapshots` baseline (see get_all()'s
+    docstring for why a dropped doc would corrupt closed-rate accounting)."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set(_snapshot("1"))
+    client.store["bad"] = {"job_id": "bad"}  # missing every other required field
+
+    with pytest.raises(ValidationError):
+        repo.get_all()
+
+
+def test_get_all_valid_skips_a_malformed_doc_and_reports_it() -> None:
+    """The serving path (`app.py`'s category listing) must not let one bad
+    document take down every category's listing page."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1"), _snapshot("2")])
+    client.store["bad"] = {"job_id": "bad"}
+
+    snapshots, skipped = repo.get_all_valid()
+
+    assert set(snapshots) == {"1", "2"}
+    assert skipped == ["bad"]
+
+
+def test_get_all_valid_on_a_fully_valid_collection_skips_nothing() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1"), _snapshot("2")])
+
+    snapshots, skipped = repo.get_all_valid()
+
+    assert set(snapshots) == {"1", "2"}
+    assert skipped == []

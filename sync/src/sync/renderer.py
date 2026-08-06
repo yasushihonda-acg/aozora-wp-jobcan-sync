@@ -21,11 +21,18 @@ def make_environment(templates_dir: Path | None = None) -> Environment:
     )
 
 
-def render_job_detail(job: JobOffer, *, env: Environment | None = None) -> str:
-    """Render a single job offer into HTML using `job_detail.html`."""
+def render_job_detail(
+    job: JobOffer, *, closed: bool = False, env: Environment | None = None
+) -> str:
+    """Render a single job offer into HTML using `job_detail.html`.
+
+    `closed=True` (B-8: `app.py` serving a `sync_status="closed"` snapshot)
+    swaps the apply CTA for a "募集終了しました" banner — the page itself
+    still renders (SEO / 被リンク維持, CLAUDE.md 方針), only the CTA changes.
+    """
     env = env or make_environment()
     template = env.get_template("job_detail.html")
-    return template.render(job=job, page_title=job.page_title)
+    return template.render(job=job, page_title=job.page_title, closed=closed)
 
 
 def render_job_list(page: JobListPage, *, env: Environment | None = None) -> str:

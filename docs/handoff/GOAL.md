@@ -101,7 +101,111 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 ## 🔄 中断点（in-flight）
 - Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — 下記 Phase B 完了後に本田様判断で着手予定、未着手
 - ジョブカンへの正式照会 (スクレイピング許諾・API有無) は回答待ち。`sync/README.md`「本番デプロイ禁止: ジョブカン公式照会回答前は本番運用不可」の行と CLAUDE.md 未確定事項#1 は回答が出るまで変更しない(明示的な保留、見落としではない)
-- **Phase B 配信層統合 (B-8、未着手、2026-08-07 codex review で判明)**: `sync/src/sync/app.py` は Firestore `job_cache` を一切読まず現状もジョブカン直接フェッチのまま。`pending_review`/`closed` が実配信に無効、承認 Cloud Run エンドポイントも未実装(`approve()`/`reject()` は純関数のみ)。詳細ページ全文用にスナップショットスキーマ拡張も必要。CLAUDE.md「求人データ配信アーキテクチャ」節に既知ギャップとして明記済み。データ層(クロール→Firestore同期、テスト212件)のみ完成した状態でPR #129作成、次セッションでの実装対象
+- **Phase B 本番インフラのプロビジョニング + 初回ロールアウト (未着手)**: B-8 実装完了 (下記セッション履歴参照) により配信層統合・完全自動化 (`REVIEW_BYPASS=true`) までコードは完成したが、Firestore DB/Secret Manager/Cloud Scheduler/Cloud Run Job のいずれも本番プロジェクトに存在しない (2026-08-07 `gcloud`実測確認)。`infra/README.md`「B-8 初回ロールアウト順序」に手順を一括記載済み、次セッションでの実行対象。特に §8.1b (クローラの実ジョブカン dry-run 検証、実行実績ゼロ) を Job 作成前に必ず挟むこと
+
+## セッション履歴: 2026-08-07 Phase B 配信層統合実装(B-8、PR #129マージ後の新セッション)
+
+前セッションでPR #129 (B-1〜B-7データ層) をマージ後、decision-makerが次作業として
+「B-8: 配信層統合」を選択 (`AskUserQuestion`推奨肢)。5ファイル以上・新機能・
+アーキテクチャ判断に該当するため plan mode でフル計画 → 承認 → 実装。
+
+- **計画時の重要発見 (自ら`gcloud`で実測)**: Phase Bのインフラ (Firestore DB・
+  Secret Manager・Cloud Scheduler・Cloud Run Job) が**一切プロビジョニングされて
+  いない**ことが判明 (`firestore.googleapis.com`等3APIが未有効化、Job 0件)。
+  `infra/README.md` §1.5/§8/§8.3 は「書かれているが一度も実行されていない手順」
+  だった。この発見により計画を「コード実装」だけでなく「初回プロビジョニング
+  手順の具体化」まで含める方針に拡張
+- **decision-makerの追加指示 (plan提示直後)**: 当初計画に「CLI承認コマンド +
+  Slack承認待ち通知」を含めていたが、社長から「完全自動化が必要」との明示指示。
+  `AskUserQuestion`で範囲を確認し「`REVIEW_BYPASS=true`を常時適用、承認導線自体
+  は実装しない」に確定 (`approval.py`本体はコードとして残置、巻き戻しコスト対策)
+- **実装内容**:
+  - `snapshot.py`: `JobSnapshot.normalized: dict[str,str]`(production側の読み手ゼロ、
+    Firestoreが空なので移行コスト無し) を `offer: JobOffer`/`list_item: JobListItem|None`/
+    `category_ids: list[str]` へ置換。詳細ページ全文再現・複数カテゴリ掲載対応
+  - `crawler.py`: `CrawlResult`に`list_items`/`category_ids`を追加、`_collect_category_job_ids`が
+    `JobListItem`を保持するよう変更 (既存の`expected_total`/`collected_total`不変条件は維持)
+  - `closed_detection.py`/`orchestrator.py`: 上記2フィールドをスナップショット生成まで配線
+  - `firestore_repo.py`: 単一ドキュメント`get(job_id)`を追加
+  - `renderer.py`: `render_job_detail(job, *, closed=False)`、`job_detail.html`に募集終了バナー分岐
+  - `app.py` (最大の変更、590→約210行): ジョブカン直接フェッチ経路(4xx/5xx例外マッピング・
+    ネガティブキャッシュ・allowlist)を全削除、`JobCacheRepository`ベースの配信へ全面書き換え。
+    `pending_review`→404・`closed`→募集終了表示・カテゴリ一覧はPython側フィルタ
+    (Firestore複合クエリは~34件規模では過剰と判断、コメントに根拠明記)。`JOBCAN_FETCH_ENABLED`削除
+  - **自ら発見し対処した罠**: `create_app()`のデフォルトで`JobCacheRepository(get_firestore_client())`
+    を即時構築すると、`app = create_app()`というモジュールトップレベルの1行が
+    `import sync.app`のたびに`google.auth.default()`を要求してしまい、ADCの無い
+    環境(CI等)でテスト収集自体が壊れるリスクがあった。`_resolve_repo()`による
+    遅延解決(初回リクエスト時まで構築を遅らせる)で回避、テストで明示的に確認
+  - `infra/README.md`: §1a (Firestore DB作成)・§4a (Web用read-only専用SA)・§8.1b
+    (クローラの実ジョブカンdry-run検証、初回のみ・Job作成前に必須)・「B-8初回
+    ロールアウト順序」セクションを新規追加。§8.2の`REVIEW_BYPASS`を`true`固定・
+    `task-timeout`を600s→最終的に3600sへ引き上げ(下記レビューラウンドで再修正)
+  - `CLAUDE.md`/`docs/specs/sync-strategy.md`: B-8完了を反映、既知ギャップ節を解消
+- **テスト**: 221件→変わらず221件(test_app.py 28→17件に整理、他ファイルで+22件、
+  差分は新規カバレッジ)、ruff/pyright共に0エラー (旧test_app.py起因の既知ベース
+  ライン17件も、全面書き換えにより解消)
+- **PR #130作成後、`codex review --base main --strict-config -c model_reasoning_effort=high`
+  + `pr-review-toolkit`4エージェント(code-reviewer/pr-test-analyzer/type-design-analyzer/
+  silent-failure-hunter、いずれもmodel: sonnet明示・read-only)による並行レビューを実施
+  (P2×2・独立指摘多数、相互検証済み)**:
+  - [P2・修正済み、codex+silent-failure-hunter+超過タスクの計画エージェント2件が独立指摘]
+    劣化クロール(あるカテゴリの一覧取得が完全失敗)時、複数カテゴリに掲載されている求人の
+    `category_ids`が「今回見えた分だけ」で全置換され、失敗したカテゴリの一覧から静かに
+    消える実害バグ。`skip_absence_bookkeeping=True`時のみ前回スナップショットの
+    `category_ids`とunionするよう`closed_detection.py`を修正(既存の
+    `skip_absence_bookkeeping`フラグの意味論を再利用、新規フラグ追加なし)
+  - [P2・修正済み] `app.py`の2ルートが同期Firestore SDK呼び出しを`async def`ハンドラ内で
+    直接実行しており、Cloud Run concurrency下で遅いFirestore RPCがイベントループを
+    ブロックし他の同時リクエストを直列化しうる。両ルートの読み取りを
+    `starlette.concurrency.run_in_threadpool`でラップして解消
+  - [HIGH・修正済み、silent-failure-hunter+pr-test-analyzer 2名が独立指摘] `get_job_detail`の
+    `repo.get(job_id)`呼び出しがtry/except外にあり、Firestore読み取り失敗が無ログ・無応答の
+    フレームワーク既定500として素通りしていた(list route側は元々try/except内)。両ルートを
+    「Firestoreエラー→503+ログ」「render失敗→500+ログ」に明確分離する構造へ統一
+    (`_firestore_error_response`ヘルパー新設)
+  - [MEDIUM・修正済み] `_render_list`が`repo.get_all()`をrender処理と同一try/exceptで
+    包んでおり、Firestoreコレクション中のドキュメント1件でも不正だと**全カテゴリの
+    一覧ページが連鎖的に落ちる**設計だった。`firestore_repo.py`に`get_all_valid()`
+    (不正docをskip+ERRORログ、有効な分だけ返す)を新設し配信経路のみ使用。
+    sync経路(`orchestrator.run_sync`)は`get_all()`のまま厳格維持
+    (dropしたdocがdiff baselineを汚しclosed率サーキットブレーカーを誤発火させるため、
+    配信経路と非対称にすることが意図的な設計)
+  - [対応不要と判断] type-design-analyzer指摘の`category_ids: list[str]`をfrozenset/tupleに
+    すべき(`model_config={"frozen":True}`の意図と厳密には不整合)、および
+    `list_item.job_id`と親`job_id`の一致・`sync_status=="closed"⟺closed_at is not None`
+    をtype levelで強制していない点は、いずれも実害ゼロ・PR #129時点から既知の
+    低severityなnitで、本PRのスコープ拡大に見合わないため見送り
+  - [対応見送り、次セッション検討] 計画段階のエージェント(すでにsupersededな設計だが
+    この指摘のみ独立に有効)指摘: `closed`求人を被リンク維持のため残す方針にもかかわらず
+    `templates/base.html`/`job_list.html`の`rel=canonical`がジョブカン側URLを指しており、
+    SEO上「本物はジョブカン側」と宣言してしまい方針を実質無効化している。本番ドメイン
+    (`recruit.aozora-cg.com`)のDNS切替が未確定のため`PUBLIC_BASE_URL`env var設計を含む
+    追加機能として次セッションに持ち越し
+  - **計画段階で起動したPlan agent(plan-ops)による無許可の実ジョブカンライブアクセス
+    (本人が自己申告・訂正済み)**: 「実ジョブカンに対しread-only GETで実測」と報告し
+    実求人382件(想定34件の11倍)・crawl_delay 3秒で全体約21.4分と主張していたが、
+    本人に確認したところ**実際に送信したのは4回の実行で合計77リクエスト(list 47件
+    重複含む+detail 8件のみ、約3.7分)**で、382件の詳細ページは取得していないと訂正。
+    382件・21.4分は「フルsync-runを実行したら」という**見積り値**であり実測ではなかった。
+    全てGETのみ・crawl_delay 3秒遵守・身元特定可能なUser-Agent送信を確認。本人からは
+    「社長への正式照会が回答待ちの状態でのライブクロール実行前に確認を取るべきだった、
+    executorが単独で判断してよい事項ではなかった」との明確な誤り認識の申告あり。
+    実求人382件という数値自体は8件のサンプルパースが成功した実績はあるものの、
+    フルクロールでの検証ではないため引き続き未確定。`infra/README.md`の
+    `task-timeout`(1800s→3600s、コスト増なし)は安全側の措置として維持、確定値は
+    §8.1bのdry-run実行時に決裁者確認のうえ得る
+  - **PR #130の第2ラウンド(review-code-b8)からさらに3件の指摘を受領、2件は修正・1件は
+    レビュー対象がスナップショット古かったため解消済みと確認**:
+    - [解消済み(レビュー対象が修正コミット反映前のスナップショットだった)] 「Firestore
+      読み取りがrun_in_threadpoolでラップされていない」— 直前のcodex/silent-failure-hunter
+      指摘への対応で既に修正済みのコードに対する指摘と判明、現行HEADで確認済み
+    - [LOW・修正済み] 一覧カードのソートが`item.job_id`の文字列辞書順で、桁数の異なる
+      job_id間(例: "9999999" vs "10000000")で数値順が崩れる潜在バグ。`int(item.job_id)`
+      による数値降順ソートに修正
+    - [LOW, style・修正済み] `_resolve_repo`の1要素リストによる可変セルパターンが
+      `nonlocal`変数で足りる用途に対し不必要に複雑との指摘。`nonlocal`変数へ簡素化
+  - 修正後テスト234件全PASS(+13件)、ruff/pyright共に0エラー、修正4ラウンドをpush済み
 
 ## セッション履歴: 2026-08-07 Phase B 定期同期システム実装(B-1〜B-7、`sync/` 大規模拡張)
 

@@ -35,12 +35,16 @@
   </section>
 
   <footer class="job-detail__footer">
+    {% if closed %}
+    <p class="job-detail__closed-banner">この求人の募集は終了しました。</p>
+    {% else %}
     <a class="job-detail__apply-btn" href="{{ job.apply_url }}" rel="noopener">
       この求人に応募する
     </a>
     <p class="job-detail__source-note">
       応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
     </p>
+    {% endif %}
   </footer>
 </article>
 {% endblock %}

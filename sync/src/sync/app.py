@@ -1,67 +1,55 @@
 """FastAPI proxy for the Jobcan public job pages.
 
-Phase 2A.2 — Cloud-Run-ready service that fronts the existing CLI parsing
-and rendering pipeline with HTTP endpoints, a TTL cache, structured logs,
-and a "fixture mode" kill switch for Phase 2B-0 deployment.
+Phase B B-8 — serves every request from Firestore `job_cache` (populated by
+the daily `sync-run` batch, `orchestrator.py`). **This service never fetches
+Jobcan at request time** — the Phase 2A.2 live-fetch-per-request design (with
+its Jobcan-error → HTTP-status mapping, allowlists, and negative cache) is
+gone; every one of those concerns existed to protect an upstream fetch that no
+longer happens here. A short positive-only HTML cache remains, because a
+`repo.get_all()` category-listing read is cheap but not free.
 
 # Routing surface
 
-    GET /healthz                      → 200 OK, no Jobcan touch
-    GET /jobs/{job_id}                → in-house HTML, fetched + cached
-    GET /jobs/?category_id=...        → in-house listing HTML
+    GET /healthz                      → 200 OK, no Firestore touch
+    GET /jobs/{job_id}                → in-house HTML from `job_cache/{job_id}`
+    GET /jobs/?category_id=...        → in-house listing, filtered from `job_cache`
 
-# Operational envs (read once at app construction)
+# Status → response mapping
 
-| env var                  | default | effect                                    |
-|--------------------------|---------|-------------------------------------------|
-| JOBCAN_FETCH_ENABLED     | true    | when false, return 503 instead of fetch   |
-|                          |         | (Phase 2B-0 deploys with false)           |
-| JOB_ID_ALLOWLIST         | ""      | comma-separated job_ids; empty = any      |
-| CATEGORY_ID_ALLOWLIST    | ""      | comma-separated category_ids; empty = any |
+| `JobSnapshot.sync_status` | Response                                    |
+|----------------------------|----------------------------------------------|
+| (no document / unknown id) | 404                                          |
+| `pending_review`            | 404 (never actually reached in practice —    |
+|                             | `REVIEW_BYPASS=true` is always on, B-8; kept |
+|                             | as a defensive default if that ever flips)   |
+| `active`                    | 200, normal render                          |
+| `closed`                    | 200, apply CTA replaced with a closed banner |
+|                             | (page stays up for SEO / 被リンク維持)         |
+| Firestore read failure      | 503, HTML page with a Jobcan fallback link   |
+| render failure (Jinja2 etc.)| 500, HTML page with a Jobcan fallback link   |
 
-# Exception → HTTP status mapping (Codex Q6)
-
-The mapping intentionally varies the response body per failure class so
-upstream incidents stay distinguishable in logs and UX. All responses
-add `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.
-
-| Exception                       | Status | Body                                       |
-|---------------------------------|--------|--------------------------------------------|
-| `JobcanClientError` (4xx)       | 302    | Redirect to Jobcan canonical URL           |
-| `JobcanClientError` (5xx / net) | 503    | HTML page with manual fallback link        |
-| `JobcanStructureChangeError`    | 500    | HTML page with manual fallback link        |
-| `JobcanValidationError`         | 500    | HTML page with manual fallback link        |
-| Allowlist reject                | 404    | Plain 404 (do not confirm id existence)    |
-| Fetch disabled                  | 503    | HTML page noting maintenance               |
-
-Negative cache: 4xx and 5xx responses are stored in a short-TTL cache so
-a flapping Jobcan endpoint does not amplify into per-request fetches.
+All responses add `Cache-Control: no-store` and `X-Robots-Tag: noindex,
+nofollow` via middleware. Every Firestore read happens inside
+`run_in_threadpool` — the SDK is synchronous, and running it directly on the
+event loop would serialize every concurrent request behind it (2026-08-07
+codex second-opinion review finding).
 """
 
 from __future__ import annotations
 
 import logging
-import os
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import ValidationError as PydanticValidationError
+from fastapi.responses import HTMLResponse
 from starlette.concurrency import run_in_threadpool
 
 from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
-from .jobcan_client import JobcanClient, JobcanClientConfig
-from .models import (
-    JobcanClientError,
-    JobcanStructureChangeError,
-    JobcanValidationError,
-)
-from .parser import parse_job_detail, parse_job_list
+from .firestore_repo import JobCacheRepository, get_firestore_client
+from .models import JobListItem, JobListPage
 from .renderer import render_error, render_job_detail, render_job_list
+from .snapshot import JobSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -74,177 +62,72 @@ JOBCAN_LIST_FALLBACK = (
     "?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
 )
 
-def _parse_csv_env(value: str) -> frozenset[str]:
-    """Parse a comma-separated env var into a frozenset of trimmed entries.
-
-    Empty string yields the empty set, which the route layer interprets as
-    "no allowlist enforced". This separates the "explicitly empty" case
-    from "unset" cleanly at the type level.
-    """
-    if not value:
-        return frozenset()
-    return frozenset(entry.strip() for entry in value.split(",") if entry.strip())
-
-
-@dataclass(frozen=True)
-class AppConfig:
-    """Application configuration resolved at app construction.
-
-    Pulled into a frozen dataclass so the route layer can rely on stable
-    settings for the request lifetime; env mutation mid-request does not
-    affect in-flight handlers.
-    """
-
-    fetch_enabled: bool
-    job_id_allowlist: frozenset[str]
-    category_id_allowlist: frozenset[str]
-
-    @classmethod
-    def from_env(cls) -> AppConfig:
-        return cls(
-            fetch_enabled=os.environ.get("JOBCAN_FETCH_ENABLED", "true").lower() != "false",
-            job_id_allowlist=_parse_csv_env(os.environ.get("JOB_ID_ALLOWLIST", "")),
-            category_id_allowlist=_parse_csv_env(os.environ.get("CATEGORY_ID_ALLOWLIST", "")),
-        )
-
-
-def _allowed(value: str, allowlist: frozenset[str]) -> bool:
-    """Empty allowlist = unrestricted (Phase 2A.2 default).
-
-    Phase 2B-1 sets non-empty allowlists to defeat ID-enumeration attacks
-    (Codex Q5/Q8). The "empty = all" convention keeps tests and local CLI
-    use cheap.
-    """
-    return not allowlist or value in allowlist
-
 
 def _error_html(title: str, message: str, fallback_url: str) -> str:
-    # Phase 2A.3 cleanup (code-review #5): delegate to the Jinja2-backed
-    # `render_error` in renderer.py so autoescape covers user-controlled
-    # message bodies (e.g. selector lists in JobcanStructureChangeError).
     return render_error(title=title, message=message, fallback_url=fallback_url)
-
-
-def _pre_fetch_check(
-    *,
-    kind: str,
-    resource_id: str,
-    log_key: str,
-    fallback_url: str,
-    allowlist: frozenset[str],
-    fetch_enabled: bool,
-    cache: Cache,
-    maintenance_message: str,
-) -> Response | None:
-    """Validate, allowlist-filter, and cache-lookup before any Jobcan fetch.
-
-    Phase 2A.3 cleanup (code-review #3): the detail and list endpoints used
-    to duplicate this six-step gate (id check → allowlist → cache hit →
-    negative cache → fetch disabled → proceed) almost verbatim. Centralising
-    here means new pre-fetch behaviour (e.g. per-IP rate-limit, request id)
-    drops into one place. Returns:
-
-    - `HTMLResponse` / `RedirectResponse` when the request can short-circuit
-      (cache hit, negative cache hit, fetch-disabled maintenance)
-    - `None` when the caller should proceed to fetch
-
-    Also raises `HTTPException(404)` for invalid ids / allowlist rejects so
-    enumeration probes can't distinguish either case from a real 404.
-    """
-    if not is_ascii_digit_id(resource_id):
-        raise HTTPException(status_code=404, detail="not found")
-
-    if not _allowed(resource_id, allowlist):
-        _logger.info("allowlist reject", extra={"kind": kind, log_key: resource_id})
-        raise HTTPException(status_code=404, detail="not found")
-
-    cached = cache.get(kind, resource_id)
-    if cached is not None:
-        _logger.info("cache hit", extra={"kind": kind, log_key: resource_id})
-        return HTMLResponse(content=cached)
-
-    neg_status = cache.get_negative(kind, resource_id)
-    if neg_status is not None:
-        return _render_negative(neg_status, fallback_url, kind=kind, key=resource_id)
-
-    if not fetch_enabled:
-        _logger.info(
-            "fetch disabled, returning maintenance page",
-            extra={"kind": kind, log_key: resource_id},
-        )
-        return HTMLResponse(
-            content=_error_html(
-                title="メンテナンス中",
-                message=maintenance_message,
-                fallback_url=fallback_url,
-            ),
-            status_code=503,
-        )
-
-    return None
 
 
 def _apply_security_headers(response: Response) -> Response:
     """Stamp the response with the headers every proxy reply must carry.
 
-    Cache-Control prevents intermediaries from holding error pages or stale
-    redirects past the cache TTL; X-Robots-Tag keeps the dev URL out of
-    search indexes during Phase 2B-0/2B-1 (Codex Q8).
+    Cache-Control prevents intermediaries from holding pages past this
+    service's own short cache TTL; X-Robots-Tag keeps non-canonical/preview
+    URLs out of search indexes.
     """
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
 
+def _rewrite_detail_url(item: JobListItem, job_id: str) -> JobListItem:
+    """Point a stored listing card at this service's own detail route.
+
+    `JobListItem.detail_url` is persisted as the absolute Jobcan URL (the
+    crawler's parse output is never rewritten before storage, so a future
+    consumer of the raw snapshot always sees what Jobcan actually served).
+    The proxy rewrites it only at render time, so card clicks stay in-house
+    instead of bouncing back to Jobcan.
+    """
+    return item.model_copy(update={"detail_url": f"/jobs/{job_id}"})
+
+
 def create_app(
     *,
-    config: AppConfig | None = None,
     cache: Cache | None = None,
-    client_factory: type[JobcanClient] = JobcanClient,
+    repo: JobCacheRepository | None = None,
 ) -> FastAPI:
     """Construct the FastAPI app.
 
-    Dependency-injection-friendly: tests pass a mocked client_factory and
-    a fresh InMemoryCache. Production constructs everything from env vars.
+    Dependency-injection-friendly: tests pass a fake `repo` (e.g. backed by
+    `tests.conftest.FakeFirestoreClient`) and a fresh `InMemoryCache`.
+    Production leaves `repo=None` — resolved lazily (see `_resolve_repo`)
+    rather than built here, so `app = create_app()` at import time never
+    touches `google.auth.default()`. `get_firestore_client()` is only ever
+    called elsewhere (`cli.py`) inside a function body, never at module
+    scope; constructing a real `firestore.Client` eagerly here would make
+    `import sync.app` itself require GCP credentials — breaking test
+    collection and any tooling that imports this module without ADC set up.
     """
-    app_config = config or AppConfig.from_env()
     proxy_cache: Cache = cache or InMemoryCache(CacheConfig())
+    _injected_repo = repo
+    _lazy_repo: JobCacheRepository | None = None
 
-    # Phase 2A.3 cleanup (code-review #6): single long-lived JobcanClient so
-    # the underlying httpx.Client keeps its connection pool, TLS session, and
-    # DNS cache across requests. Previously the proxy constructed one per
-    # request inside `_do_fetch`, paying TLS handshake cost on every fetch
-    # under Cloud Run concurrency. Closed via the lifespan shutdown phase so
-    # tests that build multiple apps in one process don't leak sockets.
-    #
-    # `crawl_delay=0.0`: Phase B's default `JobcanClientConfig` now carries a
-    # 3s crawl-delay for the daily batch sync (`crawler.py`'s politeness
-    # requirement). This client is a DIFFERENT use case — it's shared across
-    # every concurrent live user request for the app's entire lifetime, not
-    # one sequential crawl run. Leaving the default would have serialized
-    # every uncached proxy request through a 3-second-apart gate (and done so
-    # racily under threadpool concurrency, since `_wait_for_crawl_delay` isn't
-    # lock-protected) — a real regression this second-opinion review caught.
-    proxy_client = client_factory(JobcanClientConfig(crawl_delay=0.0))
-
-    @asynccontextmanager
-    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        try:
-            yield
-        finally:
-            proxy_client.close()
+    def _resolve_repo() -> JobCacheRepository:
+        nonlocal _lazy_repo
+        if _injected_repo is not None:
+            return _injected_repo
+        if _lazy_repo is None:
+            _lazy_repo = JobCacheRepository(get_firestore_client())
+        return _lazy_repo
 
     app = FastAPI(
         title="Aozora Jobcan Proxy",
-        description="Phase 2A.2 — Cloud-Run-ready Jobcan public-page proxy",
-        version="0.2.0",
-        lifespan=_lifespan,
+        description="Phase B B-8 — Firestore-backed in-house job page proxy",
+        version="0.3.0",
     )
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
-        # Every response — success, error, redirect — gets the proxy security
-        # headers. Centralising here avoids forgetting on a new endpoint.
         response = await call_next(request)
         return _apply_security_headers(response)
 
@@ -254,80 +137,95 @@ def create_app(
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def get_job_detail(job_id: str) -> Response:
-        fallback_url = JOBCAN_DETAIL_FALLBACK.format(job_id=job_id)
-        early = _pre_fetch_check(
-            kind="detail",
-            resource_id=job_id,
-            log_key="job_id",
-            fallback_url=fallback_url,
-            allowlist=app_config.job_id_allowlist,
-            fetch_enabled=app_config.fetch_enabled,
-            cache=proxy_cache,
-            maintenance_message=(
-                "求人情報は現在準備中です。Jobcan の元ページを直接ご覧ください。"
-            ),
-        )
-        if early is not None:
-            return early
-        return await _fetch_and_render_detail(
-            client=proxy_client,
-            job_id=job_id,
-            fallback_url=fallback_url,
-            cache=proxy_cache,
-        )
+        if not is_ascii_digit_id(job_id):
+            raise HTTPException(status_code=404, detail="not found")
+
+        cached = proxy_cache.get_detail(job_id)
+        if cached is not None:
+            _logger.info("cache hit", extra={"kind": "detail", "job_id": job_id})
+            return HTMLResponse(content=cached)
+
+        try:
+            snapshot = await run_in_threadpool(lambda: _resolve_repo().get(job_id))
+        except Exception:
+            _logger.exception("firestore read error", extra={"kind": "detail", "job_id": job_id})
+            return _firestore_error_response(JOBCAN_DETAIL_FALLBACK.format(job_id=job_id))
+
+        if snapshot is None or snapshot.sync_status == "pending_review":
+            raise HTTPException(status_code=404, detail="not found")
+
+        rendered = _render_detail(snapshot, job_id=job_id)
+        if rendered is None:
+            fallback_url = JOBCAN_DETAIL_FALLBACK.format(job_id=job_id)
+            return HTMLResponse(
+                content=_error_html(
+                    title="ページを表示できません",
+                    message="一時的な問題が発生しました。元のページをご覧ください。",
+                    fallback_url=fallback_url,
+                ),
+                status_code=500,
+            )
+
+        proxy_cache.set_detail(job_id, rendered)
+        _logger.info("cache miss → rendered", extra={"kind": "detail", "job_id": job_id})
+        return HTMLResponse(content=rendered)
 
     @app.get("/jobs/", response_class=HTMLResponse)
     async def get_job_list(
         category_id: Annotated[str, Query(..., min_length=1, max_length=16)],
     ) -> Response:
-        fallback_url = JOBCAN_LIST_FALLBACK.format(category_id=category_id)
-        early = _pre_fetch_check(
-            kind="list",
-            resource_id=category_id,
-            log_key="category_id",
-            fallback_url=fallback_url,
-            allowlist=app_config.category_id_allowlist,
-            fetch_enabled=app_config.fetch_enabled,
-            cache=proxy_cache,
-            maintenance_message=(
-                "求人一覧は現在準備中です。Jobcan の元ページを直接ご覧ください。"
-            ),
-        )
-        if early is not None:
-            return early
-        return await _fetch_and_render_list(
-            client=proxy_client,
-            category_id=category_id,
-            fallback_url=fallback_url,
-            cache=proxy_cache,
-        )
+        if not is_ascii_digit_id(category_id):
+            raise HTTPException(status_code=404, detail="not found")
+
+        cached = proxy_cache.get_list(category_id)
+        if cached is not None:
+            _logger.info("cache hit", extra={"kind": "list", "category_id": category_id})
+            return HTMLResponse(content=cached)
+
+        try:
+            snapshots, skipped = await run_in_threadpool(lambda: _resolve_repo().get_all_valid())
+        except Exception:
+            _logger.exception(
+                "firestore read error", extra={"kind": "list", "category_id": category_id}
+            )
+            return _firestore_error_response(JOBCAN_LIST_FALLBACK.format(category_id=category_id))
+
+        if skipped:
+            _logger.error(
+                "list route: skipped malformed job_cache docs",
+                extra={"category_id": category_id, "skipped_job_ids": skipped},
+            )
+
+        rendered = _render_list(snapshots, category_id=category_id)
+        if rendered is None:
+            fallback_url = JOBCAN_LIST_FALLBACK.format(category_id=category_id)
+            return HTMLResponse(
+                content=_error_html(
+                    title="ページを表示できません",
+                    message="一時的な問題が発生しました。元のページをご覧ください。",
+                    fallback_url=fallback_url,
+                ),
+                status_code=500,
+            )
+
+        proxy_cache.set_list(category_id, rendered)
+        _logger.info("cache miss → rendered", extra={"kind": "list", "category_id": category_id})
+        return HTMLResponse(content=rendered)
 
     return app
 
 
-def _render_negative(
-    status_code: int, fallback_url: str, *, kind: str, key: str
-) -> Response:
-    """Render a cached negative-status response.
-
-    4xx returns the redirect (the upstream told us "not here", let the user
-    confirm at the source). 5xx / network failures return a 503 HTML page —
-    the redirect hides the outage, the HTML surfaces it with a manual link.
-    """
-    _logger.info(
-        "negative cache hit",
-        extra={"kind": kind, "key": key, "negative_status": status_code},
-    )
-    if 400 <= status_code < 500:
-        # 4xx negative cache: redirect to Jobcan canonical (cached 302).
-        # Cache-Control: no-store is added by middleware so browsers don't
-        # promote the redirect across cache windows after Jobcan recovers.
-        return RedirectResponse(url=fallback_url, status_code=302)
+def _firestore_error_response(fallback_url: str) -> Response:
+    """503 page for a Firestore read failure — distinct from a render
+    failure (500) so an operator scanning logs can tell "Firestore is down"
+    apart from "this one job's/category's data is malformed"
+    (2026-08-07 second-opinion review finding: the detail route previously
+    let this propagate as an unhandled, unlogged exception)."""
     return HTMLResponse(
         content=_error_html(
             title="一時的に表示できません",
             message=(
-                "Jobcan 側に問題が発生している可能性があります。"
+                "データの取得に問題が発生している可能性があります。"
                 "少し時間をおいてから再度お試しください。"
             ),
             fallback_url=fallback_url,
@@ -336,251 +234,69 @@ def _render_negative(
     )
 
 
-async def _fetch_and_render_detail(
-    *,
-    client: JobcanClient,
-    job_id: str,
-    fallback_url: str,
-    cache: Cache,
-) -> Response:
-    """Fetch + parse + render one job detail page, with full exception mapping."""
+def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
+    """Render one snapshot's detail page. `None` signals a render failure.
 
-    def _do_fetch() -> tuple[str, str]:
-        # JobcanClient is sync (httpx.Client). Wrapping the network call in a
-        # threadpool keeps the FastAPI event loop free under concurrency
-        # (Codex Q4). The client is long-lived (Phase 2A.3 #6), so its
-        # connection pool / TLS session is reused across requests.
-        return client.fetch_job_detail(job_id)
-
-    try:
-        source_url, html = await run_in_threadpool(_do_fetch)
-    except JobcanClientError as exc:
-        return _handle_client_error(
-            exc, fallback_url, cache=cache, kind="detail", key=job_id
-        )
-
-    try:
-        offer = parse_job_detail(html, source_url, job_id=job_id)
-        rendered = render_job_detail(offer)
-    except JobcanStructureChangeError as exc:
-        _logger.error(
-            "structure change",
-            extra={"kind": "detail", "job_id": job_id, "missing": exc.missing},
-        )
-        cache.set_negative("detail", job_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="Jobcan のページ構造が変わった可能性があります。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-    except JobcanValidationError as exc:
-        _logger.error(
-            "validation failed",
-            extra={"kind": "detail", "job_id": job_id, "field_errors": exc.field_errors},
-        )
-        cache.set_negative("detail", job_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="求人情報の取得に失敗しました。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-    except PydanticValidationError as exc:
-        # parse_job_detail's domain checks raise JobcanValidationError for empty
-        # fields, but the Pydantic validators on JobOffer (apply_url / source_url
-        # http(s) prefix) still fire for malformed values that slipped past the
-        # domain checks — e.g. a malicious Jobcan HTML returning `javascript:...`
-        # as the apply link. Without this catch the proxy returns FastAPI's
-        # default 500 and skips negative caching, amplifying load on Jobcan.
-        _logger.error(
-            "pydantic validation failed",
-            extra={"kind": "detail", "job_id": job_id, "errors": exc.errors()},
-        )
-        cache.set_negative("detail", job_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="求人情報の検証に失敗しました。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-    except Exception:
-        # Last-resort catch for render-time failures (Jinja2 TemplateError,
-        # AttributeError on malformed JobOffer fields, etc.). The CLI path
-        # (cli.py L131) already does this; mirroring here keeps the proxy
-        # from leaking stack traces and ensures the negative cache absorbs
-        # the failure so connection floods do not amplify the incident.
-        _logger.exception(
-            "render or unexpected error",
-            extra={"kind": "detail", "job_id": job_id},
-        )
-        cache.set_negative("detail", job_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="一時的な問題が発生しました。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-
-    cache.set_detail(job_id, rendered)
-    _logger.info("cache miss → fetched", extra={"kind": "detail", "job_id": job_id})
-    return HTMLResponse(content=rendered)
-
-
-async def _fetch_and_render_list(
-    *,
-    client: JobcanClient,
-    category_id: str,
-    fallback_url: str,
-    cache: Cache,
-) -> Response:
-    def _do_fetch() -> tuple[str, str]:
-        return client.fetch_job_list(category_id)
-
-    try:
-        source_url, html = await run_in_threadpool(_do_fetch)
-    except JobcanClientError as exc:
-        return _handle_client_error(
-            exc, fallback_url, cache=cache, kind="list", key=category_id
-        )
-
-    try:
-        page = parse_job_list(html, source_url)
-        rendered = render_job_list(page)
-    except JobcanStructureChangeError as exc:
-        _logger.error(
-            "structure change",
-            extra={"kind": "list", "category_id": category_id, "missing": exc.missing},
-        )
-        cache.set_negative("list", category_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="Jobcan のページ構造が変わった可能性があります。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-    except JobcanValidationError as exc:
-        # parse_job_list does not currently raise this, but the symmetry with
-        # the detail path matters: when Phase 2B adds list-level field validation
-        # (e.g. requiring non-empty `address` on each card), this handler must
-        # already exist. Asymmetry was a finding in Phase 2A.2 code review.
-        _logger.error(
-            "validation failed",
-            extra={
-                "kind": "list",
-                "category_id": category_id,
-                "field_errors": exc.field_errors,
-            },
-        )
-        cache.set_negative("list", category_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="求人情報の取得に失敗しました。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-    except PydanticValidationError as exc:
-        _logger.error(
-            "pydantic validation failed",
-            extra={
-                "kind": "list",
-                "category_id": category_id,
-                "errors": exc.errors(),
-            },
-        )
-        cache.set_negative("list", category_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="求人情報の検証に失敗しました。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-    except Exception:
-        _logger.exception(
-            "render or unexpected error",
-            extra={"kind": "list", "category_id": category_id},
-        )
-        cache.set_negative("list", category_id, 500)
-        return HTMLResponse(
-            content=_error_html(
-                title="ページを表示できません",
-                message="一時的な問題が発生しました。元のページをご覧ください。",
-                fallback_url=fallback_url,
-            ),
-            status_code=500,
-        )
-
-    cache.set_list(category_id, rendered)
-    _logger.info(
-        "cache miss → fetched", extra={"kind": "list", "category_id": category_id}
-    )
-    return HTMLResponse(content=rendered)
-
-
-def _classify_client_error(exc: JobcanClientError) -> int:
-    """Translate a JobcanClientError into the HTTP status the proxy returns.
-
-    Phase 2A.3 cleanup (code-review #7): JobcanClientError now carries
-    `status_code` as a typed attribute set by jobcan_client.py at raise time.
-    The earlier `_classify_client_error` parsed it back out of the message
-    string; this version dispatches on the attribute directly so the proxy
-    breaks loudly (mypy / runtime) if jobcan_client.py ever forgets to set
-    a code, instead of silently degrading to 500.
-
-    Network failures (status_code=None) map to 503 because the canonical
-    Jobcan URL is just as unreachable for the user — a redirect would push
-    them onto the same network they can't reach.
+    Render-time failures (Jinja2 `TemplateError`, an unexpected attribute
+    error) should be rare — `snapshot.offer` is already a validated
+    `JobOffer` — but the CLI (`cli.py render`) and the old fetch-per-request
+    proxy both guarded this call, so this keeps the same defensive posture
+    instead of leaking a stack trace to the client.
     """
-    if exc.status_code is None:
-        return 503
-    return exc.status_code
+    try:
+        return render_job_detail(snapshot.offer, closed=snapshot.sync_status == "closed")
+    except Exception:
+        _logger.exception("render error", extra={"kind": "detail", "job_id": job_id})
+        return None
 
 
-def _handle_client_error(
-    exc: JobcanClientError,
-    fallback_url: str,
-    *,
-    cache: Cache,
-    kind: str,
-    key: str,
-) -> Response:
-    status = _classify_client_error(exc)
-    cache.set_negative(kind, key, status)
-    if 400 <= status < 500:
-        _logger.info(
-            "jobcan 4xx → redirect to canonical",
-            extra={"kind": kind, "key": key, "upstream_status": status},
+def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str | None:
+    """Build and render the listing page for one category from already-read
+    snapshots, or `None` on a render failure.
+
+    Deliberately pure (no Firestore access) — the caller reads the
+    collection separately (`get_all_valid()`, off the event loop) so a
+    Firestore-read failure and a template-render failure log and respond
+    differently (503 vs 500) instead of being conflated under one bare
+    `except Exception` (2026-08-07 second-opinion review finding).
+
+    Filtering in Python rather than a Firestore query: a composite query
+    (`category_ids array_contains X and sync_status == active`) would need a
+    manually-provisioned composite index in a project that deliberately has
+    no Terraform/IaC (`.claude/memory/feedback_overengineering_recovery_2026-06-18.md`),
+    and the catalogue is small enough that reading the whole collection
+    through the list cache (`CacheConfig.list_ttl`) stays cheap. Revisit this
+    if the catalogue grows into the thousands — the real posting count has
+    not yet been confirmed by an actual production `sync-run` (B-8 was
+    implemented and reviewed before any Cloud Run Job ever executed;
+    `infra/README.md` §8.1b's dry-run is where that gets measured for real).
+    """
+    try:
+        cards = [
+            _rewrite_detail_url(snapshot.list_item, snapshot.job_id)
+            for snapshot in snapshots.values()
+            if category_id in snapshot.category_ids
+            and snapshot.sync_status == "active"
+            and snapshot.list_item is not None
+        ]
+        # Numeric, not lexicographic (str sort would put "10000000" before
+        # "9999999") — job_id has no fixed digit width. Descending as a
+        # deterministic newest-first proxy: Firestore has no listing-order
+        # info to replicate Jobcan's own display order, and job_ids increase
+        # monotonically (review-code-b8 second-opinion finding).
+        cards.sort(key=lambda item: int(item.job_id), reverse=True)
+        page = JobListPage(
+            source_url=JOBCAN_LIST_FALLBACK.format(category_id=category_id),
+            category_id=category_id,
+            items=cards,
+            total_count=len(cards),
+            last_page=1,
+            next_url=None,
         )
-        return RedirectResponse(url=fallback_url, status_code=302)
-    _logger.warning(
-        "jobcan 5xx / network → maintenance page",
-        extra={"kind": kind, "key": key, "upstream_status": status},
-    )
-    return HTMLResponse(
-        content=_error_html(
-            title="一時的に表示できません",
-            message=(
-                "Jobcan 側に問題が発生している可能性があります。"
-                "少し時間をおいてから再度お試しください。"
-            ),
-            fallback_url=fallback_url,
-        ),
-        status_code=503,
-    )
+        return render_job_list(page)
+    except Exception:
+        _logger.exception("render error", extra={"kind": "list", "category_id": category_id})
+        return None
 
 
 # ASGI entrypoint for `uvicorn sync.app:app` / Docker CMD.

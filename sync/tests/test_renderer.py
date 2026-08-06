@@ -37,6 +37,20 @@ class TestRenderRealJob:
         escaped = SAMPLE_SOURCE_URL.replace("&", "&amp;")
         assert escaped in html
 
+    def test_closed_true_hides_apply_cta_and_shows_banner(self, sample_html: str) -> None:
+        """B-8: a `sync_status="closed"` snapshot still gets a detail page
+        (SEO / 被リンク維持), but must not offer a dead apply link."""
+        offer = parse_job_detail(sample_html, SAMPLE_SOURCE_URL, SAMPLE_JOB_ID)
+        html = render_job_detail(offer, closed=True)
+        assert "job-detail__apply-btn" not in html
+        assert "募集は終了しました" in html
+
+    def test_closed_false_is_the_default(self, sample_html: str) -> None:
+        offer = parse_job_detail(sample_html, SAMPLE_SOURCE_URL, SAMPLE_JOB_ID)
+        html = render_job_detail(offer)
+        assert "job-detail__apply-btn" in html
+        assert "募集終了" not in html
+
 
 class TestRenderJobList:
     """Phase 2A.1b — render_job_list smoke tests."""
