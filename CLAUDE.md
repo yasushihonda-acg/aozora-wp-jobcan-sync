@@ -151,21 +151,21 @@ Firestore DB自体・Secret Manager・Cloud Scheduler・Cloud Run Job `aozora-sy
 ## 未確定事項 (Phase A 中に詰めたい)
 
 優先順:
-1. ジョブカンへの公式照会結果
-2. WP ホスティング (Cloud Run 自前 vs マネージド WP)
-3. 個人情報棚卸し → ismap 適用範囲
-4. 決裁者の特定 (経営層 / 採用部門 / 法務、人数)
-5. 公開希望時期
-6. キービジュアル素材の最終形 (現状: nano-banana 生成、本番取材するか?)
-7. スタッフインタビュー原稿 (現状ダミー、本番取材時期)
-8. ジョブカン ATS 契約プラン (LITE / STANDARD / PROFESSIONAL)
-9. ACF Pro / WP ライセンス予算
-10. GCP / WP 月額予算上限
-11. 法務レビュー所要期間
+1. WP ホスティング (Cloud Run 自前 vs マネージド WP)
+2. 個人情報棚卸し → ismap 適用範囲
+3. 決裁者の特定 (経営層 / 採用部門 / 法務、人数)
+4. 公開希望時期
+5. キービジュアル素材の最終形 (現状: nano-banana 生成、本番取材するか?)
+6. スタッフインタビュー原稿 (現状ダミー、本番取材時期)
+7. ジョブカン ATS 契約プラン (LITE / STANDARD / PROFESSIONAL)
+8. ACF Pro / WP ライセンス予算
+9. GCP / WP 月額予算上限
+10. 法務レビュー所要期間
 
 解決済 (履歴):
 - aozora-cg.com 実物カラー → `#00c4cc` 確定 (セッション中)
 - GitHub Pages 公開先 → `yasushihonda-acg/aozora-wp-jobcan-sync` (セッション中)
+- ジョブカンへの公式照会結果 → 2026-08-07、複数AIとの事実確認により「自社契約ジョブカンの自社情報を自社サイトに表示する通常利用」に対する規約照会 trigger 自体が過剰対応と判明 (2026-06-18 `feedback_overengineering_recovery_2026-06-18.md` の巻き戻し方針の適用漏れ、Phase B本番展開のtriggerはdecision-makerの明示的な開始指示のみに一本化)
 
 ## グローバル方針との関係
 

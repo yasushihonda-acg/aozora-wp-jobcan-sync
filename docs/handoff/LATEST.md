@@ -4,7 +4,7 @@
 
 **社長の「看護職が入ってない」指摘を起点に、Phase A静的モックの単発修正では同種の不整合が再発するとの本田様の判断で、ジョブカン定期同期システム(Phase B)を本格実装。データ層(B-1〜B-7、クロール→Firestore差分検出→closed判定→承認ステータス計算、PR #129)に続き、配信層統合(B-8、PR #130)で `app.py` をジョブカン直接フェッチからFirestore単一ソース配信へ全面書き換え。承認導線は決裁者判断で「完全自動化(`REVIEW_BYPASS=true`常時適用)」に確定し、CLI承認コマンド・Slack承認待ち通知は不要と判明。両PRとも `codex review` + `pr-review-toolkit`複数エージェントによる多段レビューを経て番号単位認可でマージ・本番main反映済み。**
 
-**コードは完成したが、本番インフラは一切プロビジョニングされていない**(Firestore DB・Secret Manager・Cloud Scheduler・Cloud Run Jobいずれも未作成、`gcloud`実測確認)。加えて、ジョブカンへの正式照会は回答待ちで `sync/README.md`「本番デプロイ禁止」が現在も有効なため、次セッションでの本番展開は**decision-makerの明示的な開始指示 + ジョブカンからの回答**の両方を待つ状態。
+**コードは完成したが、本番インフラは一切プロビジョニングされていない**(Firestore DB・Secret Manager・Cloud Scheduler・Cloud Run Jobいずれも未作成、`gcloud`実測確認)。次セッションでの本番展開は**decision-makerの明示的な開始指示**を待つ状態(2026-08-07 追記訂正: 「ジョブカン正式照会回答待ち」を追加条件としていたが、2026-06-18の内部方針転換 `feedback_overengineering_recovery_2026-06-18.md` の適用漏れと判明し撤回。`sync/README.md`「本番デプロイ禁止」行も削除済み)。
 
 🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 🔗 チャットボットAPI: https://aozora-chatbot-1084369586348.asia-northeast1.run.app
@@ -33,13 +33,13 @@
 ## 次のアクション
 
 ### 即着手タスク
-即着手タスクなし — 唯一の主要な残作業(Phase B本番インフラのプロビジョニング + 初回ロールアウト)が `sync/README.md`「本番デプロイ禁止: ジョブカン公式照会回答前は本番運用不可」に直接抵触するため、技術的に実行可能でも着手不可
+即着手タスクなし — 唯一の主要な残作業(Phase B本番インフラのプロビジョニング + 初回ロールアウト)は技術的には実行可能だが、decision-makerの明示的な開始指示待ち
 
 ### 条件待ち（明示 trigger 付き）
 
 | # | 項目 | trigger（充足条件） | 充足時のタスク | 充足確認方法 |
 |---|------|------------------|--------------|------------|
-| 1 | [GOAL.md] Phase B 本番インフラのプロビジョニング + 初回ロールアウト | ①ジョブカンからの正式照会回答 かつ ②decision-makerの明示的な開始指示(実クロール・GCPリソース作成は状態変更操作のため番号単位認可対象。本セッションのplan-ops誤判断も踏まえ、read-onlyのdry-run含め事前確認が必要) | `infra/README.md`「B-8 初回ロールアウト順序」1〜6を順次実行(API有効化→Firestore DB作成→§8.1bクローラdry-run検証→Job作成・実行→Service新デプロイ→Scheduler作成) | 本田様への確認 + `sync/README.md`該当行の削除有無 |
+| 1 | [GOAL.md] Phase B 本番インフラのプロビジョニング + 初回ロールアウト | decision-makerの明示的な開始指示(実クロール・GCPリソース作成は状態変更操作のため番号単位認可対象。本セッションのplan-ops誤判断も踏まえ、read-onlyのdry-run含め事前確認が必要。**2026-08-07訂正: 「ジョブカン正式照会回答待ち」も条件としていたが2026-06-18方針転換の適用漏れと判明し撤回、`sync/README.md`該当行も削除済み**) | `infra/README.md`「B-8 初回ロールアウト順序」1〜6を順次実行(API有効化→Firestore DB作成→§8.1bクローラdry-run検証→Job作成・実行→Service新デプロイ→Scheduler作成) | 本田様への確認 |
 | 2 | [GOAL.md] Phase A 看護職カテゴリ不整合の静的モック修正 | 本田様の着手判断(Phase B完了後に判断予定と既に合意済み) | `mockup/jobs-nurse.html`等のcategory_id誤マッピング(18984↔18983)を修正 | 本田様への確認 |
 | 3 | [GOAL.md] career-ladder Lv.2〜4年収帯確定 | 決裁者から対応方針の回答(前セッションから継続、`career-ladder-salary-report.html`送信済み) | 回答内容に応じて`mockup/index.html`該当箇所を更新 | 本田様への確認 |
 
@@ -65,8 +65,8 @@
 - OPEN PR: 0件 / active Issue: 0件
 - Git: `docs/handoff/LATEST.md`更新分のみ未コミット（本ハンドオフPRで解消予定）、それ以外clean、`main`は`origin/main`と同期済み
 - CI: 直近3件 `pages build and deployment` 全て success
-- 即着手タスク: 0件 / 条件待ち: 3件(いずれも decision-maker 判断または外部照会回答待ち)
+- 即着手タスク: 0件 / 条件待ち: 3件(いずれも decision-maker 判断待ち)
 - 残留プロセス: なし(検出された node/npm プロセスはLM Studio・drawio MCP等、本セッション・本プロジェクトと無関係な既存プロセス)
-- 既知の blocker: あり — `sync/README.md`「本番デプロイ禁止」がジョブカン正式照会回答まで有効、Phase B本番展開はこの解除が前提
+- 既知の blocker: なし(2026-08-07追記訂正: `sync/README.md`「本番デプロイ禁止」行は2026-06-18方針転換の適用漏れと判明し削除済み。Phase B本番展開はdecision-makerの明示的な開始指示のみが条件)
 - 同根再発スキャン(§4.6): 本セッションの修正PR(#129, #130)はいずれもPhase B新設コードへの初回実装+レビュー起因の修正であり、過去7日のarchiveに同一トピック(Firestore配信・crawl系)の記録なし。同根候補0件
 - 対症療法判定(§4.7): 該当なし — 両PRの修正は`codex review`/`pr-review-toolkit`による設計レベルの指摘(データ不整合・イベントループブロック・エラーハンドリング非対称性)への対応であり、retry/timeout延長等の症状遮断ではない
