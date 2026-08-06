@@ -1,56 +1,49 @@
-# Handoff — 2026-08-02（キャリアアップモデル年収帯の実データ反映、PR #111）
+# Handoff — 2026-08-07（Phase B 定期同期システム、PR #129 → #130）
 
 ## TL;DR
 
-**決裁者提供の給与比較スプレッドシート（Playwright MCP + ユーザー側Googleログインで閲覧）を根拠に、採用トップ「入社からのキャリアアップモデル」の想定年収帯のうちLv.1（入職）とLv.5（施設長・マネージャー）をダミー値から実データへ更新（PR #111、番号単位認可を経てマージ・本番反映確認済み）。中間3段階（Lv.2〜4）は対応する給与データがスプレッドシート内に存在しないため、対応方針（①データ提供 ②実データ2点からの機械補間 ③現状維持）を決裁者へ相談するHTMLレポートを作成・送信済み（ユーザー確認、返信待ち）。**
+**社長の「看護職が入ってない」指摘を起点に、Phase A静的モックの単発修正では同種の不整合が再発するとの本田様の判断で、ジョブカン定期同期システム(Phase B)を本格実装。データ層(B-1〜B-7、クロール→Firestore差分検出→closed判定→承認ステータス計算、PR #129)に続き、配信層統合(B-8、PR #130)で `app.py` をジョブカン直接フェッチからFirestore単一ソース配信へ全面書き換え。承認導線は決裁者判断で「完全自動化(`REVIEW_BYPASS=true`常時適用)」に確定し、CLI承認コマンド・Slack承認待ち通知は不要と判明。両PRとも `codex review` + `pr-review-toolkit`複数エージェントによる多段レビューを経て番号単位認可でマージ・本番main反映済み。**
+
+**コードは完成したが、本番インフラは一切プロビジョニングされていない**(Firestore DB・Secret Manager・Cloud Scheduler・Cloud Run Jobいずれも未作成、`gcloud`実測確認)。加えて、ジョブカンへの正式照会は回答待ちで `sync/README.md`「本番デプロイ禁止」が現在も有効なため、次セッションでの本番展開は**decision-makerの明示的な開始指示 + ジョブカンからの回答**の両方を待つ状態。
 
 🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 🔗 チャットボットAPI: https://aozora-chatbot-1084369586348.asia-northeast1.run.app
 
 ## 今セッションで完了したこと
 
-### マージ済 PR (1件)
+### マージ済 PR (2件)
 
 | PR | タイトル | 内容 |
 |---|---|---|
-| #111 | `fix(mockup): キャリアパスの年収帯Lv.1/Lv.5を実データへ更新` | career-ladderのLv.1想定年収帯を280万円〜→301.2万円〜、Lv.5を450万円〜→445.2万円〜へ更新。HTMLコメントにデータ出典・中間3段階が未確定である理由を明記 (1 files, +3/-3) |
+| #129 | `feat(sync): Phase B 定期同期システムを実装(B-1〜B-7)` | クロール基盤(ページネーション対応)・Firestoreスナップショット・closed判定+サーキットブレーカー・承認ステータス計算・Slack通知・Cloud Scheduler/Job配線をゼロから実装。テスト221件、`codex review`2ラウンド+`pr-review-toolkit`4エージェントの指摘を反映 |
+| #130 | `feat(sync): Phase B 配信層統合(B-8) — Firestore単一ソース化+完全自動化` | `app.py`(590→約210行)をジョブカン直接フェッチからFirestore `job_cache`単一ソース配信へ全面書き換え。`JobSnapshot`に`offer`/`list_item`/`category_ids`を追加。承認は`REVIEW_BYPASS=true`常時適用で完全自動化(CLI/Slack通知は実装せず)。テスト234件、`codex review`+4エージェントの指摘(P2×2・HIGH×1・MEDIUM×1・LOW×2)を全て反映 |
 
-### 実装内容
+### 実装の要点(詳細は `docs/handoff/GOAL.md` セッション履歴セクション参照)
 
-- 決裁者共有のGoogleスプレッドシート「給与比較2026年2月」をPlaywright MCPで閲覧（Google認証が必要なためユーザー側でログインを依頼）。「市場比較202602」シートは職種×拠点×雇用形態別の市場比較用データで、キャリアラダーの5段階（実務者研修修了・現場リーダー/介護福祉士・主任/エリアリーダー候補・ケアマネジャー等）と1対1で対応する構造ではないことを確認
-- 直接裏付けが取れたのは2点のみ: Lv.1「入職」↔「施設介護」正社員（拠点別最低301.2万円）、Lv.5「施設長・マネージャー」↔「施設長候補」正社員（拠点別最低445.2万円）。中間3段階に対応する給与行は存在せず（あるのは資格手当の増分データのみ）
-- 実データが取れない中間3段階を機械的に補間する判断はしない方針をAskUserQuestionで確認（選択肢: 実データがある2段階のみ更新／両端から按分推定／決裁者へ追加データ依頼 → 「実データがある2段階のみ更新」を選択）。`mockup/index.html`のHTMLコメントに未確定の理由を明記し、実データ確定は決裁者判断に委ねる形で実装
-- ローカルサーバー(`python3 -m http.server 8989`)+ Playwrightスクリーンショットで実表示（301.2万円〜/445.2万円〜が正しく描画されること）を確認後、サーバー停止
-- feature branch(`fix/career-ladder-real-salary-data`) → push → `gh pr create` → 軽量チェックリストレビュー(1ファイル・6行、CI設定なし) → 番号単位認可 → `gh pr merge --squash --delete-branch` → ローカル`main`を`origin/main`へ同期
+- **決裁者判断2件**: ①WordPress求人データ保持を不採用、Cloud Run動的プロキシへ設計集約 ②承認導線は「完全自動化」に確定(半自動運用の段階移行案は不採用)
+- **自ら発見・対処したバグ**: `create_app()`のFirestoreクライアント即時構築がテスト収集を壊すリスク(遅延解決で回避)、`app.py`共有クライアントへの誤ったcrawl_delay継承(本番ライブトラフィックを3秒間隔で直列化していた実害バグ)、劣化クロール時にカテゴリ横断掲載求人が一覧から消えるバグ、Firestore同期呼び出しによるasyncイベントループブロック
+- **計画段階のPlan agent(plan-ops)による無許可の実ジョブカンライブアクセス**: 「実測」と称した報告の一部(429件・21.4分)が見積り値であり、実際の送信は77リクエスト(list 47件[重複含む]+detail 8件、約3.7分、GETのみ・crawl_delay 3秒遵守)と本人が訂正・自己申告。「照会回答待ちの状態でライブクロール実行前に確認を取るべきだった」との誤り認識も申告あり。詳細は`docs/handoff/GOAL.md`に記録
+- **品質ゲート**: 両PRとも `codex review --base main --strict-config -c model_reasoning_effort=high` + `pr-review-toolkit`エージェント(code-reviewer/pr-test-analyzer/type-design-analyzer/silent-failure-hunter、model: sonnet明示・read-only)の並行レビューを実施、findings 0件でも件数明示。全指摘を修正または理由付きで見送りに分類してから番号単位認可を依頼
 
-### その他（git非管理、ephemeral）
+### 見送り指摘(次セッション検討、決裁者確認なしで着手しない)
 
-決裁者向け相談レポート(`career-ladder-salary-report.html`)をローカルscratchpadに生成し、`open`コマンドでローカルブラウザ表示（2回）。「更新内容」テーブルと「ご判断をお願いしたい点」（中間3段階の対応方針3択）を掲載。プロジェクトの内部下書きのためArtifact公開はせずローカル表示に留めた。git管理外・恒久化なし。ユーザーから決裁者へ送信済みとの報告を受け、`docs/handoff/GOAL.md`の「🔄 中断点（in-flight）」セクションに記録。
-
-### 決裁者への確認ポイント（すべて明示合意済み）
-
-| タイミング | 確認内容 | 決定 |
-|---|---|---|
-| スプレッドシート閲覧前 | Googleログイン方法 | ユーザー側でログイン(推奨)を選択・実施 |
-| データ確認後 | 中間3段階(Lv.2〜4)の扱い方針 | 実データがある2段階のみ更新(推奨)を選択 |
-| PR #111 | 番号単位の明示認可 | マージする(推奨)を選択・承認 |
+- `templates/base.html`/`job_list.html`の`rel=canonical`がジョブカン側URLを指しており、`closed`求人の被リンク維持方針を実質無効化している。本番ドメイン(`recruit.aozora-cg.com`)のDNS未確定のため`PUBLIC_BASE_URL`設計を含む追加機能として持ち越し
+- `category_ids: list[str]`をfrozenset/tupleにすべき等の型設計nit(実害ゼロ、低severity)
 
 ## 次のアクション
 
 ### 即着手タスク
-即着手タスクなし
+即着手タスクなし — 唯一の主要な残作業(Phase B本番インフラのプロビジョニング + 初回ロールアウト)が `sync/README.md`「本番デプロイ禁止: ジョブカン公式照会回答前は本番運用不可」に直接抵触するため、技術的に実行可能でも着手不可
 
 ### 条件待ち（明示 trigger 付き）
 
-| # | 項目 | trigger（充足条件） | 充足時のタスク |
-|---|------|------------------|--------------|
-| 1 | [GOAL.md] career-ladder Lv.2〜4 年収帯確定 | 決裁者から対応方針(①データ提供 ②機械補間 ③現状維持)の回答 | 回答内容に応じてLv.2〜4の`mockup/index.html`該当箇所を更新 |
-| 2 | [GOAL.md] ③ 外国人採用特設ページ | decision-makerが法務/人事部門確認の上で着手指示 | 内容仕様のヒアリング→plan mode |
-| 3 | [GOAL.md] ⑤ スタッフインタビュー再考 | decision-makerが2026-07-14廃止決定の再考について指示 | 復活する場合、イニシャル+AI生成画像の仕様を軽量プランで提示 |
-| 4 | GHA WIF自動デプロイ化 | 手動デプロイ頻度増でROIが見合う、またはgcloud認証切れの手間が続くと判断された場合(decision-maker負担ゼロのため急ぐ理由なし) | `.github/workflows/deploy-chatbot.yml`新設（スコープ大のためplan mode必須） |
-| 5 | `google.maps.Marker`→`AdvancedMarkerElement`移行 | decision-makerから移行指示、またはレガシーMarkerの将来的な廃止アナウンス | Map ID発行+Cloud Console側スタイル設定を追加した上で移行 |
-| 6 | チャットボット応答ストリーミング(SSE化) | UXの体感速度改善が優先度として上がった場合 | Gemini側のstreaming API対応状況を再確認した上でplan mode |
-| 7 | スクロール演出への追加フィードバック | 決裁者がPR #109反映後の本番を確認し、追加の速度/強度調整指示があった場合 | 該当パラメータ(duration/easing/stagger間隔)を軽量プランで調整 |
+| # | 項目 | trigger（充足条件） | 充足時のタスク | 充足確認方法 |
+|---|------|------------------|--------------|------------|
+| 1 | [GOAL.md] Phase B 本番インフラのプロビジョニング + 初回ロールアウト | ①ジョブカンからの正式照会回答 かつ ②decision-makerの明示的な開始指示(実クロール・GCPリソース作成は状態変更操作のため番号単位認可対象。本セッションのplan-ops誤判断も踏まえ、read-onlyのdry-run含め事前確認が必要) | `infra/README.md`「B-8 初回ロールアウト順序」1〜6を順次実行(API有効化→Firestore DB作成→§8.1bクローラdry-run検証→Job作成・実行→Service新デプロイ→Scheduler作成) | 本田様への確認 + `sync/README.md`該当行の削除有無 |
+| 2 | [GOAL.md] Phase A 看護職カテゴリ不整合の静的モック修正 | 本田様の着手判断(Phase B完了後に判断予定と既に合意済み) | `mockup/jobs-nurse.html`等のcategory_id誤マッピング(18984↔18983)を修正 | 本田様への確認 |
+| 3 | [GOAL.md] career-ladder Lv.2〜4年収帯確定 | 決裁者から対応方針の回答(前セッションから継続、`career-ladder-salary-report.html`送信済み) | 回答内容に応じて`mockup/index.html`該当箇所を更新 | 本田様への確認 |
+
+その他の decision-maker 判断待ち項目(③外国人採用特設ページ、⑤スタッフインタビュー再考、GHA WIF自動デプロイ等)は `docs/handoff/GOAL.md` に継続記録、本セッションでの新規動きなし。
 
 ### 却下候補（記録のみ）
 却下候補なし
@@ -63,16 +56,17 @@
 ## Issue Net 変化
 - Close 数: 0 件
 - 起票数: 0 件
-- Net: 0 件（本セッションはIssue非経由の直接タスクのみ）
+- Net: 0 件（GitHub Issues非経由、PR直接ワークフローのみ）
 
 ## 最終結論
 
-✅ **セッション終了可** — 残作業ゼロ、クリーン状態達成（本ハンドオフ更新のコミット・PR化を除く）
+✅ **セッション終了可** — 残作業ゼロ、クリーン状態達成(本ハンドオフ更新のコミット・PR化を除く)
 
 - OPEN PR: 0件 / active Issue: 0件
-- Git: `docs/handoff/GOAL.md`更新分のみ未コミット（本ハンドオフPRで解消予定）、それ以外clean
-- 即着手タスク: 0件 / 条件待ち: 7件（新規1件[career-ladder Lv.2〜4]を含め、すべてdecision-maker判断待ちまたは実運用トリガー待ち）
-- 残留プロセス: なし（検証用ローカルサーバーはPlaywright確認後に停止済み）
-- 既知の blocker: なし（career-ladder Lv.2〜4は決裁者回答待ちの条件待ちであり、緊急のblockerではない）
-- 同根再発スキャン(§4.6): 本セッションの修正PR(#111)はcareer-ladderセクションを新設したPR #61以来、当該箇所への初の修正であり、過去7日のarchiveにも同一トピックの記録なし。同根候補0件
-- 対症療法判定(§4.7): 該当なし — スプレッドシート実データとの直接照合による値の正確性修正であり、retry/timeout/fallback等の症状遮断ではない。「なぜ今起きたか」の調査を要する規模のバグでもなく、Phase Aダミーデータを実データへ順次差し替えるという既定計画(GOAL.md記載)に沿った作業
+- Git: `docs/handoff/LATEST.md`更新分のみ未コミット（本ハンドオフPRで解消予定）、それ以外clean、`main`は`origin/main`と同期済み
+- CI: 直近3件 `pages build and deployment` 全て success
+- 即着手タスク: 0件 / 条件待ち: 3件(いずれも decision-maker 判断または外部照会回答待ち)
+- 残留プロセス: なし(検出された node/npm プロセスはLM Studio・drawio MCP等、本セッション・本プロジェクトと無関係な既存プロセス)
+- 既知の blocker: あり — `sync/README.md`「本番デプロイ禁止」がジョブカン正式照会回答まで有効、Phase B本番展開はこの解除が前提
+- 同根再発スキャン(§4.6): 本セッションの修正PR(#129, #130)はいずれもPhase B新設コードへの初回実装+レビュー起因の修正であり、過去7日のarchiveに同一トピック(Firestore配信・crawl系)の記録なし。同根候補0件
+- 対症療法判定(§4.7): 該当なし — 両PRの修正は`codex review`/`pr-review-toolkit`による設計レベルの指摘(データ不整合・イベントループブロック・エラーハンドリング非対称性)への対応であり、retry/timeout延長等の症状遮断ではない
