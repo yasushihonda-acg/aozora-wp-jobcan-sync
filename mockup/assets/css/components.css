@@ -838,12 +838,6 @@
   width: auto;
   margin-bottom: var(--space-4);
 }
-.site-footer__region {
-  font-size: var(--text-sm);
-  color: rgba(255,255,255,0.6);
-  line-height: var(--lh-normal);
-  margin: 0 0 var(--space-4);
-}
 .site-footer__tagline {
   position: relative;
   font-size: var(--text-lg);
