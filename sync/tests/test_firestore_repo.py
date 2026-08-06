@@ -1,6 +1,7 @@
 """`JobCacheRepository` tests against a fake Firestore client.
 
-No real Firestore / emulator connection here — the fake below models just
+No real Firestore / emulator connection here — `FakeFirestoreClient`
+(conftest.py, shared with test_orchestrator.py and test_cli.py) models just
 enough of the `google-cloud-firestore` surface (`collection().document(id).set()`,
 `collection().stream()`, `client.batch()`) to exercise `JobCacheRepository`'s
 own translation logic (dict <-> JobSnapshot, date safety, batching). True
@@ -14,66 +15,7 @@ from datetime import UTC, date, datetime
 
 from sync.firestore_repo import JobCacheRepository, _convert_dates_to_datetimes
 from sync.snapshot import JobSnapshot
-
-
-class _FakeDocSnapshot:
-    def __init__(self, doc_id: str, data: dict) -> None:
-        self.id = doc_id
-        self._data = data
-
-    def to_dict(self) -> dict:
-        return self._data
-
-
-class _FakeDocRef:
-    def __init__(self, store: dict, doc_id: str) -> None:
-        self._store = store
-        self.id = doc_id
-
-    def set(self, data: dict) -> None:
-        self._store[self.id] = data
-
-
-class _FakeCollection:
-    def __init__(self, store: dict) -> None:
-        self._store = store
-
-    def document(self, doc_id: str) -> _FakeDocRef:
-        return _FakeDocRef(self._store, doc_id)
-
-    def stream(self) -> list[_FakeDocSnapshot]:
-        return [_FakeDocSnapshot(doc_id, data) for doc_id, data in self._store.items()]
-
-
-class _FakeBatch:
-    def __init__(self, store: dict) -> None:
-        self._store = store
-        self._pending: list[tuple[str, dict | None]] = []
-
-    def set(self, doc_ref: _FakeDocRef, data: dict) -> None:
-        self._pending.append((doc_ref.id, data))
-
-    def delete(self, doc_ref: _FakeDocRef) -> None:
-        self._pending.append((doc_ref.id, None))
-
-    def commit(self) -> None:
-        for doc_id, data in self._pending:
-            if data is None:
-                self._store.pop(doc_id, None)
-            else:
-                self._store[doc_id] = data
-
-
-class _FakeFirestoreClient:
-    def __init__(self) -> None:
-        self.store: dict[str, dict] = {}
-
-    def collection(self, *collection_path: str) -> _FakeCollection:
-        assert collection_path == ("job_cache",)
-        return _FakeCollection(self.store)
-
-    def batch(self) -> _FakeBatch:
-        return _FakeBatch(self.store)
+from tests.conftest import FakeFirestoreClient as _FakeFirestoreClient
 
 
 def _snapshot(job_id: str, *, last_seen_at: datetime | None = None) -> JobSnapshot:

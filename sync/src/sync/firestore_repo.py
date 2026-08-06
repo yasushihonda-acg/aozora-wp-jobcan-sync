@@ -104,7 +104,19 @@ class JobCacheRepository:
         self._collection.document(snapshot.job_id).set(_to_dict(snapshot))
 
     def set_many(self, snapshots: list[JobSnapshot]) -> None:
-        """Batched write, chunked at Firestore's 500-mutation limit per batch."""
+        """Batched write, chunked at Firestore's 500-mutation limit per batch.
+
+        Each chunk commits as its own atomic batch, but the chunks themselves
+        are NOT atomic with each other — if a later chunk fails, earlier
+        ones stay committed (2026-08-07 second-opinion review finding). Not
+        fixed here: at current scale (~34 postings across every category,
+        far under one batch), this never actually happens, and Firestore
+        transactions carry the same 500-document ceiling as batches, so
+        "true" cross-chunk atomicity would need a different mechanism
+        entirely (e.g. a staging collection + a single pointer swap) — real
+        design work, not a one-line fix. Revisit if `KNOWN_CATEGORY_IDS`'
+        combined posting count ever approaches 500.
+        """
         for start in range(0, len(snapshots), _BATCH_LIMIT):
             chunk = snapshots[start : start + _BATCH_LIMIT]
             batch = self._client.batch()
@@ -117,7 +129,8 @@ class JobCacheRepository:
 
         Used by the 30-day closed-job GC (`closed_detection.find_gc_candidates`,
         B-3/B-6) — that function only *selects* candidates, this is the actual
-        mutation the caller applies.
+        mutation the caller applies. Same cross-chunk non-atomicity caveat as
+        `set_many` above.
         """
         for start in range(0, len(job_ids), _BATCH_LIMIT):
             chunk = job_ids[start : start + _BATCH_LIMIT]
