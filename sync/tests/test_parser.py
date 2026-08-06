@@ -480,6 +480,48 @@ class TestParseJobListReal:
             assert with_thumbs, f"{name}: zero cards with thumbnails"
 
 
+class TestParseJobListPagination:
+    """Phase B: pagination metadata extraction (total_count / last_page / next_url).
+
+    `list_care` (53 jobs, 6 pages) and `list_it` (4 jobs, single page, no
+    `.pagination-list` at all) are the two real-world shapes Jobcan renders —
+    see the `selectors.yaml` comment for why both need covering.
+    """
+
+    def test_paginated_category_reads_total_and_last_page(self) -> None:
+        page = parse_job_list(_list_fixture_html("list_care"), _list_source_url("18773"))
+        assert page.total_count == 53
+        assert page.last_page == 6
+
+    def test_paginated_category_next_url_points_to_page_2(self) -> None:
+        page = parse_job_list(_list_fixture_html("list_care"), _list_source_url("18773"))
+        assert page.next_url == (
+            "https://recruit.jobcan.jp/aozora/list/all/all/2?category_id=18773"
+        )
+
+    def test_single_page_category_has_no_pagination_list(self) -> None:
+        """list_it.html: 4 jobs, "4 件" format, zero `.pagination-list` links."""
+        page = parse_job_list(_list_fixture_html("list_it"), _list_source_url("69384"))
+        assert page.total_count == 4
+        assert page.last_page == 1
+        assert page.next_url is None
+
+    def test_total_count_none_when_pagination_block_absent(self) -> None:
+        """Defensive: a category listing with no pagination markup whatsoever
+        (hand-crafted, not a real Jobcan shape) must not raise — it degrades
+        to "single page, unknown total" rather than blocking the list."""
+        html = """
+        <div class="job-offer-box">
+          <h2 class="job-offer-title">Title</h2>
+          <a class="job-offer-title" href="/aozora/job_offers/123">Title</a>
+        </div>
+        """
+        page = parse_job_list(html, _list_source_url())
+        assert page.total_count is None
+        assert page.last_page == 1
+        assert page.next_url is None
+
+
 class TestParseJobListErrors:
     """Boundary and error-case coverage."""
 

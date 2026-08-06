@@ -17,12 +17,18 @@ import httpx
 from .models import JobcanClientError
 
 DEFAULT_USER_AGENT = (
-    "AozoraJobcanSync/0.1 (+contact@aozora-cg.com; "
-    "Phase B Phase 0 local PoC - not production)"
+    "AozoraJobcanSync/0.2 (+contact@aozora-cg.com; "
+    "Phase B periodic sync - 1x/day, gentle crawl)"
 )
 DEFAULT_TIMEOUT = 10.0  # seconds
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 1.0  # seconds (multiplied by 2^attempt)
+# Crawl-delay between *separate* requests (not retry backoff). 3-5s is the
+# range agreed for Phase B (社長 report: 1x/day cadence + gentle per-request
+# spacing so a single sync run never resembles a burst). Applied before every
+# request, keyed off the client instance's own clock — a single JobcanClient
+# is expected to live for the duration of one crawl run.
+DEFAULT_CRAWL_DELAY = 3.0  # seconds
 
 JOBCAN_BASE_URL = "https://recruit.jobcan.jp/aozora"
 
@@ -33,6 +39,7 @@ class JobcanClientConfig:
     timeout: float = DEFAULT_TIMEOUT
     max_retries: int = DEFAULT_MAX_RETRIES
     retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY
+    crawl_delay: float = DEFAULT_CRAWL_DELAY
     base_url: str = JOBCAN_BASE_URL
 
 
@@ -52,6 +59,9 @@ class JobcanClient:
             follow_redirects=True,
         )
         self._owns_client = client is None
+        # Crawl-delay bookkeeping: `None` until the first request, so the very
+        # first request of a run never waits.
+        self._last_request_at: float | None = None
 
     def fetch_job_detail(self, job_id: str | int) -> tuple[str, str]:
         """Fetch a single job detail page.
@@ -68,8 +78,18 @@ class JobcanClient:
         url = f"{self.config.base_url}/job_offers/{job_id}?hide_breadcrumb=true&hide_search=true"
         return url, self._get_with_retry(url)
 
-    def fetch_job_list(self, category_id: str | int) -> tuple[str, str]:
+    def fetch_job_list(self, category_id: str | int, page: int = 1) -> tuple[str, str]:
         """Fetch a Jobcan category listing page.
+
+        Args:
+            category_id: Jobcan category to list.
+            page: 1-based page number. Page 1 uses the original
+                `/list?category_id=` path (unchanged, so existing callers that
+                never pass `page` see identical behaviour). Page 2+ uses the
+                path-segment form Jobcan actually serves
+                (`/list/all/all/{page}?category_id=`) — confirmed against real
+                fixtures (`jobcan-html-structure.md` §8/§9 only speculated
+                `?page=N`; the real pagination links use a path segment).
 
         Returns:
             (source_url, html) — `source_url` includes the `category_id`
@@ -79,13 +99,34 @@ class JobcanClient:
         Raises:
             JobcanClientError: same conditions as `fetch_job_detail`.
         """
-        url = (
-            f"{self.config.base_url}/list"
-            f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
-        )
+        if page <= 1:
+            url = (
+                f"{self.config.base_url}/list"
+                f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
+            )
+        else:
+            url = (
+                f"{self.config.base_url}/list/all/all/{page}"
+                f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
+            )
         return url, self._get_with_retry(url)
 
+    def _wait_for_crawl_delay(self) -> None:
+        """Sleep just enough to keep requests at least `crawl_delay` apart.
+
+        Applied once per top-level call (not per retry — retries already have
+        their own exponential backoff). The first request of a client's
+        lifetime never waits (`_last_request_at` starts as `None`).
+        """
+        if self._last_request_at is not None:
+            elapsed = time.monotonic() - self._last_request_at
+            remaining = self.config.crawl_delay - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+        self._last_request_at = time.monotonic()
+
     def _get_with_retry(self, url: str) -> str:
+        self._wait_for_crawl_delay()
         for attempt in range(self.config.max_retries + 1):
             try:
                 resp = self._client.get(url)

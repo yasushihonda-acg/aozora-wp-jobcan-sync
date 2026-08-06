@@ -313,7 +313,70 @@ def parse_job_list(
         )
 
     category_id = _extract_category_id(source_url)
-    return JobListPage(source_url=source_url, category_id=category_id, items=items)
+    total_count, last_page, next_url = _parse_pagination(soup, selectors, category_id)
+    return JobListPage(
+        source_url=source_url,
+        category_id=category_id,
+        items=items,
+        total_count=total_count,
+        last_page=last_page,
+        next_url=next_url,
+    )
+
+
+# Pulls the leading integer out of either pagination-count format Jobcan
+# renders: "53 件中　1-10 件を表示" (paginated) or "4 件" (single page, no
+# `.pagination-list` at all). Both start with the total count, so one pattern
+# covers both — see `selectors.yaml` comment for the real fixture text.
+_PAGINATION_TOTAL_RE = re.compile(r"(\d+)")
+
+# Pulls the page number out of a `/aozora/list/all/all/{page}?...` URL.
+# Page 1 has no path segment (`/aozora/list/all/all?...`), so a link *without*
+# a trailing digit segment is page 1 — not matched here, callers default to 1.
+_PAGE_NUMBER_RE = re.compile(r"/list/all/all/(\d+)(?:\?|$)")
+
+
+def _parse_pagination(
+    soup: BeautifulSoup,
+    selectors: ListSelectors,
+    category_id: str | None,
+) -> tuple[int | None, int, str | None]:
+    """Extract (total_count, last_page, next_url) from a listing page.
+
+    Deliberately lenient: pagination is never required by
+    `JobcanStructureChangeError` (a category with 10 or fewer jobs renders no
+    `.pagination-list` at all — real fixture: list_it.html, 4 jobs, "4 件"
+    with no page links). Every branch below degrades to "single page" rather
+    than raising, so a Jobcan tweak to the pagination markup alone never
+    blocks the list from rendering — it just stops multi-page crawling
+    (caught separately by the crawler's total-count reconciliation).
+    """
+    total_tag = soup.select_one(selectors.pagination_total)
+    total_count: int | None = None
+    if total_tag is not None:
+        match = _PAGINATION_TOTAL_RE.search(_text(total_tag))
+        if match:
+            total_count = int(match.group(1))
+
+    last_link = soup.select_one(selectors.pagination_last_link)
+    if last_link is None:
+        # No `rel="last"` link — either a single-page category, or (defensive
+        # fallback) Jobcan renders a `rel="next"` chain without a last link.
+        next_link = soup.select_one('a[rel="next"]')
+        if next_link is None:
+            return total_count, 1, None
+        next_href = _attr(next_link, "href")
+        return total_count, 1, _normalise_jobcan_url(next_href) if next_href else None
+
+    last_href = _attr(last_link, "href")
+    page_match = _PAGE_NUMBER_RE.search(last_href)
+    last_page = int(page_match.group(1)) if page_match else 1
+
+    next_link = soup.select_one('a[rel="next"]')
+    next_href = _attr(next_link, "href") if next_link is not None else ""
+    next_url = _normalise_jobcan_url(next_href) if next_href else None
+
+    return total_count, last_page, next_url
 
 
 def _parse_list_card(

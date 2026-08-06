@@ -1,23 +1,27 @@
-"""Phase 0 CLI: `python -m sync render <job_id>`.
+"""Phase 0 CLI: `python -m sync render <job_id>`. Phase B adds `sync-run`.
 
 Exit codes:
-    0 — success (HTML rendered to stdout or --out file)
+    0 — success (HTML rendered to stdout or --out file / sync completed)
     1 — Jobcan client error (network / HTTP failure)
     2 — JobcanStructureChangeError (selectors missing)
     3 — JobcanValidationError (selectors found but required fields empty)
     4 — Render/template error
+    5 — sync-run: closed-rate circuit breaker tripped, nothing written
 """
 
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 
 from ._validators import is_ascii_digit_id
+from .firestore_repo import JobCacheRepository, get_firestore_client
 from .jobcan_client import JobcanClient
 from .models import JobcanClientError, JobcanStructureChangeError, JobcanValidationError
+from .orchestrator import run_sync
 from .parser import parse_job_detail, parse_job_list
 from .renderer import render_job_detail, render_job_list
 
@@ -138,6 +142,25 @@ def list_(
         typer.echo(f"wrote {out} ({byte_len} bytes, {len(page.items)} jobs)", err=True)
     else:
         sys.stdout.write(rendered)
+
+
+@app.command("sync-run")
+def sync_run() -> None:
+    """Daily full-catalogue sync (B-6): crawl -> diff -> closed-detection ->
+    review-gate -> Firestore write. Entry point for the Cloud Run Job that
+    Cloud Scheduler triggers once a day; see `infra/README.md` §8."""
+    now = datetime.now(tz=UTC)
+    repo = JobCacheRepository(get_firestore_client())
+    with JobcanClient() as client:
+        result = run_sync(client, repo, now=now)
+
+    typer.echo(
+        f"added={result.added} changed={result.changed} unchanged={result.unchanged} "
+        f"removed={result.removed} newly_closed={result.newly_closed} "
+        f"crawl_errors={len(result.crawl.errors)} written={result.written}"
+    )
+    if result.circuit_breaker_tripped:
+        raise typer.Exit(code=5)
 
 
 @app.command()

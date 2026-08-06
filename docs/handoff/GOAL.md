@@ -99,7 +99,24 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-なし
+- Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — 下記 Phase B 完了後に本田様判断で着手予定、未着手
+- ジョブカンへの正式照会 (スクレイピング許諾・API有無) は回答待ち。`sync/README.md`「本番デプロイ禁止: ジョブカン公式照会回答前は本番運用不可」の行と CLAUDE.md 未確定事項#1 は回答が出るまで変更しない(明示的な保留、見落としではない)
+
+## セッション履歴: 2026-08-07 Phase B 定期同期システム実装(B-1〜B-7、`sync/` 大規模拡張)
+
+社長から「看護職が入ってないのは明らかにおかしい」との指摘を起点に旧サイト比較調査を開始したところ、`mockup/jobs-nurse.html` の category_id 誤マッピング(18984=相談員 を看護師と誤認、正しい看護職は18983)が見つかった一方、本田様から「モック単発修正では同種の不整合(一回性スナップショット起因)が再発する」との根本的な設計懸念が提起され、Phase A の看護職修正を後回しにして **Phase B(ジョブカン定期同期)を先に本格実装する**方針転換があった(計画ファイル: `elegant-wobbling-snowflake.md`)。
+
+- **法務/契約面の事前確認**: ジョブカン採用管理利用規約・基本規約を一次資料で確認し、スクレイピング・クローリングを明示的に禁止する条項は無いと判明(第9条のリバースエンジニアリング禁止はソフトウェア解析文脈で公開ページ読み取りには通常適用されない解釈)。正式な許諾確認は社長へ報告済み・回答待ちだが、技術検証・実装は並行して進める判断(2026-06-18 の内部方針転換 `feedback_overengineering_recovery_2026-06-18.md` の延長)
+- **アーキテクチャ決定**: WordPress は求人データを一切保持しない設計に確定 (CPT/ACF/WP REST API 連携は不採用)。Cloud Run 動的プロキシが一覧・詳細ページを直接配信する案 D (`docs/specs/sync-strategy.md`) に設計を GCP へ集約 (「せっかく GCP でプロジェクトを組んでいるので設計を GCP に集める」という本田様判断)。矛盾していた CLAUDE.md「CPT/ACF (Phase B)」節・`sync-strategy.md` §6/§7 を本セッションで整合済み
+- **実装 (B-1〜B-6、テスト196件全PASS・ruff/pyright既存ベースライン以外エラー0件)**:
+  - B-1 クロール基盤: `jobcan_client.py` にページネーション対応(`/list/all/all/{page}`形式) + Crawl-delay 3秒、`parser.py`/`models.py` にページネーション情報抽出、`crawler.py`(新規)で全17カテゴリ×全ページ巡回オーケストレータ(job_id重複排除・部分失敗継続・総件数検算)
+  - B-2 Firestoreスナップショット + 差分検出: `snapshot.py`(新規、`job_cache/{job_id}` スキーマ)、`diff.py`(新規、added/changed/unchanged/removed分類)、`firestore_repo.py`(新規、date→datetime変換の地雷を`aozora-sns-auto`から移植)
+  - B-3 closed判定 + サーキットブレーカー: `closed_detection.py`(新規、連続2回不在で closed化、closed率>30%でサーキットブレーカー、30日GC候補選定)
+  - B-4 承認ワークフロー: `approval.py`(新規、`pending_review`ゲート + `review_bypass`フラグ。`aozora-sns-auto`の`compute_finalize_target_status`パターンを移植)
+  - B-5 Slack通知: `notifications.py`/`secrets.py`(新規、Secret Manager経由のWebhook通知、失敗を握り込む設計)
+  - B-6 Cloud Scheduler + Cloud Run Job配線: `orchestrator.py`(新規、全体オーケストレーション)、`cli.py`に`sync-run`コマンド追加、`infra/README.md`にSecret Manager(§1.5)・Cloud Scheduler/Job(§8)手順追記
+  - B-7 ドキュメント整合: CLAUDE.md「CPT/ACF」節を「求人データ配信アーキテクチャ」節へ書き換え、`sync-strategy.md`のWP CPTブロック・ロードマップを現状に合わせて更新、本エントリでGOAL.md更新
+- **意図的に対象外**(過剰設計の反面教師、2026-06-18の巻き戻し方針を踏襲): Terraformモジュール化・WIF+GHA自動デプロイ・Cloud Armor・Load Balancer・Memorystore・多段階リリース・規約照会ゲート、いずれも不採用
 
 ## セッション履歴: 2026-08-05〜06 決裁者チャット指示対応(PR #119〜#121、全完了・本番確認済み)
 社長からのGoogleチャット指摘3件に対応。いずれも番号単位認可を経てマージ・ローカルmain同期・本番反映確認済み。

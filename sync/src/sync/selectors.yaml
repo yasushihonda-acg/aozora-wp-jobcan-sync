@@ -48,6 +48,16 @@ list:
     label: ".job-offer-label"
     description: ".job-offer-description"
     thumbnail: ".job-offer-main-image-thumbnail"
+    # Pagination is intentionally NOT required (JobcanStructureChangeError is
+    # never raised for a missing pagination block): categories with <=10 jobs
+    # render `.pagination-number` with a bare "N 件" count and omit
+    # `.pagination-list` entirely (real fixture: list_it.html, 4 jobs).
+    # `pagination_total` carries the leading integer in either "53 件中
+    # 1-10 件を表示" or "4 件" — a single \d+ regex covers both formats.
+    # `pagination_last_link` reads `rel="last"` rather than walking `next`
+    # links one at a time, so a run is robust to "…" gap-elided middle pages.
+    pagination_total: ".pagination-number"
+    pagination_last_link: 'a[rel="last"]'
   # Phase 2A.1c: replace Jobcan-supplied card thumbnails with in-house
   # category illustrations that match the corporate-site (aozora-cg.com)
   # tonal manner. The original Jobcan thumbnail is preserved in

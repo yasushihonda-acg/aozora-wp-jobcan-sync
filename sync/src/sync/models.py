@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -102,6 +104,19 @@ class JobOffer(BaseModel):
             raise ValueError(f"must be an http(s) URL, got: {v!r}")
         return v
 
+    @property
+    def content_hash(self) -> str:
+        """Stable sha256 over the full normalised posting (Phase B diff detection).
+
+        Computed on demand rather than stored — `JobOffer` is frozen and this
+        keeps every existing call site that constructs one (parser, tests)
+        unchanged. `firestore_repo` persists this value alongside the
+        snapshot so a later run can compare without re-deriving it from a
+        cold `JobOffer`.
+        """
+        payload = self.model_dump_json()
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 
 class JobListItem(BaseModel):
     """One row of a Jobcan category listing page.
@@ -176,8 +191,14 @@ class JobListPage(BaseModel):
     """A parsed Jobcan category listing page.
 
     Bundles the items with the source URL so the renderer/CLI does not have
-    to thread `source_url` separately. Phase 2A.2 may extend this with
-    pagination metadata.
+    to thread `source_url` separately.
+
+    Phase B: `total_count` / `last_page` support the crawl orchestrator's
+    "did we actually get everything" check — comparing the sum of collected
+    job_ids against `total_count` catches a silent partial crawl (e.g. a
+    request that 200'd with a half-rendered page) that per-page parsing alone
+    would not surface. Both are `None` when Jobcan omits the pagination block
+    entirely (never observed in fixtures, but the parser does not require it).
     """
 
     source_url: str = Field(..., description="The Jobcan list URL that produced these items")
@@ -185,6 +206,15 @@ class JobListPage(BaseModel):
         None, description="The `category_id` query parameter parsed from source_url, if any"
     )
     items: list[JobListItem] = Field(default_factory=list)
+    total_count: int | None = Field(
+        None, description="Total job count for this category, from `.pagination-number`"
+    )
+    last_page: int = Field(
+        1, description="Highest page number for this category (1 when no pagination block)"
+    )
+    next_url: str | None = Field(
+        None, description="Absolute URL of the next page, or None when this is the last page"
+    )
 
     model_config = {"frozen": True}
 
