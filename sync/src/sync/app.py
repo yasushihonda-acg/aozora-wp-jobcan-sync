@@ -54,7 +54,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
-from .jobcan_client import JobcanClient
+from .jobcan_client import JobcanClient, JobcanClientConfig
 from .models import (
     JobcanClientError,
     JobcanStructureChangeError,
@@ -216,7 +216,16 @@ def create_app(
     # request inside `_do_fetch`, paying TLS handshake cost on every fetch
     # under Cloud Run concurrency. Closed via the lifespan shutdown phase so
     # tests that build multiple apps in one process don't leak sockets.
-    proxy_client = client_factory()
+    #
+    # `crawl_delay=0.0`: Phase B's default `JobcanClientConfig` now carries a
+    # 3s crawl-delay for the daily batch sync (`crawler.py`'s politeness
+    # requirement). This client is a DIFFERENT use case — it's shared across
+    # every concurrent live user request for the app's entire lifetime, not
+    # one sequential crawl run. Leaving the default would have serialized
+    # every uncached proxy request through a 3-second-apart gate (and done so
+    # racily under threadpool concurrency, since `_wait_for_crawl_delay` isn't
+    # lock-protected) — a real regression this second-opinion review caught.
+    proxy_client = client_factory(JobcanClientConfig(crawl_delay=0.0))
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:

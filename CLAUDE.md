@@ -66,14 +66,46 @@ mockup 内のキャラ含みイラスト (求人カード + philosophy / flow �
 - トークン定義: `mockup/assets/css/tokens.css`、components / pages もこの 3 ファイル構成
 - **2026-07-15 リクルートページ基礎トンマナ刷新 (第2フェーズ、進行中)**: 決裁者指示で①コーポレートカラー離脱・イラスト由来配色への統一 ②tcy.co.jp/recruit・g-s.dev 的な視差効果・スクロール演出の強化 ③AI臭さの払拭による洗練度向上、を段階的に実施。Stage 1 (配色システム再定義、PR #64) / Stage 2 (ヒーローパララックス+セクション内stagger演出、PR #65) 完了・本番確認済み。Stage 2 本番反映後、決裁者の追加フィードバックを受けさらに以下を実装 (いずれも同日中に実装・実機検証・マージ・本番確認済み): ヒーロー背景への Ken Burns ズームループ追加 (PR #67) / 全セクション要素への stagger 演出拡張 (PR #68) / `animation-timeline: view()` によるスクロール連動アニメーション化 (CSS Scroll-driven Animations、Chrome/Edge/Safari 対応・Firefox 安定版は `@supports` で IntersectionObserver 版へ fallback、PR #69) / スクロール連動アニメーションの進行速度緩和 (`animation-range` を entry→cover に変更、PR #70)。Stage 3 (コンポーネントリデザイン) は決裁者が Stage 1・2 の結果を確認し具体的指摘を得てから着手するロードマップ。詳細は `docs/handoff/GOAL.md` 参照
 
-### CPT / ACF (Phase B)
-- CPT: `job_offer`、Taxonomy: `job_type` / `employment_type` / `location` / `facility`
-- 項目は 2 層構造: 正規化項目 (検索・絞り込み用) + 原文スナップショット (HTML/テキスト保持) で項目変更耐性確保
+### 求人データ配信アーキテクチャ (Phase B、2026-08-07 GCP 集約に確定)
+WordPress は求人データを一切保持しない (CPT/ACF/WP REST API 連携は不採用)。
+Cloud Run 動的プロキシ (`sync/src/sync/app.py`) がジョブカンの求人一覧・詳細
+ページを直接配信する (`docs/specs/sync-strategy.md` 案D)。WordPress の役割は
+将来のブログ・お知らせページのみに縮小 (せっかく GCP でプロジェクトを組んでいる
+ため、ADR的にも設計を GCP へ集約する決裁者判断)。旧設計 (WP CPT `job_offer` +
+Taxonomy に求人データを同期する案) は本節の履歴として記録するのみ、実装対象では
+ない。
 
-### 同期復旧設計 (Phase B)
-- 初期 1 ヶ月は半自動運用: 取得 → Firestore スナップショット → 差分プレビュー → 採用担当承認 → WP 反映
-- 連続 2 回不在で closed、closed 率 > 30% で同期中止 + Slack アラート
-- 募集終了は WP 側 `private` 化 (削除しない、SEO/被リンク維持) → 30 日後 trash
+**未接続の既知ギャップ (2026-08-07 codex review 検出、B-8 として要フォロー)**:
+`app.py` は現在も**ジョブカンへ毎リクエスト直接フェッチ**しており、下記の同期
+パイプライン(Firestore `job_cache`)を一切読んでいない。つまり `pending_review`/
+`closed` は実配信に何の効果も持たず、未承認の新規求人もそのまま公開されてしまう。
+`JobSnapshot.normalized` も一覧カード相当のフィールドのみで詳細ページ本文
+(`body_html` 等)を持たないため、素朴な読み替えでは詳細ページを再現できない
+(スキーマ拡張が必要)。承認 API も同様に未接続で、`approval.py` の `approve()`/
+`reject()` は純関数として実装・テスト済みだが、これを呼ぶ Cloud Run エンドポイント
+が存在しない — Slack 通知リンクをクリックしても何も起きない。データ層 (クロール→
+Firestore同期) は完成・テスト済みだが、配信層・承認導線の統合は次の実装サイクルで
+対応する。
+
+### 同期復旧設計 (Phase B、`sync/src/sync/` にデータ層のみ実装済み — 上記ギャップ参照)
+- 初期 1 ヶ月は半自動運用として設計: 取得 → Firestore `job_cache/{job_id}`
+  スナップショット (`snapshot.py`) → 差分検出 (`diff.py`) → `pending_review`
+  (`approval.py`, `REVIEW_BYPASS=false` が既定) → Slack 通知リンク承認 (承認
+  action 自体は未接続、上記ギャップ参照) → 配信層統合後は承認済みスナップショット
+  のみを Cloud Run 動的プロキシが配信する想定 (現状は配信層自体が未接続)
+- 連続 2 回不在で closed、closed 率 > 30% (分母は前回スナップショットの非closed
+  件数 = active + pending_review、`previous_open_count`) で同期中止 + Slack
+  アラート (`closed_detection.py`)。列挙にあった「一覧に出ているが詳細取得だけ
+  失敗」は不在と別枠で扱う (2026-08-07 codex review で発見・修正済み、
+  `crawler.py` の `listed_job_ids`/`fully_listed`)。クロール反照合
+  (`expected_total`/`collected_total`) とクロールエラー件数は同一Slack通知に
+  まとめて送信 (circuit breaker発火時に別警告が握り込まれないよう統合、同日
+  第二意見レビューで発見・修正済み)
+- 募集終了は `sync_status=closed` 化 (削除しない、SEO/被リンク維持) →
+  `closed_at` から 30 日後に GC (`closed_detection.find_gc_candidates` +
+  `firestore_repo.delete_many`、`orchestrator.run_sync` が日次実行内で実施)
+- 日次実行は Cloud Scheduler → Cloud Run Job (`python -m sync sync-run`)、
+  `infra/README.md` §8 に手順あり (Terraform モジュール化はしない方針)
 
 ### 採用FAQチャットボット (`chatbot/`、2026-07-24 デプロイ済み、2026-07-24 UX改善追加)
 採用コンサルフィードバック④への対応。決裁者方針 (GCP自前構築=Vertex AI Gemini + Cloud Run、求人FAQのみスコープ、APIキー発行なしのキーレス認証) に基づき実装 (PR #89→#90)。詳細は `chatbot/README.md`。

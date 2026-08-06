@@ -11,7 +11,9 @@ from sync.models import JobcanClientError
 
 
 def _client_no_sleep() -> JobcanClient:
-    return JobcanClient(JobcanClientConfig(max_retries=2, retry_base_delay=0.0))
+    return JobcanClient(
+        JobcanClientConfig(max_retries=2, retry_base_delay=0.0, crawl_delay=0.0)
+    )
 
 
 @respx.mock
@@ -74,3 +76,73 @@ def test_5xx_retries_then_gives_up() -> None:
     with _client_no_sleep() as client:
         with pytest.raises(JobcanClientError, match="HTTP 503"):
             client.fetch_job_detail(job_id)
+
+
+# ============================================================
+# Phase B — fetch_job_list(page=N)
+# ============================================================
+
+
+@respx.mock
+def test_fetch_job_list_page_1_uses_unchanged_url() -> None:
+    """page=1 (the default) must produce byte-identical URLs to the pre-Phase-B
+    behaviour — existing callers (`app.py`, `cli.py`) never pass `page`."""
+    expected_url = f"{JOBCAN_BASE_URL}/list?category_id=18773&hide_breadcrumb=true&hide_search=true"
+    respx.get(expected_url).mock(return_value=httpx.Response(200, text="ok"))
+    with _client_no_sleep() as client:
+        url, _ = client.fetch_job_list("18773")
+    assert url == expected_url
+
+
+@respx.mock
+def test_fetch_job_list_page_2_uses_path_segment_form() -> None:
+    """Page 2+ uses `/list/all/all/{page}?category_id=`, not `?page=N` —
+    confirmed against the real `rel="last"` links in the fixtures."""
+    expected_url = (
+        f"{JOBCAN_BASE_URL}/list/all/all/2"
+        "?category_id=18773&hide_breadcrumb=true&hide_search=true"
+    )
+    respx.get(expected_url).mock(return_value=httpx.Response(200, text="ok"))
+    with _client_no_sleep() as client:
+        url, _ = client.fetch_job_list("18773", page=2)
+    assert url == expected_url
+
+
+@respx.mock
+def test_crawl_delay_waits_between_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two requests on the same client must be spaced >= crawl_delay apart."""
+    respx.get(f"{JOBCAN_BASE_URL}/job_offers/1").mock(return_value=httpx.Response(200, text="ok"))
+    respx.get(f"{JOBCAN_BASE_URL}/job_offers/2").mock(return_value=httpx.Response(200, text="ok"))
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "sync.jobcan_client.time.sleep", lambda seconds: sleeps.append(seconds)
+    )
+
+    client = JobcanClient(
+        JobcanClientConfig(max_retries=0, retry_base_delay=0.0, crawl_delay=3.0)
+    )
+    with client:
+        client.fetch_job_detail("1")
+        client.fetch_job_detail("2")
+
+    # First request never waits (no prior request this run); the second must.
+    assert len(sleeps) == 1
+    assert sleeps[0] == pytest.approx(3.0, abs=0.1)
+
+
+@respx.mock
+def test_crawl_delay_zero_never_sleeps(monkeypatch: pytest.MonkeyPatch) -> None:
+    respx.get(f"{JOBCAN_BASE_URL}/job_offers/1").mock(return_value=httpx.Response(200, text="ok"))
+    respx.get(f"{JOBCAN_BASE_URL}/job_offers/2").mock(return_value=httpx.Response(200, text="ok"))
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(
+        "sync.jobcan_client.time.sleep", lambda seconds: sleep_calls.append(seconds)
+    )
+
+    with _client_no_sleep() as client:
+        client.fetch_job_detail("1")
+        client.fetch_job_detail("2")
+
+    assert sleep_calls == []

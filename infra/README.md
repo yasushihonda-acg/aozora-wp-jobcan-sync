@@ -22,11 +22,42 @@ gcloud services enable \
   run.googleapis.com \
   cloudbuild.googleapis.com \
   cloudresourcemanager.googleapis.com \
+  firestore.googleapis.com \
+  secretmanager.googleapis.com \
+  cloudscheduler.googleapis.com \
   --project=aozora-wp-jobcan-sync
 ```
 
 API 有効化は無料 (課金は実リソース使用分のみ)。`compute.googleapis.com` は
-Cloud Run の前提として自動有効化されるので明示不要。
+Cloud Run の前提として自動有効化されるので明示不要。`firestore.googleapis.com` /
+`secretmanager.googleapis.com` / `cloudscheduler.googleapis.com` は Phase B
+(定期同期) 向けに追加 (§1.5、B-6 の Cloud Scheduler 配線で使用)。
+
+## 1.5 Secret Manager — Slack webhook URL (Phase B、初回のみ)
+
+`sync/src/sync/notifications.py` の `notify_slack()` が読む唯一のシークレット。
+closed 率サーキットブレーカー発火時のアラート等に使う (B-3)。
+
+```bash
+# 1.5a. Slack 側で Incoming Webhook を発行し、URL を控える
+#   (Slack App 管理画面 → Incoming Webhooks → Add New Webhook to Workspace)
+
+# 1.5b. Secret Manager に登録 (値は echo -n で改行なし)
+echo -n "https://hooks.slack.com/services/XXXX/YYYY/ZZZZ" | \
+  gcloud secrets create slack-webhook-url \
+  --project=aozora-wp-jobcan-sync \
+  --data-file=- \
+  --replication-policy=automatic
+
+# 1.5c. ローテーション/URL 再発行時は新バージョンを追加 (シークレット自体は削除しない)
+echo -n "https://hooks.slack.com/services/新URL" | \
+  gcloud secrets versions add slack-webhook-url \
+  --project=aozora-wp-jobcan-sync \
+  --data-file=-
+```
+
+Cloud Run (Job/Service いずれも) の実行 SA に `roles/secretmanager.secretAccessor`
+を付与すること (B-6 のサービスアカウント作成手順内で実施)。
 
 ## 2. Artifact Registry repository 作成 + cleanup policy 適用 (初回のみ)
 
@@ -149,6 +180,124 @@ CLI から `gcloud billing budgets create` も可能だが、Billing Account Adm
 - 原因仮説: Cloud Run / GFE 側で `/healthz` を予約 path として handling している可能性
 - 影響: 採用サイト本番運用 (`/jobs/{id}` と `/jobs/?category_id=...` のみ呼ぶ WP 統合) には**影響なし**
 - 対処: `sync/src/sync/app.py` の `/healthz` → `/health` 等にリネーム + redeploy で解消見込。Phase 2B-exec の追加修正として後日対応 (現状 deploy のままでも core 機能は動作)
+
+## 8. Phase B — Cloud Run Job + Cloud Scheduler (定期同期、B-6)
+
+`sync-run` (`python -m sync sync-run`、`sync/src/sync/cli.py`) が日次実行する
+バッチ本体。§4 の FastAPI proxy サービスとは**別プロセス** (Cloud Run Job) —
+プロキシは求人ページの動的配信、Job はクロール→Firestore 書込みのみを行う。
+
+Terraform モジュール化はしない (2026-06-18 の過剰設計巻き戻し方針、
+`.claude/memory/feedback_overengineering_recovery_2026-06-18.md` 参照)。`gcloud`
+コマンドを直接実行する。
+
+### 8.1 サービスアカウント作成 (初回のみ)
+
+```bash
+gcloud iam service-accounts create aozora-sync-job \
+  --project=aozora-wp-jobcan-sync \
+  --display-name="aozora-sync Cloud Run Job (daily crawl)"
+
+# Firestore 読み書き
+gcloud projects add-iam-policy-binding aozora-wp-jobcan-sync \
+  --member="serviceAccount:aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
+  --role="roles/datastore.user"
+
+# Secret Manager (slack-webhook-url) 読み取り — §1.5 で作成済みのシークレットに対して
+gcloud secrets add-iam-policy-binding slack-webhook-url \
+  --project=aozora-wp-jobcan-sync \
+  --member="serviceAccount:aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+### 8.2 Cloud Run Job 作成 + デプロイ
+
+§3 で push した同じイメージを使う (`app.py` の FastAPI サーバーではなく
+`python -m sync sync-run` を起動コマンドとして上書きする)。
+
+```bash
+CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run jobs create aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --image=asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest \
+  --command=python \
+  --args="-m,sync,sync-run" \
+  --service-account=aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com \
+  --set-env-vars=REVIEW_BYPASS=false \
+  --memory=512Mi \
+  --cpu=1 \
+  --max-retries=0 \
+  --task-timeout=600s
+```
+
+設定根拠:
+- `REVIEW_BYPASS=false`: CLAUDE.md の運用計画通り初期は半自動 (`pending_review`
+  → Slack 通知経由で人間承認)。運用が安定したら `gcloud run jobs update` で
+  `true` に切替 (`approval.py` のフラグ、コード変更不要)
+- `max-retries=0`: 失敗時に自動リトライしない — 翌日の Cloud Scheduler 実行が
+  実質的な再試行になるため、同日中の多重実行は避ける
+- `task-timeout=600s`: 全カテゴリ (17件、うち複数ページ) のクロール + Firestore
+  書込みを想定した上限。既存 FastAPI サービスの `timeout=30s` (単一リクエスト
+  想定) とは無関係
+
+新イメージを push した後、Job にも反映するには (Cloud Run Job は Service と違い
+自動で最新イメージを追わない):
+
+```bash
+gcloud run jobs update aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --image=asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest
+```
+
+### 8.3 Cloud Scheduler — 日次トリガー (初回のみ)
+
+ジョブカン側の低負荷時間帯を想定し、JST 深夜 3:00 (`cron` は UTC 基準の
+Scheduler location 設定に依存するため `--time-zone` を明示):
+
+```bash
+# Cloud Run Job を起動するための実行用 SA (Scheduler -> Cloud Run Job の OIDC 認証)
+gcloud iam service-accounts create aozora-scheduler-invoker \
+  --project=aozora-wp-jobcan-sync \
+  --display-name="Cloud Scheduler invoker for aozora-sync-daily"
+
+gcloud run jobs add-iam-policy-binding aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --member="serviceAccount:aozora-scheduler-invoker@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+gcloud scheduler jobs create http aozora-sync-daily-trigger \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1 \
+  --schedule="0 3 * * *" \
+  --time-zone="Asia/Tokyo" \
+  --uri="https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/aozora-wp-jobcan-sync/jobs/aozora-sync-daily:run" \
+  --http-method=POST \
+  --oauth-service-account-email=aozora-scheduler-invoker@aozora-wp-jobcan-sync.iam.gserviceaccount.com
+```
+
+### 8.4 動作確認
+
+```bash
+# 手動トリガー (Scheduler を待たずに即時実行)
+gcloud scheduler jobs run aozora-sync-daily-trigger \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1
+
+# 実行結果確認 (exit code 5 = closed率サーキットブレーカー発火、0 = 正常)
+gcloud run jobs executions list \
+  --job=aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1
+
+# ログ確認 (crawler.py / closed_detection.py の structured log を grep)
+gcloud logging read \
+  'resource.type="cloud_run_job" resource.labels.job_name="aozora-sync-daily"' \
+  --project=aozora-wp-jobcan-sync \
+  --limit=50 \
+  --format=json
+```
 
 ## ロールバック
 

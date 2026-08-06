@@ -99,7 +99,49 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-なし
+- Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — 下記 Phase B 完了後に本田様判断で着手予定、未着手
+- ジョブカンへの正式照会 (スクレイピング許諾・API有無) は回答待ち。`sync/README.md`「本番デプロイ禁止: ジョブカン公式照会回答前は本番運用不可」の行と CLAUDE.md 未確定事項#1 は回答が出るまで変更しない(明示的な保留、見落としではない)
+- **Phase B 配信層統合 (B-8、未着手、2026-08-07 codex review で判明)**: `sync/src/sync/app.py` は Firestore `job_cache` を一切読まず現状もジョブカン直接フェッチのまま。`pending_review`/`closed` が実配信に無効、承認 Cloud Run エンドポイントも未実装(`approve()`/`reject()` は純関数のみ)。詳細ページ全文用にスナップショットスキーマ拡張も必要。CLAUDE.md「求人データ配信アーキテクチャ」節に既知ギャップとして明記済み。データ層(クロール→Firestore同期、テスト212件)のみ完成した状態でPR #129作成、次セッションでの実装対象
+
+## セッション履歴: 2026-08-07 Phase B 定期同期システム実装(B-1〜B-7、`sync/` 大規模拡張)
+
+社長から「看護職が入ってないのは明らかにおかしい」との指摘を起点に旧サイト比較調査を開始したところ、`mockup/jobs-nurse.html` の category_id 誤マッピング(18984=相談員 を看護師と誤認、正しい看護職は18983)が見つかった一方、本田様から「モック単発修正では同種の不整合(一回性スナップショット起因)が再発する」との根本的な設計懸念が提起され、Phase A の看護職修正を後回しにして **Phase B(ジョブカン定期同期)を先に本格実装する**方針転換があった(計画ファイル: `elegant-wobbling-snowflake.md`)。
+
+- **法務/契約面の事前確認**: ジョブカン採用管理利用規約・基本規約を一次資料で確認し、スクレイピング・クローリングを明示的に禁止する条項は無いと判明(第9条のリバースエンジニアリング禁止はソフトウェア解析文脈で公開ページ読み取りには通常適用されない解釈)。正式な許諾確認は社長へ報告済み・回答待ちだが、技術検証・実装は並行して進める判断(2026-06-18 の内部方針転換 `feedback_overengineering_recovery_2026-06-18.md` の延長)
+- **アーキテクチャ決定**: WordPress は求人データを一切保持しない設計に確定 (CPT/ACF/WP REST API 連携は不採用)。Cloud Run 動的プロキシが一覧・詳細ページを直接配信する案 D (`docs/specs/sync-strategy.md`) に設計を GCP へ集約 (「せっかく GCP でプロジェクトを組んでいるので設計を GCP に集める」という本田様判断)。矛盾していた CLAUDE.md「CPT/ACF (Phase B)」節・`sync-strategy.md` §6/§7 を本セッションで整合済み
+- **実装 (B-1〜B-6、データ層のみ)**:
+  - B-1 クロール基盤: `jobcan_client.py` にページネーション対応(`/list/all/all/{page}`形式) + Crawl-delay 3秒、`parser.py`/`models.py` にページネーション情報抽出、`crawler.py`(新規)で全17カテゴリ×全ページ巡回オーケストレータ(job_id重複排除・部分失敗継続・総件数検算)
+  - B-2 Firestoreスナップショット + 差分検出: `snapshot.py`(新規、`job_cache/{job_id}` スキーマ)、`diff.py`(新規、added/changed/unchanged/removed/unfetched分類)、`firestore_repo.py`(新規、date→datetime変換の地雷を`aozora-sns-auto`から移植)
+  - B-3 closed判定 + サーキットブレーカー: `closed_detection.py`(新規、連続2回不在で closed化、closed率>30%でサーキットブレーカー、30日GC候補選定+実削除)
+  - B-4 承認ステータス計算: `approval.py`(新規、`pending_review`判定 + `review_bypass`フラグの純関数。`aozora-sns-auto`の`compute_finalize_target_status`パターンを移植。**承認を実行するCloud Runエンドポイントは未実装**、下記ギャップ参照)
+  - B-5 Slack通知: `notifications.py`/`secrets.py`(新規、Secret Manager経由のWebhook通知、失敗を握り込む設計)
+  - B-6 Cloud Scheduler + Cloud Run Job配線: `orchestrator.py`(新規、全体オーケストレーション、GC実行含む)、`cli.py`に`sync-run`コマンド追加、`infra/README.md`にSecret Manager(§1.5)・Cloud Scheduler/Job(§8)手順追記
+  - B-7 ドキュメント整合: CLAUDE.md「CPT/ACF」節を「求人データ配信アーキテクチャ」節へ書き換え、`sync-strategy.md`のWP CPTブロック・ロードマップを現状に合わせて更新、本エントリでGOAL.md更新
+- **意図的に対象外**(過剰設計の反面教師、2026-06-18の巻き戻し方針を踏襲): Terraformモジュール化・WIF+GHA自動デプロイ・Cloud Armor・Load Balancer・Memorystore・多段階リリース・規約照会ゲート、いずれも不採用
+- **PR #129作成後、`codex review --base main -c model_reasoning_effort=high`実施(P1×3・P2×1検出)**:
+  - [P1・修正済み] `crawler.py`が「一覧には出ているが詳細取得だけ失敗」を「不在」と誤分類し、2回連続の一時的失敗だけで正常な求人をclosed化する実害バグ。`CrawlResult.listed_job_ids`/`fully_listed`を追加し、`diff.py`に`unfetched`分類・`closed_detection.py`に`skip_absence_bookkeeping`を追加して解消(テスト16件追加)
+  - [P2・修正済み] `find_gc_candidates()`が実際には呼ばれておらずGCが機能していなかった。`firestore_repo.delete_many()`を追加し`orchestrator.run_sync()`から実行するよう接続(テスト5件追加)
+  - [P1×2・未修正、B-8として次セッション対象] `app.py`がFirestoreを読まずジョブカン直接フェッチのままで承認ワークフローが実配信に無効/承認エンドポイント自体が存在しない。設計判断とスキーマ拡張を要する別スコープの機能のため、本PRでは実装せず、CLAUDE.md・GOAL.mdに既知ギャップとして明記のうえ次セッションへ持ち越し
+  - 修正後テスト212件全PASS、ruff/pyright既存ベースライン以外エラー0件
+- **並行起動した`pr-review-toolkit`(code-reviewer/pr-test-analyzer/silent-failure-hunter/type-design-analyzer)+`evaluator`の5エージェントによる第二意見レビュー結果を反映(3エージェントから報告受領、code-reviewer/evaluatorは再送依頼中)**:
+  - [HIGH・修正済み] pr-test-analyzer指摘: `review_bypass=True`時に「closedから再掲載」の安全策(`pending_review`要求)が無条件で上書きされる挙動が未テスト。意図的挙動と判断しテストで固定(`test_review_bypass_true_reactivating_from_closed_skips_review`)、`approval.py`のdocstringに根拠を明記
+  - [MED-HIGH・修正済み] pr-test-analyzer指摘: サーキットブレーカーの分子(pending_review含む全absent job)と分母(`active`限定)の population不一致で closed_rate が実態を超えて計算されうる不整合。分母を`previous_open_count`(active+pending_review)に拡張して解消(テスト2件追加)
+  - [HIGH・修正済み、silent-failure-hunter+pr-test-analyzer 2名が独立指摘] `expected_total`/`collected_total`のreconciliation機構が計算されるだけで一度も参照されておらず「サイレントな部分クロール検知」が死んでいた。`orchestrator.run_sync`で不一致を検知しSlack警告するよう接続。あわせて`collected_total`の集計基準を「重複排除後」から「カテゴリ単位・重複排除前」に修正(exp/collected両方が同じ基準でないと複数カテゴリに掲載された求人が常に不一致判定されるバグを実装中に発見・修正)
+  - [MED・意図的挙動と判断、テストのみ追加] pr-test-analyzer指摘: `pending_review`のまま2回不在の求人が`approval.reject()`を経由せず自動closed化される。「未承認でも消えたら消えた扱いでよい」という判断でコード変更なし、`test_pending_review_job_absent_twice_auto_closes_without_reject`で挙動を固定
+  - [LOW-MED・修正済み] pr-test-analyzer指摘: サーキットブレーカー30%閾値ちょうど・GC30日ちょうど・batch上限500ちょうどの境界値が未テスト。3件追加(全て期待通りの境界挙動を確認)
+  - [LOW・修正済み] pr-test-analyzer+silent-failure-hunter指摘: サーキットブレーカー発火時に別枠のクロールエラーSlack警告が握り込まれる問題。1回のSlack通知に統合(テスト追加)
+  - [MEDIUM-HIGH・対応見送り、次セッション検討] type-design-analyzer指摘: `CrawlResult.errors: list[dict[str,str]]`がキー有無で異種レコードを判別するstringly-typed設計で、`collected_total`計算の型安全性が弱い。tagged union化が対応候補だが影響範囲(crawler.py+テスト多数)が大きく本ラウンドでは見送り
+  - [MEDIUM・対応見送り、次セッション検討] type-design-analyzer指摘: `JobSnapshot`が`sync_status=="closed"⟺closed_at is not None`の不変条件をモデル自身で検証していない。`model_validator`追加を検討したが、Firestore読み込み時(`get_all()`)に不正データで即クラッシュするリスクとのトレードオフがあり、本プロジェクトの「部分失敗は継続」方針と矛盾するため見送り(silent-failure-hunter指摘の握り込み設計とは逆方向の判断、要decision-maker確認)
+  - silent-failure-hunter: `notify_slack()`の全握り込み設計・`crawl_all()`の例外網羅は「安全と確認」との評価
+- **`pr-review-toolkit:code-reviewer`(review-code)の報告(2回のフォローアップ後に受領、5件・うち高深刻度2件)を反映**:
+  - [HIGH・修正済み] `JobcanClient._wait_for_crawl_delay()`のcheck-sleep-update手続きに排他制御が無く、`app.py`が共有する同一クライアントへの並行リクエスト下で2スレッドが同時に同じ`remaining`待機時間を計算し、Crawl-delayの間隔保証を静かにすり抜けうる(`crawler.py`の逐次利用では発生しない、`app.py`固有のレース)。`threading.Lock`で該当区間を保護して解消
+  - [HIGH・修正済み、review-codeの指摘を調査した過程で自ら発見した副次バグ] 上記スレッド安全性の調査中に、`app.py`の共有プロキシクライアントがB-1で追加した`DEFAULT_CRAWL_DELAY=3.0`(バッチクロール用)をそのまま継承していたことが判明。これはcodex/review-codeどちらも明示的に指摘していない、本セッション独自の発見で、バッチ日次実行だけでなく**本番の全ライブユーザーリクエストが3秒間隔ゲートで直列化されていた**実害バグ(review-codeのレースコンディション指摘より深刻度が高い)。`create_app()`のクライアント構築時に`JobcanClientConfig(crawl_delay=0.0)`を明示指定して解消
+  - [MED・修正済み] `test_firestore_repo.py`が`conftest.py`と同内容のフェイクFirestoreクラスを重複定義。`conftest.py`からimportする形に統一
+  - [MED・修正済み] `_FirestoreClientLike.collection()`が単一`name: str`引数のみを宣言しており、実SDK(`firestore.Client.collection(*collection_path: str)`)の可変長引数と構造的に不一致でpyrightが本物のクライアントを拒否。Protocol側も`*collection_path: str`に変更(テストフェイク側も追随)
+  - 上記reconciliation_mismatch接続(B-6)の副作用で、`test_orchestrator.py`/`test_cli.py`のリスティングHTML生成helperが`.pagination-number`を含んでおらず`expected_total`が常に0扱いになる既存ギャップが露呈(サーキットブレーカー関連テスト3件が偽の不一致でabsence-bookkeepingを抑制され失敗)。両helperに`total_count`パラメータ(既定値`len(job_ids)`)を追加して解消
+  - `review-evaluator`は合計4回のフォローアップ(idle通知への再送3回+最終確認1回)に応答なし。他4エージェント(code-reviewer/pr-test-analyzer/silent-failure-hunter/type-design-analyzer)+codex review 2ラウンドから十分な相互検証済み知見を得られたと判断し、応答を待たずレビュー完了として次工程(コミット・push・ドキュメント反映)へ進めた
+  - 最終テスト221件全PASS、ruff/pyright既存ベースライン(test_app.py 17件、本PR未変更ファイル・以前からの既知偽陽性)以外エラー0件、修正3ラウンドをpush済み(直近: `4e5b426`)
+  - **決裁者への報告待ち**: 上記全修正完了後、PR #129のマージには本田様の番号単位明示認可が必要(CLAUDE.md PRワークフロー)。まだ依頼していない
 
 ## セッション履歴: 2026-08-05〜06 決裁者チャット指示対応(PR #119〜#121、全完了・本番確認済み)
 社長からのGoogleチャット指摘3件に対応。いずれも番号単位認可を経てマージ・ローカルmain同期・本番反映確認済み。

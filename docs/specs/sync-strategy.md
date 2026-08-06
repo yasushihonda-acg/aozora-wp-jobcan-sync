@@ -1,9 +1,20 @@
 # 同期戦略 (Sync Strategy)
 
+> **2026-08-07 追記 (Phase B 定期同期を実装、B-1〜B-6)**: 案 D を「一回性スナップショット」
+> から「日次クロール + Firestore 差分検出 + closed 判定/サーキットブレーカー + 承認
+> ワークフロー」の定期同期へ拡張し実装済み (`sync/src/sync/{crawler,diff,
+> closed_detection,approval,notifications,orchestrator}.py`)。WP は求人データを
+> 一切保持しない設計に確定 (せっかく GCP でプロジェクトを組んでいるため設計を GCP に
+> 集約する決裁者判断) — §6 の WordPress CPT ブロックは不採用、履歴として残置。
+> 詳細: §7 ロードマップ、`infra/README.md` §8、CLAUDE.md 「同期復旧設計 (Phase B)」節。
+>
 > **2026-06-17 大幅更新 (Codex セカンドオピニオン 2 回目反映)**:
 > 案 D (動的プロキシ + 自社テンプレ再表示) を採用方針に格上げ。WP CPT 不要、データ複製不要、応募導線はジョブカン直リンクで温存。
 >
 > **公式照会を Phase 4 → Phase 1 (早期ゲート) に格上げ**: 案 D は許諾が取れない場合に成立しない設計であり、Phase 2 以降の Cloud Run / Terraform / Memorystore 投資を始める前に許諾範囲を確定させる必要がある。
+> (2026-08-07 時点: 公式照会は送付済み・回答待ちのまま。一次資料 (ジョブカン ATS/基本規約)
+> の確認で明示的な禁止条項が無いと判明したため、回答を待つ間も技術検証・実装は並行して
+> 進める方針 — 本番デプロイ可否の最終判断はこのまま回答待ち、`sync/README.md` 参照)
 
 ## 0. 採用方針 (2026-06-17 確定)
 
@@ -147,26 +158,44 @@ Firestore: job_cache/{job_id}
   - last_seen_at: timestamp
   - sync_status: "active" | "closed" | "pending_review"
 
-WordPress: CPT job_offer
-  - post_title: 求人タイトル
-  - post_content: 仕事内容 (原文スナップショット保持)
-  - meta:jobcan_job_id (ユニークキー)
-  - meta:source_url
-  - meta:apply_url
-  - meta:salary_text, work_hours, holidays, welfare, requirements
-  - meta:address, station
-  - meta:content_hash
-  - meta:last_synced_at
-  - meta:sync_status (active/closed)
-  - meta:closed_at (closed 化日時、30 日後に trash)
-  - tax:job_type, employment_type, location, facility
 ```
+
+> **不採用 (2026-08-07、履歴として残置)**: 以下の WordPress CPT ブロックは
+> 求人データを WP 側にも複製する旧設計。GCP 集約方針の確定により実装対象では
+> ない — Firestore の `job_cache/{job_id}` (上記) を唯一の求人データストアとし、
+> Cloud Run 動的プロキシがそこから直接一覧・詳細ページを配信する**想定**。
+> **既知ギャップ (2026-08-07 codex review 検出)**: `sync/src/sync/app.py` は
+> 現状ジョブカンへ毎リクエスト直接フェッチしており、この Firestore 読み出しへの
+> 統合はまだ実装されていない (CLAUDE.md「求人データ配信アーキテクチャ」節参照)。
+>
+> ```
+> WordPress: CPT job_offer
+>   - post_title: 求人タイトル
+>   - post_content: 仕事内容 (原文スナップショット保持)
+>   - meta:jobcan_job_id (ユニークキー)
+>   - meta:source_url
+>   - meta:apply_url
+>   - meta:salary_text, work_hours, holidays, welfare, requirements
+>   - meta:address, station
+>   - meta:content_hash
+>   - meta:last_synced_at
+>   - meta:sync_status (active/closed)
+>   - meta:closed_at (closed 化日時、30 日後に trash)
+>   - tax:job_type, employment_type, location, facility
+> ```
 
 ## 7. ロードマップ
 
+> 2026-08-07 更新: 当初案 (下表の旧版) は「案 2 (CSV 半自動) を主系、案 1/3 を
+> 許諾状況で選択」という 2026-06-17 時点の暫定整理だったが、同日中に案 D
+> (動的プロキシ) へ採用方針が確定済みだったにもかかわらず本表が追従していな
+> かった。以下が現状。
+
 | 時期 | 内容 |
 |---|---|
-| Phase A 中 | ジョブカン公式照会 (この文面送付) → 回答待ち |
-| Phase B 初期 | 案 2 (CSV 半自動) で本番稼働開始、まず週次運用 |
-| Phase B 中期 | 案 3 採用可なら追加実装 (案 2 のフォールバック付き) |
-| Phase C | 案 1 採用可なら全面移行 (アダプター差し替え設計で実装) |
+| Phase A 中 | ジョブカン公式照会 (この文面送付) → 回答待ち。技術検証・実装は並行して進める (`sync/README.md` の本番デプロイ判断は引き続き回答待ち) |
+| Phase 0 (完了) | 案 D のローカル PoC。`python -m sync render/list` で単発取得・表示を確認 |
+| Phase B データ層 (実装済み、2026-08-07、B-1〜B-6) | 案 D を定期同期へ拡張。日次クロール (`crawler.py`) → Firestore 差分検出 (`diff.py`) → closed 判定 + サーキットブレーカー (`closed_detection.py`) → 承認ステータス計算 (`approval.py`, 初期は `REVIEW_BYPASS=false` で半自動) → Slack 通知 (`notifications.py`) → Cloud Scheduler + Cloud Run Job (`infra/README.md` §8)。テスト212件でカバー |
+| Phase B 配信層統合 (未着手、B-8) | `app.py` を Firestore `job_cache` 読み出しに統合(現状はジョブカン直接フェッチのまま)。詳細ページ全文用にスナップショットスキーマ拡張が必要。承認 Cloud Run エンドポイント(Slack リンク→`approve()`/`reject()` 実行)も未実装 — CLAUDE.md「求人データ配信アーキテクチャ」節の既知ギャップ参照 |
+| Phase B 運用 | 半自動運用が安定したら `REVIEW_BYPASS=true` へ切替 (承認担当の判断、コード変更不要) |
+| Phase C (未着手) | ジョブカン公式 API/Webhook が提供されると回答があれば移行検討 (現時点で公式 API の存在は一次資料で未確認) |

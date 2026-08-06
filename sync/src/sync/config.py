@@ -77,6 +77,11 @@ class ListSelectors(BaseModel):
     label: str
     description: str
     thumbnail: str
+    # Pagination selectors — never required (the parser treats a missing
+    # pagination block as "single page", not a structure change; see the
+    # selectors.yaml comment for the two real-world formats).
+    pagination_total: str
+    pagination_last_link: str
 
 
 class ThumbnailCategoryEntry(BaseModel):
