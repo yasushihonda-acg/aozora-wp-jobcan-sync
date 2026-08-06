@@ -136,13 +136,19 @@ def _detail_html(job_id: str) -> str:
     """
 
 
-def _mock_every_category_returns(job_ids: list[str]) -> None:
+def _mock_every_category_returns(job_ids: list[str], *, total_count: int | None = None) -> None:
+    """`total_count` defaults to `len(job_ids)` — an accurate `.pagination-number`
+    — so these CLI-level tests never accidentally trip `reconciliation_mismatch`
+    (see the identical rationale in `test_orchestrator.py`'s `_list_html`)."""
+    if total_count is None:
+        total_count = len(job_ids)
     cards = "".join(
         f'<div class="job-offer-box"><h2 class="job-offer-title">求人 {jid}</h2>'
         f'<a class="job-offer-title" href="/aozora/job_offers/{jid}">求人 {jid}</a></div>'
         for jid in job_ids
     )
-    html = f"<html><body>{cards}</body></html>"
+    pagination = f'<div class="pagination-number">{total_count}&nbsp;件</div>'
+    html = f"<html><body>{pagination}{cards}</body></html>"
     for category_id in KNOWN_CATEGORY_IDS:
         respx.get(
             f"{JOBCAN_BASE_URL}/list"

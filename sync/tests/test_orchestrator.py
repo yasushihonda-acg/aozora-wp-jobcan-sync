@@ -45,47 +45,13 @@ def _detail_html(job_id: str) -> str:
     """
 
 
-def _list_html(job_ids: list[str]) -> str:
-    cards = "".join(
-        f"""
-        <div class="job-offer-box">
-          <h2 class="job-offer-title">求人 {jid}</h2>
-          <a class="job-offer-title" href="/aozora/job_offers/{jid}?hide_breadcrumb=false">
-            求人 {jid}
-          </a>
-        </div>
-        """
-        for jid in job_ids
-    )
-    return f"<html><body>{cards}</body></html>"
-
-
-def _mock_all_categories_return(job_ids: list[str]) -> None:
-    """Every category_id in KNOWN_CATEGORY_IDS returns the same tiny listing
-    — the orchestrator dedupes across categories, so this still yields
-    exactly `job_ids` worth of detail fetches."""
-    from sync.crawler import KNOWN_CATEGORY_IDS
-
-    html = _list_html(job_ids)
-    for category_id in KNOWN_CATEGORY_IDS:
-        url = (
-            f"{JOBCAN_BASE_URL}/list"
-            f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
-        )
-        respx.get(url).mock(return_value=httpx.Response(200, text=html))
-    for job_id in job_ids:
-        detail_url = (
-            f"{JOBCAN_BASE_URL}/job_offers/{job_id}?hide_breadcrumb=true&hide_search=true"
-        )
-        respx.get(detail_url).mock(return_value=httpx.Response(200, text=_detail_html(job_id)))
-
-
-def _list_html_with_total(job_ids: list[str], *, total_count: int) -> str:
-    """Same as `_list_html` but with a `.pagination-number` block so
-    `expected_total` actually accumulates something — `_list_html` omits it
-    entirely, which is fine for tests that don't care about reconciliation
-    but means `total_count` stays `None` and can never demonstrate a
-    genuine match/mismatch."""
+def _list_html(job_ids: list[str], *, total_count: int | None = None) -> str:
+    """`total_count` defaults to `len(job_ids)` — an accurate `.pagination-number`
+    — so ordinary tests never accidentally trigger `reconciliation_mismatch`
+    just because they don't care about it. Pass an explicit mismatched value
+    to test the reconciliation check itself."""
+    if total_count is None:
+        total_count = len(job_ids)
     cards = "".join(
         f"""
         <div class="job-offer-box">
@@ -103,14 +69,13 @@ def _list_html_with_total(job_ids: list[str], *, total_count: int) -> str:
     </body></html>"""
 
 
-def _mock_all_categories_return_with_total(job_ids: list[str], *, total_count: int) -> None:
-    """Like `_mock_all_categories_return`, but every category also reports
-    `total_count` via `.pagination-number` — needed to test the
-    expected_total/collected_total reconciliation, which `_list_html`'s bare
-    listings can never trigger meaningfully (total_count stays `None`)."""
+def _mock_all_categories_return(job_ids: list[str], *, total_count: int | None = None) -> None:
+    """Every category_id in KNOWN_CATEGORY_IDS returns the same tiny listing
+    — the orchestrator dedupes across categories, so this still yields
+    exactly `job_ids` worth of detail fetches."""
     from sync.crawler import KNOWN_CATEGORY_IDS
 
-    html = _list_html_with_total(job_ids, total_count=total_count)
+    html = _list_html(job_ids, total_count=total_count)
     for category_id in KNOWN_CATEGORY_IDS:
         url = (
             f"{JOBCAN_BASE_URL}/list"
@@ -252,7 +217,7 @@ def test_run_sync_reconciliation_matches_when_counts_agree(
     as a mismatch; see `crawler.CrawlResult`'s docstring)."""
     alerts: list[str] = []
     monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
-    _mock_all_categories_return_with_total(["1"], total_count=1)
+    _mock_all_categories_return(["1"], total_count=1)
     repo = JobCacheRepository(FakeFirestoreClient())
 
     with _client() as client:
@@ -269,7 +234,7 @@ def test_run_sync_warns_on_reconciliation_mismatch(monkeypatch: pytest.MonkeyPat
     handling alone wouldn't catch."""
     alerts: list[str] = []
     monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
-    _mock_all_categories_return_with_total(["1"], total_count=5)
+    _mock_all_categories_return(["1"], total_count=5)
     repo = JobCacheRepository(FakeFirestoreClient())
 
     with _client() as client:

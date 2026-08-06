@@ -81,22 +81,22 @@ def run_sync(
         previous_snapshots,
         listed_job_ids=frozenset(crawl_result.listed_job_ids),
     )
-    closed_result = apply_closed_detection(
-        diff,
-        previous_snapshots,
-        now=now,
-        skip_absence_bookkeeping=not crawl_result.fully_listed,
-    )
 
     warnings: list[str] = []
     if crawl_result.errors:
         warnings.append(f"{len(crawl_result.errors)} 件のクロールエラー (Cloud Logging 参照)")
 
     # `expected_total`/`collected_total` reconciliation: catches a silent
-    # partial crawl (e.g. a 200 with a half-rendered page) that per-request
-    # error handling alone wouldn't surface — see `crawler.CrawlResult`'s
-    # docstring. This was computed but never actually checked anywhere until
-    # this fix (2026-08-07 second-opinion review finding).
+    # partial crawl (e.g. a 200 with a half-rendered page — parses fine, so
+    # `fully_listed` stays True, but under-counts) that per-request error
+    # handling alone wouldn't surface — see `crawler.CrawlResult`'s docstring.
+    # This was computed but never actually checked anywhere until this fix
+    # (2026-08-07 second-opinion review finding). A mismatch must ALSO
+    # suppress absence-bookkeeping the same way `not fully_listed` does — a
+    # second-opinion review round caught that computing the flag without
+    # actually gating `apply_closed_detection` with it meant a repeated
+    # partial listing could still quietly close genuinely-live postings
+    # while only sending a warning nobody need act on urgently.
     reconciliation_mismatch = crawl_result.expected_total != crawl_result.collected_total
     if reconciliation_mismatch:
         _logger.warning(
@@ -111,6 +111,13 @@ def run_sync(
             f"(expected={crawl_result.expected_total}, collected={crawl_result.collected_total}) "
             "— サイレントな部分クロールの可能性"
         )
+
+    closed_result = apply_closed_detection(
+        diff,
+        previous_snapshots,
+        now=now,
+        skip_absence_bookkeeping=not crawl_result.fully_listed or reconciliation_mismatch,
+    )
 
     if closed_result.circuit_breaker_tripped:
         message = (

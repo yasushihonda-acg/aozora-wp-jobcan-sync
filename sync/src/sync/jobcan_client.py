@@ -9,6 +9,7 @@ Codex review reflected:
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 
@@ -62,6 +63,13 @@ class JobcanClient:
         # Crawl-delay bookkeeping: `None` until the first request, so the very
         # first request of a run never waits.
         self._last_request_at: float | None = None
+        # `app.py` shares one JobcanClient across concurrent threadpool
+        # requests (unlike `crawler.py`'s sequential `crawl_all`, this
+        # client's calls can genuinely race). Without a lock, two threads can
+        # both read a stale `_last_request_at`, both compute the same
+        # `remaining` wait, and both proceed together — silently bypassing
+        # the intended spacing (2026-08-07 second-opinion review finding).
+        self._crawl_delay_lock = threading.Lock()
 
     def fetch_job_detail(self, job_id: str | int) -> tuple[str, str]:
         """Fetch a single job detail page.
@@ -117,13 +125,22 @@ class JobcanClient:
         Applied once per top-level call (not per retry — retries already have
         their own exponential backoff). The first request of a client's
         lifetime never waits (`_last_request_at` starts as `None`).
+
+        Lock-protected: the check-sleep-update sequence must be atomic across
+        threads, or two concurrent callers can both read the same
+        `_last_request_at`, both sleep the same (too-short) `remaining`, and
+        both fire their request together. `app.py` shares one `JobcanClient`
+        across concurrent requests, so this genuinely happens without a lock;
+        `crawler.py`'s sequential `crawl_all` never contends for it, so the
+        lock costs nothing there.
         """
-        if self._last_request_at is not None:
-            elapsed = time.monotonic() - self._last_request_at
-            remaining = self.config.crawl_delay - elapsed
-            if remaining > 0:
-                time.sleep(remaining)
-        self._last_request_at = time.monotonic()
+        with self._crawl_delay_lock:
+            if self._last_request_at is not None:
+                elapsed = time.monotonic() - self._last_request_at
+                remaining = self.config.crawl_delay - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
+            self._last_request_at = time.monotonic()
 
     def _get_with_retry(self, url: str) -> str:
         self._wait_for_crawl_delay()
