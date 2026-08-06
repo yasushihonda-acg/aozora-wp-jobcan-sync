@@ -12,7 +12,13 @@ import logging
 from dataclasses import dataclass, field
 
 from .jobcan_client import JobcanClient
-from .models import JobcanClientError, JobcanStructureChangeError, JobcanValidationError, JobOffer
+from .models import (
+    JobcanClientError,
+    JobcanStructureChangeError,
+    JobcanValidationError,
+    JobListItem,
+    JobOffer,
+)
 from .parser import parse_job_detail, parse_job_list
 
 _logger = logging.getLogger(__name__)
@@ -89,6 +95,18 @@ class CrawlResult:
     caller (`orchestrator.py`) uses this flag to suppress absence-counting
     entirely for a run where any category's picture is incomplete, rather
     than risk closing jobs based on a gap that means nothing."""
+    list_items: dict[str, JobListItem] = field(default_factory=dict)
+    """Every job_id's listing-card row (B-8: `app.py` needs `description`/
+    `labels`/`thumbnail_url` to serve category listings from Firestore
+    without ever touching Jobcan again). Keyed by job_id; the first category
+    a job_id is seen under wins if it appears in more than one (the row is
+    the same posting, category-independent fields don't differ meaningfully
+    between listings)."""
+    category_ids: dict[str, list[str]] = field(default_factory=dict)
+    """Every category_id each job_id was actually listed under this run,
+    in first-seen order. A posting can legitimately appear under more than
+    one category (see `crawl_all`'s docstring) — this is what `GET
+    /jobs/?category_id=` filters on."""
 
 
 def crawl_all(
@@ -114,7 +132,7 @@ def crawl_all(
 
     for category_id in category_ids:
         try:
-            job_ids_for_category, category_fully_listed = _collect_category_job_ids(
+            items_for_category, category_fully_listed = _collect_category_job_ids(
                 client, category_id, result
             )
         except (JobcanClientError, JobcanStructureChangeError) as exc:
@@ -130,10 +148,17 @@ def crawl_all(
 
         if not category_fully_listed:
             result.fully_listed = False
+        job_ids_for_category = [item.job_id for item in items_for_category]
         result.listed_job_ids.update(job_ids_for_category)
         result.collected_total += len(job_ids_for_category)
 
-        for job_id in job_ids_for_category:
+        for item in items_for_category:
+            job_id = item.job_id
+            result.list_items.setdefault(job_id, item)
+            result.category_ids.setdefault(job_id, [])
+            if category_id not in result.category_ids[job_id]:
+                result.category_ids[job_id].append(category_id)
+
             if job_id in seen_job_ids:
                 continue
             seen_job_ids.add(job_id)
@@ -146,22 +171,22 @@ def _collect_category_job_ids(
     client: JobcanClient,
     category_id: str,
     result: CrawlResult,
-) -> tuple[list[str], bool]:
-    """Walk every page of one category, returning (job_ids, fully_listed).
+) -> tuple[list[JobListItem], bool]:
+    """Walk every page of one category, returning (items, fully_listed).
 
     Page 1's failure propagates to the caller (category-level skip). A later
     page's failure is recorded and the walk stops for *this category only* —
     `last_page` came from page 1, so a mid-crawl failure means the remaining
     pages of this one category are missing this run, not silently dropped
     without a trace. `fully_listed=False` in that case tells the caller this
-    category's job_ids are an undercount, not a true "these are all the jobs".
+    category's items are an undercount, not a true "these are all the jobs".
     """
     source_url, html = client.fetch_job_list(category_id, page=1)
     page = parse_job_list(html, source_url)
     if page.total_count is not None:
         result.expected_total += page.total_count
 
-    job_ids = [item.job_id for item in page.items]
+    items = list(page.items)
     fully_listed = True
 
     for page_number in range(2, page.last_page + 1):
@@ -182,9 +207,9 @@ def _collect_category_job_ids(
             )
             fully_listed = False
             break
-        job_ids.extend(item.job_id for item in next_page.items)
+        items.extend(next_page.items)
 
-    return job_ids, fully_listed
+    return items, fully_listed
 
 
 def _fetch_one_detail(client: JobcanClient, job_id: str, result: CrawlResult) -> None:

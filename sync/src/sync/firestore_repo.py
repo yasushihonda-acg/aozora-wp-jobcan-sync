@@ -100,6 +100,19 @@ class JobCacheRepository:
             snapshots[doc.id] = JobSnapshot.model_validate(data)
         return snapshots
 
+    def get(self, job_id: str) -> JobSnapshot | None:
+        """Read one snapshot by job_id, or `None` if it doesn't exist.
+
+        Used by `app.py` (B-8) to serve a single detail page without reading
+        the whole collection — `get_all()` stays the right call for category
+        listings at this collection's size (~34 docs), but a single detail
+        request has no reason to pay for that.
+        """
+        doc = self._collection.document(job_id).get()
+        if not doc.exists:
+            return None
+        return JobSnapshot.model_validate(doc.to_dict() or {})
+
     def set(self, snapshot: JobSnapshot) -> None:
         self._collection.document(snapshot.job_id).set(_to_dict(snapshot))
 

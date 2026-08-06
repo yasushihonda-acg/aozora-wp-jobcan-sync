@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from .diff import DiffResult
+from .models import JobListItem
 from .snapshot import JobSnapshot, snapshot_from_offer
 
 # 1 回の不在では closed 化しない — 2 回連続不在で確定。
@@ -68,6 +69,8 @@ def apply_closed_detection(
     *,
     now: datetime,
     skip_absence_bookkeeping: bool = False,
+    list_items: dict[str, JobListItem] | None = None,
+    category_ids: dict[str, list[str]] | None = None,
 ) -> ClosedDetectionResult:
     """Fold this crawl's diff into the next `job_cache` snapshot set.
 
@@ -87,11 +90,24 @@ def apply_closed_detection(
     absence and a "we simply never got to check" gap are indistinguishable,
     so nothing should be counted toward closure until a run with a complete
     picture confirms it.
+
+    `list_items`/`category_ids` (B-8: `CrawlResult.list_items`/`category_ids`)
+    are threaded through to every freshly-built snapshot so `app.py` can serve
+    category listings straight from Firestore. Omitting them (the default)
+    leaves `JobSnapshot.list_item`/`category_ids` at their empty defaults —
+    fine for tests that only care about closed-detection, not serving.
     """
+    list_items = list_items or {}
+    category_ids = category_ids or {}
     next_snapshots: dict[str, JobSnapshot] = {}
 
     for offer in (*diff.added, *diff.changed, *diff.unchanged):
-        next_snapshots[offer.job_id] = snapshot_from_offer(offer, now=now)
+        next_snapshots[offer.job_id] = snapshot_from_offer(
+            offer,
+            now=now,
+            list_item=list_items.get(offer.job_id),
+            category_ids=category_ids.get(offer.job_id),
+        )
 
     for previous in diff.unfetched:
         next_snapshots[previous.job_id] = previous

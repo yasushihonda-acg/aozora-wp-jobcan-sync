@@ -246,3 +246,32 @@ def test_crawl_result_defaults_are_empty() -> None:
     assert result.collected_total == 0
     assert result.listed_job_ids == set()
     assert result.fully_listed is True
+    assert result.list_items == {}
+    assert result.category_ids == {}
+
+
+@respx.mock
+def test_crawl_all_records_list_item_and_single_category() -> None:
+    _mock_list_page("A", 1, _list_html(job_ids=["1"], total_count=1, last_page=1))
+    _mock_detail("1")
+
+    with _client() as client:
+        result = crawl_all(client, category_ids=("A",))
+
+    assert result.list_items["1"].job_id == "1"
+    assert result.category_ids["1"] == ["A"]
+
+
+@respx.mock
+def test_crawl_all_records_every_category_for_a_cross_listed_job() -> None:
+    """job_id 1 appears in both category A and B's listing — B-8 needs to
+    know both, so `/jobs/?category_id=` serves it under either one."""
+    _mock_list_page("A", 1, _list_html(job_ids=["1"], total_count=1, last_page=1))
+    _mock_list_page("B", 1, _list_html(job_ids=["1"], total_count=1, last_page=1))
+    _mock_detail("1")
+
+    with _client() as client:
+        result = crawl_all(client, category_ids=("A", "B"))
+
+    assert result.category_ids["1"] == ["A", "B"]
+    assert result.list_items["1"].job_id == "1"

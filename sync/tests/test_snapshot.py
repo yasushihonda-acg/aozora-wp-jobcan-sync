@@ -8,7 +8,7 @@ from typing import Any
 import pydantic
 import pytest
 
-from sync.models import JobOffer
+from sync.models import JobListItem, JobOffer
 from sync.snapshot import JobSnapshot, snapshot_from_offer
 
 
@@ -59,17 +59,38 @@ def test_snapshot_from_offer_honours_explicit_status_and_absence_count() -> None
     assert snap.absence_count == 1
 
 
-def test_snapshot_from_offer_normalized_subset_matches_offer_fields() -> None:
+def test_snapshot_from_offer_stores_full_offer_for_detail_rerender() -> None:
     offer = _offer(title="訪問看護師", salary="¥300,000〜")
     snap = snapshot_from_offer(offer, now=datetime(2026, 8, 7, tzinfo=UTC))
 
-    assert snap.normalized["title"] == "訪問看護師"
-    assert snap.normalized["salary"] == "¥300,000〜"
-    assert snap.normalized["address"] == offer.address
-    assert snap.normalized["label"] == offer.label
-    assert snap.normalized["location"] == offer.location
-    # body_html deliberately excluded — content_hash covers full-content diffing.
-    assert "body_html" not in snap.normalized
+    assert snap.offer == offer
+    assert snap.offer.body_html == "<p>本文</p>"
+
+
+def test_snapshot_from_offer_default_list_item_and_category_ids() -> None:
+    snap = snapshot_from_offer(_offer(), now=datetime(2026, 8, 7, tzinfo=UTC))
+    assert snap.list_item is None
+    assert snap.category_ids == []
+
+
+def test_snapshot_from_offer_honours_explicit_list_item_and_category_ids() -> None:
+    item = JobListItem(
+        job_id="1777023",
+        title="介護職員",
+        address="福岡事業所",
+        description="excerpt",
+        thumbnail_url=None,
+        source_thumbnail_url=None,
+        detail_url="https://recruit.jobcan.jp/aozora/job_offers/1777023",
+    )
+    snap = snapshot_from_offer(
+        _offer(),
+        now=datetime(2026, 8, 7, tzinfo=UTC),
+        list_item=item,
+        category_ids=["18773", "18988"],
+    )
+    assert snap.list_item == item
+    assert snap.category_ids == ["18773", "18988"]
 
 
 def test_two_offers_differing_only_in_salary_produce_different_hashes() -> None:
@@ -95,6 +116,7 @@ def test_job_snapshot_accepts_all_sync_statuses() -> None:
         "source_url": "https://recruit.jobcan.jp/aozora/job_offers/1",
         "apply_url": "https://recruit.jobcan.jp/aozora/entry/new/1",
         "last_seen_at": datetime(2026, 8, 7, tzinfo=UTC),
+        "offer": _offer(),
     }
     for status in ("active", "closed", "pending_review"):
         snap = JobSnapshot(**base, sync_status=status)

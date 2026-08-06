@@ -322,3 +322,46 @@ def test_skip_absence_bookkeeping_false_is_the_original_behaviour() -> None:
 
     assert set(result.newly_closed_job_ids) == {str(i) for i in range(1, 11)}
     assert result.circuit_breaker_tripped is True
+
+
+def test_list_items_and_category_ids_are_threaded_onto_fresh_snapshots() -> None:
+    """B-8: a newly-added job's listing-card row and category association
+    (from `CrawlResult.list_items`/`category_ids`) must land on the snapshot
+    `apply_closed_detection` builds, not just on the `JobOffer` — `app.py`
+    reads them off the snapshot, not the offer, when serving listings."""
+    from sync.models import JobListItem
+
+    offer = _offer("1")
+    item = JobListItem(
+        job_id="1",
+        title="介護職員",
+        address="福岡事業所",
+        description="excerpt",
+        thumbnail_url=None,
+        source_thumbnail_url=None,
+        detail_url="https://recruit.jobcan.jp/aozora/job_offers/1",
+    )
+    diff = compute_diff([offer], previous_snapshots={})
+
+    result = apply_closed_detection(
+        diff,
+        {},
+        now=_DAY1,
+        list_items={"1": item},
+        category_ids={"1": ["18773", "18988"]},
+    )
+
+    assert result.next_snapshots["1"].list_item == item
+    assert result.next_snapshots["1"].category_ids == ["18773", "18988"]
+
+
+def test_list_items_and_category_ids_default_to_empty_when_omitted() -> None:
+    """Existing callers that only care about closed-detection (not serving)
+    must not be forced to pass these — omitting them stays safe."""
+    offer = _offer("1")
+    diff = compute_diff([offer], previous_snapshots={})
+
+    result = apply_closed_detection(diff, {}, now=_DAY1)
+
+    assert result.next_snapshots["1"].list_item is None
+    assert result.next_snapshots["1"].category_ids == []
