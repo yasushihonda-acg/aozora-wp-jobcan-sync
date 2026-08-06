@@ -298,7 +298,7 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run jobs create aozora-
   --memory=512Mi \
   --cpu=1 \
   --max-retries=0 \
-  --task-timeout=1800s
+  --task-timeout=3600s
 ```
 
 設定根拠:
@@ -309,9 +309,11 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run jobs create aozora-
   である限り実際には発生しない (`compute_target_sync_status` の既存実装)
 - `max-retries=0`: 失敗時に自動リトライしない — 翌日の Cloud Scheduler 実行が
   実質的な再試行になるため、同日中の多重実行は避ける
-- `task-timeout=1800s`: 全カテゴリ (17件、うち複数ページ) のクロールは
-  crawl_delay 3秒 × ページ数の直列実行で初回は10分前後を見込む。旧
-  `600s` では不足の可能性が高いため引き上げ。既存 FastAPI サービスの
+- `task-timeout=3600s`: 全17カテゴリ(実測382件、47リストページ)を
+  crawl_delay 3秒で巡回すると実測約21.4分(1,287秒)。Cloud Run Job の
+  課金は実実行時間のみで timeout 上限を上げてもコストは増えないため、
+  リトライバックオフ等の揺らぎを吸収する余裕を持たせて1時間に設定
+  (旧 `1800s` でも実測値の約1.4倍の余裕はあったが、より安全側に統一)。既存 FastAPI サービスの
   `timeout=30s` (単一リクエスト想定) とは無関係
 
 新イメージを push した後、Job にも反映するには (Cloud Run Job は Service と違い
