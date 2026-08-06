@@ -197,3 +197,61 @@ def test_gc_candidate_excludes_closed_job_with_no_closed_at() -> None:
     Firestore data) must never be treated as GC-eligible."""
     malformed = _snapshot("1", sync_status="closed", closed_at=None)
     assert find_gc_candidates({"1": malformed}, now=_DAY1 + timedelta(days=365)) == []
+
+
+def test_unfetched_job_is_carried_forward_untouched() -> None:
+    """A job listed but whose detail fetch failed (diff.unfetched) must not
+    have its absence_count touched, and must not close — this is the
+    behaviour the P1 codex finding required."""
+    previous = {"1": _snapshot("1", absence_count=1)}
+    diff = DiffResult(unfetched=[previous["1"]])
+
+    result = apply_closed_detection(diff, previous, now=_DAY3)
+
+    snap = result.next_snapshots["1"]
+    assert snap.absence_count == 1  # unchanged, not incremented
+    assert snap.sync_status == "active"
+    assert result.newly_closed_job_ids == []
+
+
+def test_unfetched_does_not_count_toward_circuit_breaker() -> None:
+    previous = {str(i): _snapshot(str(i), absence_count=1) for i in range(1, 11)}
+    diff = DiffResult(unfetched=list(previous.values()))
+
+    result = apply_closed_detection(diff, previous, now=_DAY3)
+
+    assert result.newly_closed_job_ids == []
+    assert result.closed_rate == 0.0
+    assert result.circuit_breaker_tripped is False
+
+
+def test_skip_absence_bookkeeping_treats_removed_like_unfetched() -> None:
+    """When a crawl is incomplete (some category failed to list at all,
+    `CrawlResult.fully_listed=False`), `diff.removed` must not advance
+    absence_count or close anything — a category-level listing failure is
+    just as uninformative as a per-job fetch failure."""
+    previous = {str(i): _snapshot(str(i), absence_count=1) for i in range(1, 11)}
+    diff = compute_diff([], previous_snapshots=previous)
+    assert len(diff.removed) == 10  # sanity: without the flag these would close
+
+    result = apply_closed_detection(
+        diff, previous, now=_DAY3, skip_absence_bookkeeping=True
+    )
+
+    assert result.newly_closed_job_ids == []
+    assert result.circuit_breaker_tripped is False
+    for snap in result.next_snapshots.values():
+        assert snap.absence_count == 1  # unchanged
+        assert snap.sync_status == "active"
+
+
+def test_skip_absence_bookkeeping_false_is_the_original_behaviour() -> None:
+    """Sanity check that the new parameter defaults to the pre-fix behaviour
+    for a genuinely complete crawl."""
+    previous = {str(i): _snapshot(str(i), absence_count=1) for i in range(1, 11)}
+    diff = compute_diff([], previous_snapshots=previous)
+
+    result = apply_closed_detection(diff, previous, now=_DAY3)
+
+    assert set(result.newly_closed_job_ids) == {str(i) for i in range(1, 11)}
+    assert result.circuit_breaker_tripped is True

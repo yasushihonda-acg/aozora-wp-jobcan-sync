@@ -4,7 +4,7 @@ network or GCP call happens in this file."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -145,7 +145,13 @@ def test_run_sync_circuit_breaker_trip_writes_nothing(monkeypatch: pytest.Monkey
         snap = snapshot_from_offer(_offer_stub(str(i)), now=_NOW, absence_count=1)
         repo.set(snap)
 
-    _mock_all_categories_return([])  # every previously-active job vanishes this crawl too
+    # Every category still lists successfully (fully_listed=True) but none of
+    # them mention job_ids 1-10 — a genuine absence, not a listing failure.
+    # (An empty `.job-offer-box` listing would itself raise
+    # JobcanStructureChangeError, which is a *different* signal this fix
+    # deliberately treats as "unknown," not "closed" — see the P1 codex
+    # finding this test guards against.)
+    _mock_all_categories_return(["999"])
 
     with _client() as client:
         result = orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
@@ -190,6 +196,77 @@ def test_run_sync_notifies_slack_on_crawl_errors(monkeypatch: pytest.MonkeyPatch
     assert result.written is True
     assert len(result.crawl.errors) == 1
     assert len(alerts) == 1
+
+
+@respx.mock
+def test_run_sync_repeated_detail_fetch_failures_never_close_a_listed_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end regression test for the P1 codex finding: a job that stays
+    listed every run but whose detail fetch keeps failing (e.g. a persistent
+    Jobcan-side 500 on that one posting) must NEVER close, no matter how many
+    consecutive runs this happens across — closing requires evidence the
+    listing itself stopped mentioning it, which never happens here."""
+    from sync.crawler import KNOWN_CATEGORY_IDS
+
+    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    repo = JobCacheRepository(FakeFirestoreClient())
+
+    # Run 1: job "1" is listed and fetched successfully, becomes active.
+    _mock_all_categories_return(["1"])
+    with _client() as client:
+        orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
+    assert repo.get_all()["1"].sync_status == "active"
+
+    # Runs 2 and 3: job "1" is still listed everywhere, but its detail page
+    # 500s both times — under the pre-fix behaviour this would have counted
+    # as 2 consecutive absences and closed it.
+    for category_id in KNOWN_CATEGORY_IDS:
+        respx.get(
+            f"{JOBCAN_BASE_URL}/list"
+            f"?category_id={category_id}&hide_breadcrumb=true&hide_search=true"
+        ).mock(return_value=httpx.Response(200, text=_list_html(["1"])))
+    respx.get(
+        f"{JOBCAN_BASE_URL}/job_offers/1?hide_breadcrumb=true&hide_search=true"
+    ).mock(return_value=httpx.Response(500))
+
+    for _ in range(2):
+        with _client() as client:
+            result = orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
+        assert result.newly_closed == 0
+        snap = repo.get_all()["1"]
+        assert snap.sync_status == "active"
+        assert snap.absence_count == 0
+
+
+@respx.mock
+def test_run_sync_deletes_gc_eligible_closed_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A `closed` job past the 30-day retention window must actually be
+    deleted from Firestore by the end of a successful run — the P2 codex
+    finding was that `find_gc_candidates` was never wired to a deletion."""
+    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    repo = JobCacheRepository(FakeFirestoreClient())
+
+    long_closed = snapshot_from_offer(_offer_stub("old"), now=_NOW - timedelta(days=40))
+    long_closed = long_closed.model_copy(
+        update={"sync_status": "closed", "closed_at": _NOW - timedelta(days=31)}
+    )
+    recently_closed = snapshot_from_offer(_offer_stub("recent"), now=_NOW - timedelta(days=5))
+    recently_closed = recently_closed.model_copy(
+        update={"sync_status": "closed", "closed_at": _NOW - timedelta(days=5)}
+    )
+    repo.set(long_closed)
+    repo.set(recently_closed)
+
+    _mock_all_categories_return(["1"])
+    with _client() as client:
+        result = orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
+
+    assert result.gc_deleted == 1
+    remaining = repo.get_all()
+    assert "old" not in remaining
+    assert "recent" in remaining
+    assert "1" in remaining
 
 
 def _offer_stub(job_id: str):

@@ -174,6 +174,55 @@ def test_crawl_all_continues_after_one_detail_fetch_fails() -> None:
 
     assert {o.job_id for o in result.offers} == {"2"}
     assert any(e.get("job_id") == "1" for e in result.errors)
+    # job_id 1 was still *listed* even though its detail fetch failed — this
+    # is what lets diff.py distinguish "fetch failed" from "gone from the
+    # listing" (P1 codex finding).
+    assert result.listed_job_ids == {"1", "2"}
+    assert result.fully_listed is True
+
+
+@respx.mock
+def test_crawl_all_fully_listed_false_when_category_page_1_fails() -> None:
+    respx.get(
+        f"{JOBCAN_BASE_URL}/list?category_id=A&hide_breadcrumb=true&hide_search=true"
+    ).mock(return_value=httpx.Response(500))
+
+    with _client() as client:
+        result = crawl_all(client, category_ids=("A",))
+
+    assert result.fully_listed is False
+    assert result.listed_job_ids == set()
+
+
+@respx.mock
+def test_crawl_all_fully_listed_false_when_a_later_page_fails() -> None:
+    _mock_list_page("A", 1, _list_html(job_ids=["1"], total_count=2, last_page=2))
+    respx.get(
+        f"{JOBCAN_BASE_URL}/list/all/all/2?category_id=A&hide_breadcrumb=true&hide_search=true"
+    ).mock(return_value=httpx.Response(500))
+    _mock_detail("1")
+
+    with _client() as client:
+        result = crawl_all(client, category_ids=("A",))
+
+    assert result.fully_listed is False
+    # Page 1's job_id is still legitimately listed — only the missing page 2
+    # is unknown, not page 1's contents.
+    assert result.listed_job_ids == {"1"}
+
+
+@respx.mock
+def test_crawl_all_fully_listed_true_when_every_category_succeeds() -> None:
+    _mock_list_page("A", 1, _list_html(job_ids=["1"], total_count=1, last_page=1))
+    _mock_list_page("B", 1, _list_html(job_ids=["2"], total_count=1, last_page=1))
+    _mock_detail("1")
+    _mock_detail("2")
+
+    with _client() as client:
+        result = crawl_all(client, category_ids=("A", "B"))
+
+    assert result.fully_listed is True
+    assert result.listed_job_ids == {"1", "2"}
 
 
 @respx.mock
@@ -195,3 +244,5 @@ def test_crawl_result_defaults_are_empty() -> None:
     assert result.errors == []
     assert result.expected_total == 0
     assert result.collected_total == 0
+    assert result.listed_job_ids == set()
+    assert result.fully_listed is True

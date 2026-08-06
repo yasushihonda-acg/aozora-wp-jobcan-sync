@@ -48,14 +48,20 @@ class _FakeCollection:
 class _FakeBatch:
     def __init__(self, store: dict) -> None:
         self._store = store
-        self._pending: list[tuple[str, dict]] = []
+        self._pending: list[tuple[str, dict | None]] = []
 
     def set(self, doc_ref: _FakeDocRef, data: dict) -> None:
         self._pending.append((doc_ref.id, data))
 
+    def delete(self, doc_ref: _FakeDocRef) -> None:
+        self._pending.append((doc_ref.id, None))
+
     def commit(self) -> None:
         for doc_id, data in self._pending:
-            self._store[doc_id] = data
+            if data is None:
+                self._store.pop(doc_id, None)
+            else:
+                self._store[doc_id] = data
 
 
 class _FakeFirestoreClient:
@@ -132,6 +138,55 @@ def test_set_many_chunks_at_batch_limit(monkeypatch) -> None:
 
     assert len(batch_calls) == 2
     assert len(repo.get_all()) == 501
+
+
+def test_delete_many_removes_specified_snapshots() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1"), _snapshot("2"), _snapshot("3")])
+
+    repo.delete_many(["1", "3"])
+
+    assert set(repo.get_all()) == {"2"}
+
+
+def test_delete_many_on_empty_list_is_a_no_op() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1")])
+
+    repo.delete_many([])
+
+    assert set(repo.get_all()) == {"1"}
+
+
+def test_delete_many_ignores_nonexistent_job_ids() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1")])
+
+    repo.delete_many(["does-not-exist"])
+
+    assert set(repo.get_all()) == {"1"}
+
+
+def test_delete_many_chunks_at_batch_limit(monkeypatch) -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot(str(i)) for i in range(501)])
+    batch_calls = []
+    original_batch = client.batch
+
+    def _counting_batch():
+        batch_calls.append(1)
+        return original_batch()
+
+    monkeypatch.setattr(client, "batch", _counting_batch)
+
+    repo.delete_many([str(i) for i in range(501)])
+
+    assert len(batch_calls) == 2
+    assert repo.get_all() == {}
 
 
 def test_set_overwrites_existing_snapshot_for_same_job_id() -> None:

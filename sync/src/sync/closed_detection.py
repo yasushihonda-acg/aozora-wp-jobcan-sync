@@ -55,24 +55,44 @@ def apply_closed_detection(
     previous_snapshots: dict[str, JobSnapshot],
     *,
     now: datetime,
+    skip_absence_bookkeeping: bool = False,
 ) -> ClosedDetectionResult:
     """Fold this crawl's diff into the next `job_cache` snapshot set.
 
     Every job seen this crawl (added/changed/unchanged) becomes `active` with
-    `absence_count` reset to 0. Every job absent this crawl (`diff.removed`)
-    gets its `absence_count` incremented; the 2nd consecutive absence flips
-    it to `closed` and stamps `closed_at`. A job already `closed` from an
-    earlier run is left untouched — `absence_count` stops mattering once
-    closed, and re-stamping `closed_at` on every subsequent run would break
-    the 30-day GC window's start point.
+    `absence_count` reset to 0. `diff.unfetched` (listed but detail fetch
+    failed) is carried forward untouched — no fresh data, no evidence of
+    absence either, so nothing about it should change. Every job genuinely
+    absent this crawl (`diff.removed`) gets its `absence_count` incremented;
+    the 2nd consecutive absence flips it to `closed` and stamps `closed_at`.
+    A job already `closed` from an earlier run is left untouched —
+    `absence_count` stops mattering once closed, and re-stamping `closed_at`
+    on every subsequent run would break the 30-day GC window's start point.
+
+    `skip_absence_bookkeeping=True` (pass when `CrawlResult.fully_listed` is
+    False) treats every entry in `diff.removed` the same as `unfetched`
+    instead: if any category failed to list completely this run, a "genuine"
+    absence and a "we simply never got to check" gap are indistinguishable,
+    so nothing should be counted toward closure until a run with a complete
+    picture confirms it.
     """
     next_snapshots: dict[str, JobSnapshot] = {}
 
     for offer in (*diff.added, *diff.changed, *diff.unchanged):
         next_snapshots[offer.job_id] = snapshot_from_offer(offer, now=now)
 
+    for previous in diff.unfetched:
+        next_snapshots[previous.job_id] = previous
+
+    if skip_absence_bookkeeping:
+        for previous in diff.removed:
+            next_snapshots[previous.job_id] = previous
+        removed_candidates: list[JobSnapshot] = []
+    else:
+        removed_candidates = diff.removed
+
     newly_closed: list[str] = []
-    for previous in diff.removed:
+    for previous in removed_candidates:
         if previous.sync_status == "closed":
             next_snapshots[previous.job_id] = previous
             continue

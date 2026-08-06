@@ -56,14 +56,20 @@ class _FakeCollection:
 class _FakeBatch:
     def __init__(self, store: dict) -> None:
         self._store = store
-        self._pending: list[tuple[str, dict]] = []
+        self._pending: list[tuple[str, dict | None]] = []
 
     def set(self, doc_ref: _FakeDocRef, data: dict) -> None:
         self._pending.append((doc_ref.id, data))
 
+    def delete(self, doc_ref: _FakeDocRef) -> None:
+        self._pending.append((doc_ref.id, None))
+
     def commit(self) -> None:
         for doc_id, data in self._pending:
-            self._store[doc_id] = data
+            if data is None:
+                self._store.pop(doc_id, None)
+            else:
+                self._store[doc_id] = data
 
 
 class FakeFirestoreClient:

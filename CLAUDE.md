@@ -68,22 +68,38 @@ mockup 内のキャラ含みイラスト (求人カード + philosophy / flow �
 
 ### 求人データ配信アーキテクチャ (Phase B、2026-08-07 GCP 集約に確定)
 WordPress は求人データを一切保持しない (CPT/ACF/WP REST API 連携は不採用)。
-Cloud Run 動的プロキシ (`sync/`) がジョブカンの求人一覧・詳細ページを直接
-配信する (`docs/specs/sync-strategy.md` 案D)。WordPress の役割は将来のブログ・
-お知らせページのみに縮小 (せっかく GCP でプロジェクトを組んでいるため、ADR的にも
-設計を GCP へ集約する決裁者判断)。旧設計 (WP CPT `job_offer` + Taxonomy に
-求人データを同期する案) は本節の履歴として記録するのみ、実装対象ではない。
+Cloud Run 動的プロキシ (`sync/src/sync/app.py`) がジョブカンの求人一覧・詳細
+ページを直接配信する (`docs/specs/sync-strategy.md` 案D)。WordPress の役割は
+将来のブログ・お知らせページのみに縮小 (せっかく GCP でプロジェクトを組んでいる
+ため、ADR的にも設計を GCP へ集約する決裁者判断)。旧設計 (WP CPT `job_offer` +
+Taxonomy に求人データを同期する案) は本節の履歴として記録するのみ、実装対象では
+ない。
 
-### 同期復旧設計 (Phase B、`sync/src/sync/` に実装済み)
-- 初期 1 ヶ月は半自動運用: 取得 → Firestore `job_cache/{job_id}` スナップショット
-  (`snapshot.py`) → 差分検出 (`diff.py`) → `pending_review` (`approval.py`,
-  `REVIEW_BYPASS=false` が既定) → Slack 通知リンク承認 → Firestore 上の
-  承認済みスナップショットを Cloud Run 動的プロキシがそのまま配信 (WP 反映は発生しない)
+**未接続の既知ギャップ (2026-08-07 codex review 検出、B-8 として要フォロー)**:
+`app.py` は現在も**ジョブカンへ毎リクエスト直接フェッチ**しており、下記の同期
+パイプライン(Firestore `job_cache`)を一切読んでいない。つまり `pending_review`/
+`closed` は実配信に何の効果も持たず、未承認の新規求人もそのまま公開されてしまう。
+`JobSnapshot.normalized` も一覧カード相当のフィールドのみで詳細ページ本文
+(`body_html` 等)を持たないため、素朴な読み替えでは詳細ページを再現できない
+(スキーマ拡張が必要)。承認 API も同様に未接続で、`approval.py` の `approve()`/
+`reject()` は純関数として実装・テスト済みだが、これを呼ぶ Cloud Run エンドポイント
+が存在しない — Slack 通知リンクをクリックしても何も起きない。データ層 (クロール→
+Firestore同期) は完成・テスト済みだが、配信層・承認導線の統合は次の実装サイクルで
+対応する。
+
+### 同期復旧設計 (Phase B、`sync/src/sync/` にデータ層のみ実装済み — 上記ギャップ参照)
+- 初期 1 ヶ月は半自動運用として設計: 取得 → Firestore `job_cache/{job_id}`
+  スナップショット (`snapshot.py`) → 差分検出 (`diff.py`) → `pending_review`
+  (`approval.py`, `REVIEW_BYPASS=false` が既定) → Slack 通知リンク承認 (承認
+  action 自体は未接続、上記ギャップ参照) → 配信層統合後は承認済みスナップショット
+  のみを Cloud Run 動的プロキシが配信する想定 (現状は配信層自体が未接続)
 - 連続 2 回不在で closed、closed 率 > 30% (分母は前回スナップショットの active
-  件数) で同期中止 + Slack アラート (`closed_detection.py`)
+  件数) で同期中止 + Slack アラート (`closed_detection.py`)。列挙にあった「一覧に
+  出ているが詳細取得だけ失敗」は不在と別枠で扱う (2026-08-07 codex review で発見・
+  修正済み、`crawler.py` の `listed_job_ids`/`fully_listed`)
 - 募集終了は `sync_status=closed` 化 (削除しない、SEO/被リンク維持) →
-  `closed_at` から 30 日後に GC (`closed_detection.find_gc_candidates`、
-  Cloud Run Job 日次実行、Firestore TTL は使わず明示的な GC ジョブ)
+  `closed_at` から 30 日後に GC (`closed_detection.find_gc_candidates` +
+  `firestore_repo.delete_many`、`orchestrator.run_sync` が日次実行内で実施)
 - 日次実行は Cloud Scheduler → Cloud Run Job (`python -m sync sync-run`)、
   `infra/README.md` §8 に手順あり (Terraform モジュール化はしない方針)
 

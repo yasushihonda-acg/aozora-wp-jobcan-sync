@@ -101,6 +101,7 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 ## 🔄 中断点（in-flight）
 - Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — 下記 Phase B 完了後に本田様判断で着手予定、未着手
 - ジョブカンへの正式照会 (スクレイピング許諾・API有無) は回答待ち。`sync/README.md`「本番デプロイ禁止: ジョブカン公式照会回答前は本番運用不可」の行と CLAUDE.md 未確定事項#1 は回答が出るまで変更しない(明示的な保留、見落としではない)
+- **Phase B 配信層統合 (B-8、未着手、2026-08-07 codex review で判明)**: `sync/src/sync/app.py` は Firestore `job_cache` を一切読まず現状もジョブカン直接フェッチのまま。`pending_review`/`closed` が実配信に無効、承認 Cloud Run エンドポイントも未実装(`approve()`/`reject()` は純関数のみ)。詳細ページ全文用にスナップショットスキーマ拡張も必要。CLAUDE.md「求人データ配信アーキテクチャ」節に既知ギャップとして明記済み。データ層(クロール→Firestore同期、テスト212件)のみ完成した状態でPR #129作成、次セッションでの実装対象
 
 ## セッション履歴: 2026-08-07 Phase B 定期同期システム実装(B-1〜B-7、`sync/` 大規模拡張)
 
@@ -108,15 +109,21 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 
 - **法務/契約面の事前確認**: ジョブカン採用管理利用規約・基本規約を一次資料で確認し、スクレイピング・クローリングを明示的に禁止する条項は無いと判明(第9条のリバースエンジニアリング禁止はソフトウェア解析文脈で公開ページ読み取りには通常適用されない解釈)。正式な許諾確認は社長へ報告済み・回答待ちだが、技術検証・実装は並行して進める判断(2026-06-18 の内部方針転換 `feedback_overengineering_recovery_2026-06-18.md` の延長)
 - **アーキテクチャ決定**: WordPress は求人データを一切保持しない設計に確定 (CPT/ACF/WP REST API 連携は不採用)。Cloud Run 動的プロキシが一覧・詳細ページを直接配信する案 D (`docs/specs/sync-strategy.md`) に設計を GCP へ集約 (「せっかく GCP でプロジェクトを組んでいるので設計を GCP に集める」という本田様判断)。矛盾していた CLAUDE.md「CPT/ACF (Phase B)」節・`sync-strategy.md` §6/§7 を本セッションで整合済み
-- **実装 (B-1〜B-6、テスト196件全PASS・ruff/pyright既存ベースライン以外エラー0件)**:
+- **実装 (B-1〜B-6、データ層のみ)**:
   - B-1 クロール基盤: `jobcan_client.py` にページネーション対応(`/list/all/all/{page}`形式) + Crawl-delay 3秒、`parser.py`/`models.py` にページネーション情報抽出、`crawler.py`(新規)で全17カテゴリ×全ページ巡回オーケストレータ(job_id重複排除・部分失敗継続・総件数検算)
-  - B-2 Firestoreスナップショット + 差分検出: `snapshot.py`(新規、`job_cache/{job_id}` スキーマ)、`diff.py`(新規、added/changed/unchanged/removed分類)、`firestore_repo.py`(新規、date→datetime変換の地雷を`aozora-sns-auto`から移植)
-  - B-3 closed判定 + サーキットブレーカー: `closed_detection.py`(新規、連続2回不在で closed化、closed率>30%でサーキットブレーカー、30日GC候補選定)
-  - B-4 承認ワークフロー: `approval.py`(新規、`pending_review`ゲート + `review_bypass`フラグ。`aozora-sns-auto`の`compute_finalize_target_status`パターンを移植)
+  - B-2 Firestoreスナップショット + 差分検出: `snapshot.py`(新規、`job_cache/{job_id}` スキーマ)、`diff.py`(新規、added/changed/unchanged/removed/unfetched分類)、`firestore_repo.py`(新規、date→datetime変換の地雷を`aozora-sns-auto`から移植)
+  - B-3 closed判定 + サーキットブレーカー: `closed_detection.py`(新規、連続2回不在で closed化、closed率>30%でサーキットブレーカー、30日GC候補選定+実削除)
+  - B-4 承認ステータス計算: `approval.py`(新規、`pending_review`判定 + `review_bypass`フラグの純関数。`aozora-sns-auto`の`compute_finalize_target_status`パターンを移植。**承認を実行するCloud Runエンドポイントは未実装**、下記ギャップ参照)
   - B-5 Slack通知: `notifications.py`/`secrets.py`(新規、Secret Manager経由のWebhook通知、失敗を握り込む設計)
-  - B-6 Cloud Scheduler + Cloud Run Job配線: `orchestrator.py`(新規、全体オーケストレーション)、`cli.py`に`sync-run`コマンド追加、`infra/README.md`にSecret Manager(§1.5)・Cloud Scheduler/Job(§8)手順追記
+  - B-6 Cloud Scheduler + Cloud Run Job配線: `orchestrator.py`(新規、全体オーケストレーション、GC実行含む)、`cli.py`に`sync-run`コマンド追加、`infra/README.md`にSecret Manager(§1.5)・Cloud Scheduler/Job(§8)手順追記
   - B-7 ドキュメント整合: CLAUDE.md「CPT/ACF」節を「求人データ配信アーキテクチャ」節へ書き換え、`sync-strategy.md`のWP CPTブロック・ロードマップを現状に合わせて更新、本エントリでGOAL.md更新
 - **意図的に対象外**(過剰設計の反面教師、2026-06-18の巻き戻し方針を踏襲): Terraformモジュール化・WIF+GHA自動デプロイ・Cloud Armor・Load Balancer・Memorystore・多段階リリース・規約照会ゲート、いずれも不採用
+- **PR #129作成後、`codex review --base main -c model_reasoning_effort=high`実施(P1×3・P2×1検出)**:
+  - [P1・修正済み] `crawler.py`が「一覧には出ているが詳細取得だけ失敗」を「不在」と誤分類し、2回連続の一時的失敗だけで正常な求人をclosed化する実害バグ。`CrawlResult.listed_job_ids`/`fully_listed`を追加し、`diff.py`に`unfetched`分類・`closed_detection.py`に`skip_absence_bookkeeping`を追加して解消(テスト16件追加)
+  - [P2・修正済み] `find_gc_candidates()`が実際には呼ばれておらずGCが機能していなかった。`firestore_repo.delete_many()`を追加し`orchestrator.run_sync()`から実行するよう接続(テスト5件追加)
+  - [P1×2・未修正、B-8として次セッション対象] `app.py`がFirestoreを読まずジョブカン直接フェッチのままで承認ワークフローが実配信に無効/承認エンドポイント自体が存在しない。設計判断とスキーマ拡張を要する別スコープの機能のため、本PRでは実装せず、CLAUDE.md・GOAL.mdに既知ギャップとして明記のうえ次セッションへ持ち越し
+  - 修正後テスト212件全PASS、ruff/pyright既存ベースライン以外エラー0件
+  - 並行して`pr-review-toolkit`(code-reviewer/pr-test-analyzer/silent-failure-hunter/type-design-analyzer)+`evaluator`の5エージェントによる第二意見レビューも実施(結果は本エントリ更新時点で集約待ち、次回セッションで反映)
 
 ## セッション履歴: 2026-08-05〜06 決裁者チャット指示対応(PR #119〜#121、全完了・本番確認済み)
 社長からのGoogleチャット指摘3件に対応。いずれも番号単位認可を経てマージ・ローカルmain同期・本番反映確認済み。

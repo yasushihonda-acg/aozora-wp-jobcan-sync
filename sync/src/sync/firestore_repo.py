@@ -111,3 +111,17 @@ class JobCacheRepository:
             for snapshot in chunk:
                 batch.set(self._collection.document(snapshot.job_id), _to_dict(snapshot))
             batch.commit()
+
+    def delete_many(self, job_ids: list[str]) -> None:
+        """Batched delete, chunked at Firestore's 500-mutation limit per batch.
+
+        Used by the 30-day closed-job GC (`closed_detection.find_gc_candidates`,
+        B-3/B-6) — that function only *selects* candidates, this is the actual
+        mutation the caller applies.
+        """
+        for start in range(0, len(job_ids), _BATCH_LIMIT):
+            chunk = job_ids[start : start + _BATCH_LIMIT]
+            batch = self._client.batch()
+            for job_id in chunk:
+                batch.delete(self._collection.document(job_id))
+            batch.commit()

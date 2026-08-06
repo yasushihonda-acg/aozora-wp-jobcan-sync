@@ -70,6 +70,21 @@ class CrawlResult:
     errors: list[dict[str, str]] = field(default_factory=list)
     expected_total: int = 0
     collected_total: int = 0
+    listed_job_ids: set[str] = field(default_factory=set)
+    """Every job_id actually observed in a successfully-fetched listing page
+    this run, regardless of whether its detail fetch later succeeded. This is
+    the ground truth `diff.compute_diff` needs to avoid conflating "detail
+    fetch failed" with "gone from the listing" (see `fully_listed` below for
+    the category-level equivalent) — `closed_detection.py`'s absence counter
+    must never advance just because *we* failed to fetch something."""
+    fully_listed: bool = True
+    """False if any category failed to list completely this run (page 1
+    itself failed, or a later page failed mid-pagination). `listed_job_ids`
+    alone can't distinguish "this job_id is genuinely gone" from "its whole
+    category failed to list, so we never got the chance to see it" — the
+    caller (`orchestrator.py`) uses this flag to suppress absence-counting
+    entirely for a run where any category's picture is incomplete, rather
+    than risk closing jobs based on a gap that means nothing."""
 
 
 def crawl_all(
@@ -95,16 +110,23 @@ def crawl_all(
 
     for category_id in category_ids:
         try:
-            job_ids_for_category = _collect_category_job_ids(client, category_id, result)
+            job_ids_for_category, category_fully_listed = _collect_category_job_ids(
+                client, category_id, result
+            )
         except (JobcanClientError, JobcanStructureChangeError) as exc:
             result.errors.append(
                 {"category_id": category_id, "error": f"{type(exc).__name__}: {exc}"}
             )
+            result.fully_listed = False
             _logger.error(
                 "crawl: category listing failed, skipping category",
                 extra={"category_id": category_id, "error": str(exc)},
             )
             continue
+
+        if not category_fully_listed:
+            result.fully_listed = False
+        result.listed_job_ids.update(job_ids_for_category)
 
         for job_id in job_ids_for_category:
             if job_id in seen_job_ids:
@@ -120,14 +142,15 @@ def _collect_category_job_ids(
     client: JobcanClient,
     category_id: str,
     result: CrawlResult,
-) -> list[str]:
-    """Walk every page of one category, returning every job_id found.
+) -> tuple[list[str], bool]:
+    """Walk every page of one category, returning (job_ids, fully_listed).
 
     Page 1's failure propagates to the caller (category-level skip). A later
     page's failure is recorded and the walk stops for *this category only* —
     `last_page` came from page 1, so a mid-crawl failure means the remaining
     pages of this one category are missing this run, not silently dropped
-    without a trace.
+    without a trace. `fully_listed=False` in that case tells the caller this
+    category's job_ids are an undercount, not a true "these are all the jobs".
     """
     source_url, html = client.fetch_job_list(category_id, page=1)
     page = parse_job_list(html, source_url)
@@ -135,6 +158,7 @@ def _collect_category_job_ids(
         result.expected_total += page.total_count
 
     job_ids = [item.job_id for item in page.items]
+    fully_listed = True
 
     for page_number in range(2, page.last_page + 1):
         try:
@@ -152,10 +176,11 @@ def _collect_category_job_ids(
                 "crawl: category page failed, stopping this category's pagination",
                 extra={"category_id": category_id, "page": page_number, "error": str(exc)},
             )
+            fully_listed = False
             break
         job_ids.extend(item.job_id for item in next_page.items)
 
-    return job_ids
+    return job_ids, fully_listed
 
 
 def _fetch_one_detail(client: JobcanClient, job_id: str, result: CrawlResult) -> None:

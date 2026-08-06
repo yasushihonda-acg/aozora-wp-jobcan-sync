@@ -162,8 +162,11 @@ Firestore: job_cache/{job_id}
 
 > **不採用 (2026-08-07、履歴として残置)**: 以下の WordPress CPT ブロックは
 > 求人データを WP 側にも複製する旧設計。GCP 集約方針の確定により実装対象では
-> ない — Firestore の `job_cache/{job_id}` (上記) が唯一の求人データストアで、
-> Cloud Run 動的プロキシがそこから直接一覧・詳細ページを配信する。
+> ない — Firestore の `job_cache/{job_id}` (上記) を唯一の求人データストアとし、
+> Cloud Run 動的プロキシがそこから直接一覧・詳細ページを配信する**想定**。
+> **既知ギャップ (2026-08-07 codex review 検出)**: `sync/src/sync/app.py` は
+> 現状ジョブカンへ毎リクエスト直接フェッチしており、この Firestore 読み出しへの
+> 統合はまだ実装されていない (CLAUDE.md「求人データ配信アーキテクチャ」節参照)。
 >
 > ```
 > WordPress: CPT job_offer
@@ -192,6 +195,7 @@ Firestore: job_cache/{job_id}
 |---|---|
 | Phase A 中 | ジョブカン公式照会 (この文面送付) → 回答待ち。技術検証・実装は並行して進める (`sync/README.md` の本番デプロイ判断は引き続き回答待ち) |
 | Phase 0 (完了) | 案 D のローカル PoC。`python -m sync render/list` で単発取得・表示を確認 |
-| Phase B (実装済み、2026-08-07、B-1〜B-6) | 案 D を定期同期へ拡張。日次クロール (`crawler.py`) → Firestore 差分検出 (`diff.py`) → closed 判定 + サーキットブレーカー (`closed_detection.py`) → 承認ワークフロー (`approval.py`, 初期は `REVIEW_BYPASS=false` で半自動) → Slack 通知 (`notifications.py`) → Cloud Scheduler + Cloud Run Job (`infra/README.md` §8) |
+| Phase B データ層 (実装済み、2026-08-07、B-1〜B-6) | 案 D を定期同期へ拡張。日次クロール (`crawler.py`) → Firestore 差分検出 (`diff.py`) → closed 判定 + サーキットブレーカー (`closed_detection.py`) → 承認ステータス計算 (`approval.py`, 初期は `REVIEW_BYPASS=false` で半自動) → Slack 通知 (`notifications.py`) → Cloud Scheduler + Cloud Run Job (`infra/README.md` §8)。テスト212件でカバー |
+| Phase B 配信層統合 (未着手、B-8) | `app.py` を Firestore `job_cache` 読み出しに統合(現状はジョブカン直接フェッチのまま)。詳細ページ全文用にスナップショットスキーマ拡張が必要。承認 Cloud Run エンドポイント(Slack リンク→`approve()`/`reject()` 実行)も未実装 — CLAUDE.md「求人データ配信アーキテクチャ」節の既知ギャップ参照 |
 | Phase B 運用 | 半自動運用が安定したら `REVIEW_BYPASS=true` へ切替 (承認担当の判断、コード変更不要) |
 | Phase C (未着手) | ジョブカン公式 API/Webhook が提供されると回答があれば移行検討 (現時点で公式 API の存在は一次資料で未確認) |

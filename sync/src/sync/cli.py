@@ -157,6 +157,7 @@ def sync_run() -> None:
     typer.echo(
         f"added={result.added} changed={result.changed} unchanged={result.unchanged} "
         f"removed={result.removed} newly_closed={result.newly_closed} "
+        f"gc_deleted={result.gc_deleted} "
         f"crawl_errors={len(result.crawl.errors)} written={result.written}"
     )
     if result.circuit_breaker_tripped:

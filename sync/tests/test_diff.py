@@ -100,3 +100,42 @@ def test_mixed_batch_classifies_each_job_independently() -> None:
 def test_empty_current_and_empty_previous_is_a_no_op() -> None:
     result = compute_diff([], previous_snapshots={})
     assert result.added == result.changed == result.unchanged == result.removed == []
+
+
+def test_previous_job_absent_but_listed_this_run_is_unfetched_not_removed() -> None:
+    """A job whose listing entry was seen this crawl but whose detail fetch
+    failed must NOT be classified as `removed` — that conflation is exactly
+    the P1 bug codex review flagged (a fetch failure isn't evidence the
+    posting disappeared)."""
+    offer = _offer("1")
+    previous = {"1": snapshot_from_offer(offer, now=_NOW)}
+
+    result = compute_diff([], previous_snapshots=previous, listed_job_ids=frozenset({"1"}))
+
+    assert result.removed == []
+    assert len(result.unfetched) == 1
+    assert result.unfetched[0].job_id == "1"
+
+
+def test_previous_job_absent_and_not_listed_is_still_removed() -> None:
+    """A job_id genuinely missing from every listing this run (not merely
+    unfetched) is `removed`, same as when `listed_job_ids` is omitted."""
+    offer = _offer("1")
+    previous = {"1": snapshot_from_offer(offer, now=_NOW)}
+
+    result = compute_diff([], previous_snapshots=previous, listed_job_ids=frozenset({"2", "3"}))
+
+    assert result.unfetched == []
+    assert [s.job_id for s in result.removed] == ["1"]
+
+
+def test_listed_job_ids_default_preserves_old_all_removed_behaviour() -> None:
+    """Omitting `listed_job_ids` (the default) must behave exactly like
+    before this fix — every absence is `removed`, nothing is `unfetched`."""
+    offer = _offer("1")
+    previous = {"1": snapshot_from_offer(offer, now=_NOW)}
+
+    result = compute_diff([], previous_snapshots=previous)
+
+    assert result.unfetched == []
+    assert [s.job_id for s in result.removed] == ["1"]

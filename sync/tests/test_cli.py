@@ -203,7 +203,12 @@ class TestSyncRunSubcommand:
             )
             repo.set(snapshot_from_offer(offer, now=datetime.now(UTC), absence_count=1))
 
-        _mock_every_category_returns([])
+        # Every category lists successfully (fully_listed=True) but mentions
+        # only job_id "999" — a genuine absence for jobs 1-10, not a listing
+        # failure. An empty `.job-offer-box` listing would itself raise
+        # JobcanStructureChangeError, a different signal this fix treats as
+        # "unknown," not "closed".
+        _mock_every_category_returns(["999"])
 
         result = runner.invoke(app, ["sync-run"])
 
