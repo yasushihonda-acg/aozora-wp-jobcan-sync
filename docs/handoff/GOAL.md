@@ -140,13 +140,55 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
   - `infra/README.md`: §1a (Firestore DB作成)・§4a (Web用read-only専用SA)・§8.1b
     (クローラの実ジョブカンdry-run検証、初回のみ・Job作成前に必須)・「B-8初回
     ロールアウト順序」セクションを新規追加。§8.2の`REVIEW_BYPASS`を`true`固定・
-    `task-timeout`を600s→1800sへ引き上げ (17カテゴリ×crawl_delay 3秒で初回10分想定)
+    `task-timeout`を600s→最終的に3600sへ引き上げ(下記レビューラウンドで再修正)
   - `CLAUDE.md`/`docs/specs/sync-strategy.md`: B-8完了を反映、既知ギャップ節を解消
 - **テスト**: 221件→変わらず221件(test_app.py 28→17件に整理、他ファイルで+22件、
   差分は新規カバレッジ)、ruff/pyright共に0エラー (旧test_app.py起因の既知ベース
   ライン17件も、全面書き換えにより解消)
-- **未実施 (次セッション)**: 本番インフラの実プロビジョニング・初回ロールアウト
-  (上記「中断点」参照)。コードのマージ判断は本田様の番号単位認可待ち
+- **PR #130作成後、`codex review --base main --strict-config -c model_reasoning_effort=high`
+  + `pr-review-toolkit`4エージェント(code-reviewer/pr-test-analyzer/type-design-analyzer/
+  silent-failure-hunter、いずれもmodel: sonnet明示・read-only)による並行レビューを実施
+  (P2×2・独立指摘多数、相互検証済み)**:
+  - [P2・修正済み、codex+silent-failure-hunter+超過タスクの計画エージェント2件が独立指摘]
+    劣化クロール(あるカテゴリの一覧取得が完全失敗)時、複数カテゴリに掲載されている求人の
+    `category_ids`が「今回見えた分だけ」で全置換され、失敗したカテゴリの一覧から静かに
+    消える実害バグ。`skip_absence_bookkeeping=True`時のみ前回スナップショットの
+    `category_ids`とunionするよう`closed_detection.py`を修正(既存の
+    `skip_absence_bookkeeping`フラグの意味論を再利用、新規フラグ追加なし)
+  - [P2・修正済み] `app.py`の2ルートが同期Firestore SDK呼び出しを`async def`ハンドラ内で
+    直接実行しており、Cloud Run concurrency下で遅いFirestore RPCがイベントループを
+    ブロックし他の同時リクエストを直列化しうる。両ルートの読み取りを
+    `starlette.concurrency.run_in_threadpool`でラップして解消
+  - [HIGH・修正済み、silent-failure-hunter+pr-test-analyzer 2名が独立指摘] `get_job_detail`の
+    `repo.get(job_id)`呼び出しがtry/except外にあり、Firestore読み取り失敗が無ログ・無応答の
+    フレームワーク既定500として素通りしていた(list route側は元々try/except内)。両ルートを
+    「Firestoreエラー→503+ログ」「render失敗→500+ログ」に明確分離する構造へ統一
+    (`_firestore_error_response`ヘルパー新設)
+  - [MEDIUM・修正済み] `_render_list`が`repo.get_all()`をrender処理と同一try/exceptで
+    包んでおり、Firestoreコレクション中のドキュメント1件でも不正だと**全カテゴリの
+    一覧ページが連鎖的に落ちる**設計だった。`firestore_repo.py`に`get_all_valid()`
+    (不正docをskip+ERRORログ、有効な分だけ返す)を新設し配信経路のみ使用。
+    sync経路(`orchestrator.run_sync`)は`get_all()`のまま厳格維持
+    (dropしたdocがdiff baselineを汚しclosed率サーキットブレーカーを誤発火させるため、
+    配信経路と非対称にすることが意図的な設計)
+  - [対応不要と判断] type-design-analyzer指摘の`category_ids: list[str]`をfrozenset/tupleに
+    すべき(`model_config={"frozen":True}`の意図と厳密には不整合)、および
+    `list_item.job_id`と親`job_id`の一致・`sync_status=="closed"⟺closed_at is not None`
+    をtype levelで強制していない点は、いずれも実害ゼロ・PR #129時点から既知の
+    低severityなnitで、本PRのスコープ拡大に見合わないため見送り
+  - [対応見送り、次セッション検討] 計画段階のエージェント(すでにsupersededな設計だが
+    この指摘のみ独立に有効)指摘: `closed`求人を被リンク維持のため残す方針にもかかわらず
+    `templates/base.html`/`job_list.html`の`rel=canonical`がジョブカン側URLを指しており、
+    SEO上「本物はジョブカン側」と宣言してしまい方針を実質無効化している。本番ドメイン
+    (`recruit.aozora-cg.com`)のDNS切替が未確定のため`PUBLIC_BASE_URL`env var設計を含む
+    追加機能として次セッションに持ち越し
+  - **計画段階で起動したPlan agent(plan-ops)への確認事項**: 「実ジョブカンに対しread-only
+    GETで実測」と報告し実求人382件(想定34件の11倍)・crawl_delay 3秒で全体約21.4分と
+    主張。社長への正式照会が回答待ちの状態でのライブクロールの可能性があり、本人に
+    実行有無を確認依頼中(未回答)。この数値はコード・ドキュメントへ「未検証」と明記して
+    引用し、`infra/README.md`の`task-timeout`のみ安全側(1800s→3600s、コスト増なし)に反映。
+    確定値は`infra/README.md`§8.1b記載のdry-run実行時に決裁者確認のうえ得る
+  - 修正後テスト234件全PASS(+13件)、ruff/pyright共に0エラー、修正2ラウンドをpush済み
 
 ## セッション履歴: 2026-08-07 Phase B 定期同期システム実装(B-1〜B-7、`sync/` 大規模拡張)
 

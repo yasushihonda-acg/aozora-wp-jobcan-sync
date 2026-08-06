@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+import pytest
+from pydantic import ValidationError
+
 from sync.firestore_repo import JobCacheRepository, _convert_dates_to_datetimes
 from sync.models import JobOffer
 from sync.snapshot import JobSnapshot
@@ -215,3 +218,41 @@ def test_get_returns_the_matching_snapshot() -> None:
 def test_get_returns_none_for_missing_job_id() -> None:
     repo = JobCacheRepository(_FakeFirestoreClient())
     assert repo.get("nonexistent") is None
+
+
+def test_get_all_raises_on_a_single_malformed_doc() -> None:
+    """The sync path (`orchestrator.run_sync`) must fail loudly rather than
+    silently narrow its `previous_snapshots` baseline (see get_all()'s
+    docstring for why a dropped doc would corrupt closed-rate accounting)."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set(_snapshot("1"))
+    client.store["bad"] = {"job_id": "bad"}  # missing every other required field
+
+    with pytest.raises(ValidationError):
+        repo.get_all()
+
+
+def test_get_all_valid_skips_a_malformed_doc_and_reports_it() -> None:
+    """The serving path (`app.py`'s category listing) must not let one bad
+    document take down every category's listing page."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1"), _snapshot("2")])
+    client.store["bad"] = {"job_id": "bad"}
+
+    snapshots, skipped = repo.get_all_valid()
+
+    assert set(snapshots) == {"1", "2"}
+    assert skipped == ["bad"]
+
+
+def test_get_all_valid_on_a_fully_valid_collection_skips_nothing() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many([_snapshot("1"), _snapshot("2")])
+
+    snapshots, skipped = repo.get_all_valid()
+
+    assert set(snapshots) == {"1", "2"}
+    assert skipped == []

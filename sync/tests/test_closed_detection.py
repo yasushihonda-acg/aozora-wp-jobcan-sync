@@ -365,3 +365,44 @@ def test_list_items_and_category_ids_default_to_empty_when_omitted() -> None:
 
     assert result.next_snapshots["1"].list_item is None
     assert result.next_snapshots["1"].category_ids == []
+
+
+def test_skip_absence_bookkeeping_unions_category_ids_with_previous() -> None:
+    """2026-08-07 codex + second-opinion review finding: a job cross-listed
+    under categories A and B, on a run where B's listing fails outright
+    (`fully_listed=False` -> `skip_absence_bookkeeping=True`), must not lose
+    its B membership just because this run's `category_ids` map only saw A —
+    that would silently drop its card from `/jobs/?category_id=B` until the
+    next healthy run, even though nothing about the B-listing itself changed."""
+    previous = {"1": _snapshot("1", category_ids=["A", "B"])}
+    offer = _offer("1")
+    diff = compute_diff([offer], previous_snapshots=previous)
+
+    result = apply_closed_detection(
+        diff,
+        previous,
+        now=_DAY2,
+        skip_absence_bookkeeping=True,
+        category_ids={"1": ["A"]},  # this run only saw category A
+    )
+
+    assert set(result.next_snapshots["1"].category_ids) == {"A", "B"}
+
+
+def test_skip_absence_bookkeeping_false_replaces_category_ids_normally() -> None:
+    """On a genuinely complete run, a job that really left category B must
+    actually leave it — the union behaviour above must NOT apply here, or a
+    job could never be removed from a category again."""
+    previous = {"1": _snapshot("1", category_ids=["A", "B"])}
+    offer = _offer("1")
+    diff = compute_diff([offer], previous_snapshots=previous)
+
+    result = apply_closed_detection(
+        diff,
+        previous,
+        now=_DAY2,
+        skip_absence_bookkeeping=False,
+        category_ids={"1": ["A"]},
+    )
+
+    assert result.next_snapshots["1"].category_ids == ["A"]

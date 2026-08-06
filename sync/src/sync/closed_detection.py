@@ -96,17 +96,37 @@ def apply_closed_detection(
     category listings straight from Firestore. Omitting them (the default)
     leaves `JobSnapshot.list_item`/`category_ids` at their empty defaults —
     fine for tests that only care about closed-detection, not serving.
+
+    `skip_absence_bookkeeping=True` also changes how `category_ids` is
+    assembled for `changed`/`unchanged` offers: instead of replacing them with
+    only this run's (possibly incomplete) categories, it unions with the
+    *previous* snapshot's `category_ids`. Otherwise a job cross-listed under
+    categories A and B, on a run where B's listing fails outright, would be
+    rebuilt with `category_ids=["A"]` — silently dropping its card from
+    `/jobs/?category_id=B` until the next healthy run, even though nothing
+    about its B-listing actually changed (2026-08-07 codex + second-opinion
+    review finding). Same principle as the absence-bookkeeping skip itself:
+    when this run's picture is incomplete, don't act on what it doesn't show.
     """
     list_items = list_items or {}
     category_ids = category_ids or {}
     next_snapshots: dict[str, JobSnapshot] = {}
 
     for offer in (*diff.added, *diff.changed, *diff.unchanged):
+        this_run_category_ids = category_ids.get(offer.job_id)
+        if skip_absence_bookkeeping:
+            previous = previous_snapshots.get(offer.job_id)
+            if previous is not None and previous.category_ids:
+                merged = list(previous.category_ids)
+                for category_id in this_run_category_ids or []:
+                    if category_id not in merged:
+                        merged.append(category_id)
+                this_run_category_ids = merged
         next_snapshots[offer.job_id] = snapshot_from_offer(
             offer,
             now=now,
             list_item=list_items.get(offer.job_id),
-            category_ids=category_ids.get(offer.job_id),
+            category_ids=this_run_category_ids,
         )
 
     for previous in diff.unfetched:

@@ -25,9 +25,14 @@ longer happens here. A short positive-only HTML cache remains, because a
 | `active`                    | 200, normal render                          |
 | `closed`                    | 200, apply CTA replaced with a closed banner |
 |                             | (page stays up for SEO / 被リンク維持)         |
+| Firestore read failure      | 503, HTML page with a Jobcan fallback link   |
+| render failure (Jinja2 etc.)| 500, HTML page with a Jobcan fallback link   |
 
 All responses add `Cache-Control: no-store` and `X-Robots-Tag: noindex,
-nofollow` via middleware.
+nofollow` via middleware. Every Firestore read happens inside
+`run_in_threadpool` — the SDK is synchronous, and running it directly on the
+event loop would serialize every concurrent request behind it (2026-08-07
+codex second-opinion review finding).
 """
 
 from __future__ import annotations
@@ -37,6 +42,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
+from starlette.concurrency import run_in_threadpool
 
 from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
@@ -138,7 +144,12 @@ def create_app(
             _logger.info("cache hit", extra={"kind": "detail", "job_id": job_id})
             return HTMLResponse(content=cached)
 
-        snapshot = _resolve_repo().get(job_id)
+        try:
+            snapshot = await run_in_threadpool(lambda: _resolve_repo().get(job_id))
+        except Exception:
+            _logger.exception("firestore read error", extra={"kind": "detail", "job_id": job_id})
+            return _firestore_error_response(JOBCAN_DETAIL_FALLBACK.format(job_id=job_id))
+
         if snapshot is None or snapshot.sync_status == "pending_review":
             raise HTTPException(status_code=404, detail="not found")
 
@@ -170,7 +181,21 @@ def create_app(
             _logger.info("cache hit", extra={"kind": "list", "category_id": category_id})
             return HTMLResponse(content=cached)
 
-        rendered = _render_list(_resolve_repo(), category_id=category_id)
+        try:
+            snapshots, skipped = await run_in_threadpool(lambda: _resolve_repo().get_all_valid())
+        except Exception:
+            _logger.exception(
+                "firestore read error", extra={"kind": "list", "category_id": category_id}
+            )
+            return _firestore_error_response(JOBCAN_LIST_FALLBACK.format(category_id=category_id))
+
+        if skipped:
+            _logger.error(
+                "list route: skipped malformed job_cache docs",
+                extra={"category_id": category_id, "skipped_job_ids": skipped},
+            )
+
+        rendered = _render_list(snapshots, category_id=category_id)
         if rendered is None:
             fallback_url = JOBCAN_LIST_FALLBACK.format(category_id=category_id)
             return HTMLResponse(
@@ -189,6 +214,25 @@ def create_app(
     return app
 
 
+def _firestore_error_response(fallback_url: str) -> Response:
+    """503 page for a Firestore read failure — distinct from a render
+    failure (500) so an operator scanning logs can tell "Firestore is down"
+    apart from "this one job's/category's data is malformed"
+    (2026-08-07 second-opinion review finding: the detail route previously
+    let this propagate as an unhandled, unlogged exception)."""
+    return HTMLResponse(
+        content=_error_html(
+            title="一時的に表示できません",
+            message=(
+                "データの取得に問題が発生している可能性があります。"
+                "少し時間をおいてから再度お試しください。"
+            ),
+            fallback_url=fallback_url,
+        ),
+        status_code=503,
+    )
+
+
 def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
     """Render one snapshot's detail page. `None` signals a render failure.
 
@@ -205,18 +249,28 @@ def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
         return None
 
 
-def _render_list(repo: JobCacheRepository, *, category_id: str) -> str | None:
-    """Build and render the listing page for one category, or `None` on failure.
+def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str | None:
+    """Build and render the listing page for one category from already-read
+    snapshots, or `None` on a render failure.
 
-    Reads the whole `job_cache` collection and filters in Python rather than
-    a Firestore query — at this collection's size (~34 docs total) a
-    composite index (`category_ids array_contains X and sync_status !=
-    pending_review`) is more complexity than the read pattern justifies; a
-    query-based rewrite is worth revisiting only if the catalogue grows into
-    the hundreds.
+    Deliberately pure (no Firestore access) — the caller reads the
+    collection separately (`get_all_valid()`, off the event loop) so a
+    Firestore-read failure and a template-render failure log and respond
+    differently (503 vs 500) instead of being conflated under one bare
+    `except Exception` (2026-08-07 second-opinion review finding).
+
+    Filtering in Python rather than a Firestore query: a composite query
+    (`category_ids array_contains X and sync_status == active`) would need a
+    manually-provisioned composite index in a project that deliberately has
+    no Terraform/IaC (`.claude/memory/feedback_overengineering_recovery_2026-06-18.md`),
+    and the catalogue is small enough that reading the whole collection
+    through the list cache (`CacheConfig.list_ttl`) stays cheap. Revisit this
+    if the catalogue grows into the thousands — the real posting count has
+    not yet been confirmed by an actual production `sync-run` (B-8 was
+    implemented and reviewed before any Cloud Run Job ever executed;
+    `infra/README.md` §8.1b's dry-run is where that gets measured for real).
     """
     try:
-        snapshots = repo.get_all()
         cards = [
             _rewrite_detail_url(snapshot.list_item, snapshot.job_id)
             for snapshot in snapshots.values()

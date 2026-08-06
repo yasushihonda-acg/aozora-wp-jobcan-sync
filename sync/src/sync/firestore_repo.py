@@ -7,16 +7,19 @@ so they're testable without a Firestore client at all.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, date, datetime, time
 from functools import lru_cache
 from typing import Any, Protocol
 
 from google.cloud import firestore
+from pydantic import ValidationError
 
 from .snapshot import JobSnapshot
 
 _COLLECTION = "job_cache"
+_logger = logging.getLogger(__name__)
 
 
 class _FirestoreClientLike(Protocol):
@@ -93,20 +96,55 @@ class JobCacheRepository:
         self._collection = client.collection(_COLLECTION)
 
     def get_all(self) -> dict[str, JobSnapshot]:
-        """Read every existing snapshot, keyed by job_id."""
+        """Read every existing snapshot, keyed by job_id.
+
+        Deliberately strict: a single malformed/legacy document raises and
+        aborts the whole read. This is the method `orchestrator.run_sync`
+        feeds into `compute_diff` as `previous_snapshots` — silently dropping
+        a doc there would corrupt the diff baseline (a dropped doc looks like
+        a job that was never known -> gets re-added -> `pending_review`, and
+        shrinks `previous_open_count`, inflating `closed_rate` toward the
+        30% circuit breaker). The sync path must fail loudly, not quietly
+        narrow its picture of what's already in Firestore. See
+        `get_all_valid()` for the serving path's more lenient equivalent
+        (2026-08-07 second-opinion review finding).
+        """
         snapshots: dict[str, JobSnapshot] = {}
         for doc in self._collection.stream():
             data = doc.to_dict() or {}
             snapshots[doc.id] = JobSnapshot.model_validate(data)
         return snapshots
 
+    def get_all_valid(self) -> tuple[dict[str, JobSnapshot], list[str]]:
+        """Like `get_all()`, but skips (rather than raises on) a single
+        malformed/legacy document, returning the skipped job_ids alongside
+        the valid snapshots.
+
+        Used by `app.py`'s category-listing route — with `get_all()`, one
+        hand-edited or stale-schema document anywhere in the collection would
+        take down every category's listing page, not just the bad job's own
+        detail page. The sync path must NOT use this method; see `get_all()`
+        for why leniency there is actively dangerous rather than merely
+        unnecessary.
+        """
+        snapshots: dict[str, JobSnapshot] = {}
+        skipped: list[str] = []
+        for doc in self._collection.stream():
+            data = doc.to_dict() or {}
+            try:
+                snapshots[doc.id] = JobSnapshot.model_validate(data)
+            except ValidationError:
+                _logger.error("skipping malformed job_cache doc", extra={"job_id": doc.id})
+                skipped.append(doc.id)
+        return snapshots, skipped
+
     def get(self, job_id: str) -> JobSnapshot | None:
         """Read one snapshot by job_id, or `None` if it doesn't exist.
 
         Used by `app.py` (B-8) to serve a single detail page without reading
-        the whole collection — `get_all()` stays the right call for category
-        listings at this collection's size (~34 docs), but a single detail
-        request has no reason to pay for that.
+        the whole collection — `get_all()`/`get_all_valid()` stay the right
+        call for category listings, but a single detail request has no
+        reason to pay for that.
         """
         doc = self._collection.document(job_id).get()
         if not doc.exists:

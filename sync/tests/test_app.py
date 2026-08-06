@@ -58,18 +58,26 @@ def _repo_with(*snapshots: JobSnapshot) -> JobCacheRepository:
     return repo
 
 
+_UNSET: Any = object()
+
+
 def _snapshot(
     job_id: str,
     *,
     sync_status: str = "active",
     category_ids: list[str] | None = None,
-    list_item: JobListItem | None = None,
+    list_item: JobListItem | None = _UNSET,
 ) -> JobSnapshot:
+    """`list_item=_UNSET` (the default) defaults to a populated card;
+    `list_item=None` is honoured as an explicit "no card" — a plain `None`
+    default couldn't distinguish the two, which previously made it
+    impossible to construct the `list_item=None` case this file needs to
+    test (2026-08-07 second-opinion review finding)."""
     return snapshot_from_offer(
         _offer(job_id),
         now=datetime(2026, 8, 7, tzinfo=UTC),
         sync_status=sync_status,  # type: ignore[arg-type]
-        list_item=list_item if list_item is not None else _list_item(job_id),
+        list_item=_list_item(job_id) if list_item is _UNSET else list_item,
         category_ids=category_ids if category_ids is not None else ["18773"],
     )
 
@@ -182,6 +190,25 @@ def test_get_job_detail_render_failure_returns_500(monkeypatch: Any) -> None:
     assert "一時的な問題が発生しました" in response.text
 
 
+def test_get_job_detail_firestore_read_failure_returns_503(monkeypatch: Any) -> None:
+    """A repo.get() failure (Firestore outage, malformed doc) must be caught
+    and logged, not propagate as an unhandled exception (2026-08-07
+    second-opinion review finding — this path previously had no try/except
+    at all, unlike the list route)."""
+    repo = _repo_with(_snapshot("1"))
+
+    def _raise(_job_id: str) -> None:
+        raise RuntimeError("simulated Firestore outage")
+
+    monkeypatch.setattr(repo, "get", _raise)
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
+
+    assert response.status_code == 503
+    assert "データの取得に問題が発生している可能性があります" in response.text
+
+
 # ──────────────────────────── /jobs/?category_id= ─────────────────────────
 
 
@@ -263,6 +290,88 @@ def test_get_job_list_render_failure_returns_500(monkeypatch: Any) -> None:
     assert "一時的な問題が発生しました" in response.text
 
 
+def test_get_job_list_excludes_pending_review_jobs() -> None:
+    """Low practical urgency (`REVIEW_BYPASS=true` always on per B-8), but
+    the schema/filter still supports the state and should stay verified."""
+    repo = _repo_with(_snapshot("1", sync_status="pending_review", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_skips_snapshot_with_no_list_item() -> None:
+    """`list_item=None` should be defensive-only (every real `crawl_all()`
+    job_id has one), but if it's ever missing the card must be silently
+    skipped rather than blow up `_rewrite_detail_url` and 500 the whole
+    category (2026-08-07 second-opinion review finding — previously untested)."""
+    repo = _repo_with(_snapshot("1", category_ids=["18773"], list_item=None))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_closed_and_multi_category_combo() -> None:
+    """The one state-flag combination not covered elsewhere: a `closed` job
+    that's also cross-listed under two categories must vanish from both,
+    not just one."""
+    repo = _repo_with(_snapshot("1", sync_status="closed", category_ids=["18773", "18988"]))
+    client = _client_with(repo)
+
+    for category_id in ("18773", "18988"):
+        response = client.get(f"/jobs/?category_id={category_id}")
+        assert response.text.count("job-list-card__link") == 0
+
+
+def test_get_job_list_firestore_read_failure_returns_503(monkeypatch: Any) -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+
+    def _raise() -> None:
+        raise RuntimeError("simulated Firestore outage")
+
+    monkeypatch.setattr(repo, "get_all_valid", _raise)
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 503
+    assert "データの取得に問題が発生している可能性があります" in response.text
+
+
+def test_get_job_list_cache_hit_does_not_re_read_firestore() -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    client.get("/jobs/?category_id=18773")
+    repo.delete_many(["1"])
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 1
+
+
+def test_get_job_list_malformed_doc_does_not_take_down_other_jobs() -> None:
+    """A malformed document elsewhere in `job_cache` must not prevent a
+    healthy job's own category listing from rendering — this is the whole
+    point of using `get_all_valid()` instead of `get_all()` in the list
+    route (2026-08-07 second-opinion review finding)."""
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    fake_client: FakeFirestoreClient = repo._client  # type: ignore[assignment]
+    fake_client.store["bad"] = {"job_id": "bad"}  # missing every other field
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 1
+
+
 # ─────────────────────── lazy repo resolution (import safety) ───────────────
 
 
@@ -272,3 +381,33 @@ def test_create_app_does_not_require_repo_at_construction_time() -> None:
     require GCP credentials (see app.py's `_resolve_repo` docstring)."""
     app = create_app()
     assert app is not None
+
+
+def test_resolve_repo_builds_the_client_at_most_once(monkeypatch: Any) -> None:
+    """Pins the actual behaviour `_resolve_repo`'s lazy singleton exists for
+    (2026-08-07 second-opinion review finding: this was previously asserted
+    only by "doesn't crash," which would still pass even if the client were
+    rebuilt on every request). `/healthz` must never trigger it; the first
+    `/jobs/...` request must build it exactly once; a second request must
+    reuse it."""
+    from sync import app as app_module
+
+    build_count = 0
+
+    def _fake_get_firestore_client() -> object:
+        nonlocal build_count
+        build_count += 1
+        return FakeFirestoreClient()
+
+    monkeypatch.setattr(app_module, "get_firestore_client", _fake_get_firestore_client)
+    app = app_module.create_app()
+    client = TestClient(app)
+
+    client.get("/healthz")
+    assert build_count == 0
+
+    client.get("/jobs/1")  # 404 (empty repo) — still exercises _resolve_repo
+    assert build_count == 1
+
+    client.get("/jobs/1")
+    assert build_count == 1
