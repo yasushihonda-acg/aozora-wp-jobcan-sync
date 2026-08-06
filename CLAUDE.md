@@ -93,10 +93,14 @@ Firestore同期) は完成・テスト済みだが、配信層・承認導線の
   (`approval.py`, `REVIEW_BYPASS=false` が既定) → Slack 通知リンク承認 (承認
   action 自体は未接続、上記ギャップ参照) → 配信層統合後は承認済みスナップショット
   のみを Cloud Run 動的プロキシが配信する想定 (現状は配信層自体が未接続)
-- 連続 2 回不在で closed、closed 率 > 30% (分母は前回スナップショットの active
-  件数) で同期中止 + Slack アラート (`closed_detection.py`)。列挙にあった「一覧に
-  出ているが詳細取得だけ失敗」は不在と別枠で扱う (2026-08-07 codex review で発見・
-  修正済み、`crawler.py` の `listed_job_ids`/`fully_listed`)
+- 連続 2 回不在で closed、closed 率 > 30% (分母は前回スナップショットの非closed
+  件数 = active + pending_review、`previous_open_count`) で同期中止 + Slack
+  アラート (`closed_detection.py`)。列挙にあった「一覧に出ているが詳細取得だけ
+  失敗」は不在と別枠で扱う (2026-08-07 codex review で発見・修正済み、
+  `crawler.py` の `listed_job_ids`/`fully_listed`)。クロール反照合
+  (`expected_total`/`collected_total`) とクロールエラー件数は同一Slack通知に
+  まとめて送信 (circuit breaker発火時に別警告が握り込まれないよう統合、同日
+  第二意見レビューで発見・修正済み)
 - 募集終了は `sync_status=closed` 化 (削除しない、SEO/被リンク維持) →
   `closed_at` から 30 日後に GC (`closed_detection.find_gc_candidates` +
   `firestore_repo.delete_many`、`orchestrator.run_sync` が日次実行内で実施)

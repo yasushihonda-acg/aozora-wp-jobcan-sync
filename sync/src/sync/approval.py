@@ -43,7 +43,18 @@ def compute_target_sync_status(
     Rules, in order:
 
     - `review_bypass=True` → always `"active"` — the fully-automatic phase
-      skips the review gate entirely, regardless of anything else.
+      skips the review gate entirely, regardless of anything else, **including
+      a job_id reactivating from `"closed"`** (whether it closed naturally
+      via absence, or was explicitly `reject()`-ed by a human). This is a
+      deliberate consequence of what "fully automatic" means, not an
+      oversight: bypass mode trusts the pipeline for every posting
+      unconditionally, so a rejected posting has no more protection than any
+      other absent-then-reappearing one. Second-opinion review flagged this
+      interaction as worth locking in with an explicit test
+      (`test_review_bypass_always_wins_regardless_of_other_inputs` and
+      `test_review_bypass_true_reactivating_from_closed_skips_review` in
+      test_approval.py) precisely because it's easy to assume the reactivation
+      safety net survives bypass mode when it deliberately doesn't.
     - New content (`is_new_or_changed=True`), OR a job_id reactivating after
       having been `"closed"` → `"pending_review"`. A job_id that reappears
       with byte-identical content after being closed is still a meaningful

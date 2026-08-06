@@ -57,6 +57,24 @@ def test_review_bypass_always_wins_regardless_of_other_inputs() -> None:
     )
 
 
+def test_review_bypass_true_reactivating_from_closed_skips_review() -> None:
+    """The specific combination second-opinion review flagged as untested:
+    `is_new_or_changed=False` (byte-identical content) + `previous_status=
+    "closed"` + `review_bypass=True`. Without bypass this exact input
+    requires `pending_review` (see
+    `test_unchanged_job_reactivating_from_closed_requires_review` below) —
+    bypass mode deliberately overrides that safety net too, since "fully
+    automatic" means no posting gets human review, not "every posting except
+    ones that were previously rejected." See `compute_target_sync_status`'s
+    docstring for the full rationale."""
+    assert (
+        compute_target_sync_status(
+            is_new_or_changed=False, previous_status="closed", review_bypass=True
+        )
+        == "active"
+    )
+
+
 def test_new_job_without_bypass_goes_to_pending_review() -> None:
     assert (
         compute_target_sync_status(is_new_or_changed=True, previous_status=None)

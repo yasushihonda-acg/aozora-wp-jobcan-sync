@@ -140,6 +140,26 @@ def test_set_many_chunks_at_batch_limit(monkeypatch) -> None:
     assert len(repo.get_all()) == 501
 
 
+def test_set_many_exactly_at_batch_limit_is_a_single_batch(monkeypatch) -> None:
+    """Exactly 500 snapshots must stay a single `client.batch()` call."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    batch_calls = []
+    original_batch = client.batch
+
+    def _counting_batch():
+        batch_calls.append(1)
+        return original_batch()
+
+    monkeypatch.setattr(client, "batch", _counting_batch)
+
+    snapshots = [_snapshot(str(i)) for i in range(500)]
+    repo.set_many(snapshots)
+
+    assert len(batch_calls) == 1
+    assert len(repo.get_all()) == 500
+
+
 def test_delete_many_removes_specified_snapshots() -> None:
     client = _FakeFirestoreClient()
     repo = JobCacheRepository(client)

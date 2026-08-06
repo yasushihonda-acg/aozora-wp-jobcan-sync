@@ -60,10 +60,14 @@ class CrawlResult:
 
     `expected_total` / `collected_total` are the reconciliation check: sum
     each category's own reported `total_count` (from its page-1 listing) vs.
-    every job_id actually attempted (fetched OK or errored — either way, we
-    "saw" it). A silent partial crawl (a 200 with a half-rendered page, or a
-    category missing from `KNOWN_CATEGORY_IDS`) shows up as a mismatch here
-    instead of shipping short with no signal.
+    the number of listing rows actually seen, summed the same way — *before*
+    cross-category dedup. Both are accumulated per-category on the same
+    basis specifically so a legitimately cross-listed job_id (a 夜勤専従
+    posting also listed under 介護職) never reads as a mismatch just because
+    `offers`/`listed_job_ids` collapse it to one entry — that dedup is a
+    separate concern from "did each category's listing render completely."
+    A silent partial crawl (a 200 with a half-rendered page) still shows up
+    here as a mismatch instead of shipping short with no signal.
     """
 
     offers: list[JobOffer] = field(default_factory=list)
@@ -127,6 +131,7 @@ def crawl_all(
         if not category_fully_listed:
             result.fully_listed = False
         result.listed_job_ids.update(job_ids_for_category)
+        result.collected_total += len(job_ids_for_category)
 
         for job_id in job_ids_for_category:
             if job_id in seen_job_ids:
@@ -134,7 +139,6 @@ def crawl_all(
             seen_job_ids.add(job_id)
             _fetch_one_detail(client, job_id, result)
 
-    result.collected_total = len(result.offers) + len([e for e in result.errors if "job_id" in e])
     return result
 
 

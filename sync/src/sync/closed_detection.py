@@ -12,12 +12,18 @@ and are always exercised together by the sync run:
    `crawler.py` per job) — that's a fetch failure, not "the listing doesn't
    mention this job_id anymore."
 2. **Circuit breaker** — if the newly-closed count this run exceeds 30% of
-   the *previous* snapshot's active count, something is more likely broken
-   on Jobcan's or our side (HTML structure change, wrong category_id, a
-   network partial failure) than 30%+ of postings genuinely closing between
-   two daily crawls. The denominator is explicitly "previous active count",
-   not "current total" — pinning down what `sync-strategy.md` §5 left
-   ambiguous.
+   the *previous* snapshot's non-closed count, something is more likely
+   broken on Jobcan's or our side (HTML structure change, wrong category_id,
+   a network partial failure) than 30%+ of postings genuinely closing between
+   two daily crawls. The denominator is "previous non-closed count" —
+   `active` + `pending_review` — not `active` alone: the numerator
+   (`newly_closed`) can close a `pending_review` job just as readily as an
+   `active` one (see below), so restricting the denominator to `active` only
+   would let `closed_rate` exceed 100% and silently under-trip whenever a
+   run's absences skew toward not-yet-approved postings. Pinning down what
+   `sync-strategy.md` §5 left ambiguous (2026-08-07 codex second-opinion
+   review caught the original active-only denominator as a numerator/
+   denominator population mismatch).
 3. **GC candidate selection** — a `closed` job past the 30-day retention
    window is a candidate for actual removal. Kept as a query, not a mutation:
    the caller (a future Cloud Run Job, B-6) decides when/whether to delete.
@@ -34,7 +40,9 @@ from .snapshot import JobSnapshot, snapshot_from_offer
 # 1 回の不在では closed 化しない — 2 回連続不在で確定。
 CLOSE_AFTER_CONSECUTIVE_ABSENCES = 2
 
-# 分母は「前回スナップショットの active 件数」(sync-strategy.md §5 の未定義点を確定)。
+# 分母は「前回スナップショットの非closed件数(active + pending_review)」
+# (sync-strategy.md §5 の未定義点を確定。active限定だと分子と population が
+# 食い違い rate が 1.0 を超えうる、というレビュー指摘を反映して active 限定から拡張)。
 CLOSED_RATE_CIRCUIT_BREAKER_THRESHOLD = 0.30
 
 # closed_at から 30 日後に GC 対象 (CLAUDE.md「同期復旧設計」の既存運用ルール)。
@@ -45,7 +53,11 @@ GC_RETENTION_DAYS = 30
 class ClosedDetectionResult:
     next_snapshots: dict[str, JobSnapshot] = field(default_factory=dict)
     newly_closed_job_ids: list[str] = field(default_factory=list)
-    previous_active_count: int = 0
+    previous_open_count: int = 0
+    """Previous snapshot count with `sync_status != "closed"` — the
+    denominator for `closed_rate`. Named "open" (not "active") because it
+    deliberately includes `pending_review` alongside `active`; see the
+    module docstring's circuit-breaker section for why."""
     closed_rate: float = 0.0
     circuit_breaker_tripped: bool = False
 
@@ -108,17 +120,15 @@ def apply_closed_detection(
                 update={"absence_count": absence_count}
             )
 
-    previous_active_count = sum(
-        1 for snapshot in previous_snapshots.values() if snapshot.sync_status == "active"
+    previous_open_count = sum(
+        1 for snapshot in previous_snapshots.values() if snapshot.sync_status != "closed"
     )
-    closed_rate = (
-        len(newly_closed) / previous_active_count if previous_active_count > 0 else 0.0
-    )
+    closed_rate = len(newly_closed) / previous_open_count if previous_open_count > 0 else 0.0
 
     return ClosedDetectionResult(
         next_snapshots=next_snapshots,
         newly_closed_job_ids=newly_closed,
-        previous_active_count=previous_active_count,
+        previous_open_count=previous_open_count,
         closed_rate=closed_rate,
         circuit_breaker_tripped=closed_rate > CLOSED_RATE_CIRCUIT_BREAKER_THRESHOLD,
     )

@@ -9,6 +9,7 @@ to monkeypatch module-level functions or reach real GCP.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -20,6 +21,8 @@ from .firestore_repo import JobCacheRepository
 from .jobcan_client import JobcanClient
 from .notifications import notify_slack
 
+_logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class SyncRunResult:
@@ -30,6 +33,7 @@ class SyncRunResult:
     removed: int
     newly_closed: int
     gc_deleted: int
+    reconciliation_mismatch: bool
     circuit_breaker_tripped: bool
     written: bool
 
@@ -58,6 +62,14 @@ def run_sync(
     just produced and deletes any hits — this is the only place that query is
     ever acted on, so a `closed` document doesn't linger in Firestore forever
     with no removal path.
+
+    Every warning this run collects (crawl errors, a reconciliation
+    mismatch) is sent in a *single* Slack notification alongside whatever
+    else the run is reporting — a circuit-breaker trip no longer silently
+    swallows a separate crawl-errors warning just because it returns early
+    (2026-08-07 second-opinion review finding: the two were mutually
+    exclusive before, which could mislead an on-call responder into reading
+    a broken crawl as "postings genuinely closed").
     """
     if review_bypass is None:
         review_bypass = review_bypass_enabled()
@@ -76,13 +88,40 @@ def run_sync(
         skip_absence_bookkeeping=not crawl_result.fully_listed,
     )
 
+    warnings: list[str] = []
+    if crawl_result.errors:
+        warnings.append(f"{len(crawl_result.errors)} 件のクロールエラー (Cloud Logging 参照)")
+
+    # `expected_total`/`collected_total` reconciliation: catches a silent
+    # partial crawl (e.g. a 200 with a half-rendered page) that per-request
+    # error handling alone wouldn't surface — see `crawler.CrawlResult`'s
+    # docstring. This was computed but never actually checked anywhere until
+    # this fix (2026-08-07 second-opinion review finding).
+    reconciliation_mismatch = crawl_result.expected_total != crawl_result.collected_total
+    if reconciliation_mismatch:
+        _logger.warning(
+            "crawl reconciliation mismatch",
+            extra={
+                "expected_total": crawl_result.expected_total,
+                "collected_total": crawl_result.collected_total,
+            },
+        )
+        warnings.append(
+            "想定件数と収集件数が不一致 "
+            f"(expected={crawl_result.expected_total}, collected={crawl_result.collected_total}) "
+            "— サイレントな部分クロールの可能性"
+        )
+
     if closed_result.circuit_breaker_tripped:
-        notify_slack(
+        message = (
             ":rotating_light: ジョブカン同期: closed率が閾値を超えたため同期を中止しました。 "
             f"closed_rate={closed_result.closed_rate:.0%} "
             f"newly_closed={len(closed_result.newly_closed_job_ids)} "
-            f"previous_active={closed_result.previous_active_count}"
+            f"previous_open={closed_result.previous_open_count}"
         )
+        if warnings:
+            message += "\n追加の警告: " + " / ".join(warnings)
+        notify_slack(message)
         return SyncRunResult(
             crawl=crawl_result,
             added=len(diff.added),
@@ -91,6 +130,7 @@ def run_sync(
             removed=len(diff.removed),
             newly_closed=len(closed_result.newly_closed_job_ids),
             gc_deleted=0,
+            reconciliation_mismatch=reconciliation_mismatch,
             circuit_breaker_tripped=True,
             written=False,
         )
@@ -104,11 +144,8 @@ def run_sync(
     if gc_candidates:
         repo.delete_many(gc_candidates)
 
-    if crawl_result.errors:
-        notify_slack(
-            f":warning: ジョブカン同期: {len(crawl_result.errors)} 件のエラーが発生しました "
-            "(Cloud Logging 参照)。"
-        )
+    if warnings:
+        notify_slack(":warning: ジョブカン同期で警告: " + " / ".join(warnings))
 
     return SyncRunResult(
         crawl=crawl_result,
@@ -118,6 +155,7 @@ def run_sync(
         removed=len(diff.removed),
         newly_closed=len(closed_result.newly_closed_job_ids),
         gc_deleted=len(gc_candidates),
+        reconciliation_mismatch=reconciliation_mismatch,
         circuit_breaker_tripped=False,
         written=True,
     )

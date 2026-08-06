@@ -116,8 +116,8 @@ def test_changed_and_unchanged_jobs_stay_active_with_zero_absence() -> None:
         assert snap.absence_count == 0
 
 
-def test_circuit_breaker_denominator_is_previous_active_count() -> None:
-    """5 previously-active jobs, 2 close this run -> 40% > 30% threshold."""
+def test_circuit_breaker_denominator_is_previous_open_count() -> None:
+    """5 previously-open jobs, 3 close this run -> 60% > 30% threshold."""
     previous = {
         str(i): _snapshot(str(i), absence_count=1) for i in range(1, 4)
     } | {str(i): _snapshot(str(i)) for i in (4, 5)}
@@ -127,11 +127,57 @@ def test_circuit_breaker_denominator_is_previous_active_count() -> None:
 
     result = apply_closed_detection(diff, previous, now=_DAY3)
 
-    assert result.previous_active_count == 5
+    assert result.previous_open_count == 5
     # jobs 1-3 flip to closed (absence_count 1->2); jobs 4-5 go to absence_count=1.
     assert sorted(result.newly_closed_job_ids) == ["1", "2", "3"]
     assert result.closed_rate == 3 / 5
     assert result.circuit_breaker_tripped is True
+
+
+def test_circuit_breaker_denominator_includes_pending_review() -> None:
+    """A regression guard for a numerator/denominator population mismatch a
+    second-opinion review caught: with an active-only denominator (the
+    pre-fix behaviour), 3 active jobs + 2 of 7 pending_review jobs closing
+    would read as 2/3 ≈ 67% (false trip — halts a perfectly ordinary sync
+    over a couple of unapproved postings expiring). The correct denominator
+    counts every previously non-closed job (3 active + 7 pending_review =
+    10), giving 2/10 = 20% — no trip."""
+    previous = {
+        "1": _snapshot("1"),
+        "2": _snapshot("2"),
+        "3": _snapshot("3"),
+        "p1": _snapshot("p1", sync_status="pending_review", absence_count=1),
+        "p2": _snapshot("p2", sync_status="pending_review", absence_count=1),
+        # p3-p7: also pending_review, but only their FIRST absence this run
+        # (absence_count 0->1) — still part of the "open" population, but
+        # don't close, so they only affect the denominator, not the numerator.
+        **{f"p{i}": _snapshot(f"p{i}", sync_status="pending_review") for i in range(3, 8)},
+    }
+    diff = compute_diff([], previous_snapshots=previous)
+
+    result = apply_closed_detection(diff, previous, now=_DAY3)
+
+    assert result.previous_open_count == 10
+    assert sorted(result.newly_closed_job_ids) == ["p1", "p2"]
+    assert result.closed_rate == 2 / 10
+    assert result.circuit_breaker_tripped is False
+
+
+def test_pending_review_job_absent_twice_auto_closes_without_reject() -> None:
+    """A `pending_review` job that disappears from its listing before anyone
+    approves/rejects it still closes via the normal absence path — this is
+    intentional (it's genuinely gone regardless of review status), not
+    something that must route through `approval.reject()`. Locked in by a
+    test per second-opinion review, which found this interaction untested."""
+    previous = {"1": _snapshot("1", sync_status="pending_review", absence_count=1)}
+    diff = compute_diff([], previous_snapshots=previous)
+
+    result = apply_closed_detection(diff, previous, now=_DAY3)
+
+    snap = result.next_snapshots["1"]
+    assert snap.sync_status == "closed"
+    assert snap.closed_at == _DAY3
+    assert result.newly_closed_job_ids == ["1"]
 
 
 def test_circuit_breaker_trips_when_every_previous_job_closes() -> None:
@@ -156,7 +202,7 @@ def test_circuit_breaker_stays_quiet_when_most_jobs_survive() -> None:
 
     result = apply_closed_detection(diff, previous, now=_DAY3)
 
-    assert result.previous_active_count == 10
+    assert result.previous_open_count == 10
     assert result.newly_closed_job_ids == ["10"]
     assert result.closed_rate == 0.1
     assert result.circuit_breaker_tripped is False
@@ -164,8 +210,19 @@ def test_circuit_breaker_stays_quiet_when_most_jobs_survive() -> None:
 
 def test_circuit_breaker_denominator_zero_never_divides_by_zero() -> None:
     result = apply_closed_detection(DiffResult(), {}, now=_DAY1)
-    assert result.previous_active_count == 0
+    assert result.previous_open_count == 0
     assert result.closed_rate == 0.0
+
+
+def test_circuit_breaker_not_tripped_at_exactly_the_threshold() -> None:
+    """The condition is a strict `>` — exactly 30% (3 of 10) must NOT trip."""
+    previous = {str(i): _snapshot(str(i), absence_count=1) for i in range(1, 11)}
+    surviving_offers = [_offer(str(i)) for i in range(4, 11)]  # 7 of 10 survive
+    diff = compute_diff(surviving_offers, previous_snapshots=previous)
+
+    result = apply_closed_detection(diff, previous, now=_DAY3)
+
+    assert result.closed_rate == 0.3
     assert result.circuit_breaker_tripped is False
 
 
@@ -174,6 +231,16 @@ def test_gc_candidate_selected_after_retention_window() -> None:
         "1", sync_status="closed", closed_at=_DAY1 - timedelta(days=31)
     )
     snapshots = {"1": closed_31_days_ago}
+
+    assert find_gc_candidates(snapshots, now=_DAY1) == ["1"]
+
+
+def test_gc_candidate_selected_at_exactly_the_retention_boundary() -> None:
+    """The condition is `<=` — exactly 30 days must already be eligible."""
+    closed_exactly_30_days_ago = _snapshot(
+        "1", sync_status="closed", closed_at=_DAY1 - timedelta(days=30)
+    )
+    snapshots = {"1": closed_exactly_30_days_ago}
 
     assert find_gc_candidates(snapshots, now=_DAY1) == ["1"]
 

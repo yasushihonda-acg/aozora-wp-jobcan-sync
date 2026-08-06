@@ -123,7 +123,17 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
   - [P2・修正済み] `find_gc_candidates()`が実際には呼ばれておらずGCが機能していなかった。`firestore_repo.delete_many()`を追加し`orchestrator.run_sync()`から実行するよう接続(テスト5件追加)
   - [P1×2・未修正、B-8として次セッション対象] `app.py`がFirestoreを読まずジョブカン直接フェッチのままで承認ワークフローが実配信に無効/承認エンドポイント自体が存在しない。設計判断とスキーマ拡張を要する別スコープの機能のため、本PRでは実装せず、CLAUDE.md・GOAL.mdに既知ギャップとして明記のうえ次セッションへ持ち越し
   - 修正後テスト212件全PASS、ruff/pyright既存ベースライン以外エラー0件
-  - 並行して`pr-review-toolkit`(code-reviewer/pr-test-analyzer/silent-failure-hunter/type-design-analyzer)+`evaluator`の5エージェントによる第二意見レビューも実施(結果は本エントリ更新時点で集約待ち、次回セッションで反映)
+- **並行起動した`pr-review-toolkit`(code-reviewer/pr-test-analyzer/silent-failure-hunter/type-design-analyzer)+`evaluator`の5エージェントによる第二意見レビュー結果を反映(3エージェントから報告受領、code-reviewer/evaluatorは再送依頼中)**:
+  - [HIGH・修正済み] pr-test-analyzer指摘: `review_bypass=True`時に「closedから再掲載」の安全策(`pending_review`要求)が無条件で上書きされる挙動が未テスト。意図的挙動と判断しテストで固定(`test_review_bypass_true_reactivating_from_closed_skips_review`)、`approval.py`のdocstringに根拠を明記
+  - [MED-HIGH・修正済み] pr-test-analyzer指摘: サーキットブレーカーの分子(pending_review含む全absent job)と分母(`active`限定)の population不一致で closed_rate が実態を超えて計算されうる不整合。分母を`previous_open_count`(active+pending_review)に拡張して解消(テスト2件追加)
+  - [HIGH・修正済み、silent-failure-hunter+pr-test-analyzer 2名が独立指摘] `expected_total`/`collected_total`のreconciliation機構が計算されるだけで一度も参照されておらず「サイレントな部分クロール検知」が死んでいた。`orchestrator.run_sync`で不一致を検知しSlack警告するよう接続。あわせて`collected_total`の集計基準を「重複排除後」から「カテゴリ単位・重複排除前」に修正(exp/collected両方が同じ基準でないと複数カテゴリに掲載された求人が常に不一致判定されるバグを実装中に発見・修正)
+  - [MED・意図的挙動と判断、テストのみ追加] pr-test-analyzer指摘: `pending_review`のまま2回不在の求人が`approval.reject()`を経由せず自動closed化される。「未承認でも消えたら消えた扱いでよい」という判断でコード変更なし、`test_pending_review_job_absent_twice_auto_closes_without_reject`で挙動を固定
+  - [LOW-MED・修正済み] pr-test-analyzer指摘: サーキットブレーカー30%閾値ちょうど・GC30日ちょうど・batch上限500ちょうどの境界値が未テスト。3件追加(全て期待通りの境界挙動を確認)
+  - [LOW・修正済み] pr-test-analyzer+silent-failure-hunter指摘: サーキットブレーカー発火時に別枠のクロールエラーSlack警告が握り込まれる問題。1回のSlack通知に統合(テスト追加)
+  - [MEDIUM-HIGH・対応見送り、次セッション検討] type-design-analyzer指摘: `CrawlResult.errors: list[dict[str,str]]`がキー有無で異種レコードを判別するstringly-typed設計で、`collected_total`計算の型安全性が弱い。tagged union化が対応候補だが影響範囲(crawler.py+テスト多数)が大きく本ラウンドでは見送り
+  - [MEDIUM・対応見送り、次セッション検討] type-design-analyzer指摘: `JobSnapshot`が`sync_status=="closed"⟺closed_at is not None`の不変条件をモデル自身で検証していない。`model_validator`追加を検討したが、Firestore読み込み時(`get_all()`)に不正データで即クラッシュするリスクとのトレードオフがあり、本プロジェクトの「部分失敗は継続」方針と矛盾するため見送り(silent-failure-hunter指摘の握り込み設計とは逆方向の判断、要decision-maker確認)
+  - silent-failure-hunter: `notify_slack()`の全握り込み設計・`crawl_all()`の例外網羅は「安全と確認」との評価
+  - 最終テスト221件全PASS、ruff/pyright既存ベースライン(17件、本PR起因ではない)以外エラー0件、修正2ラウンドをpush済み
 
 ## セッション履歴: 2026-08-05〜06 決裁者チャット指示対応(PR #119〜#121、全完了・本番確認済み)
 社長からのGoogleチャット指摘3件に対応。いずれも番号単位認可を経てマージ・ローカルmain同期・本番反映確認済み。
