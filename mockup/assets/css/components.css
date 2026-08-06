@@ -575,13 +575,14 @@
   .career-ladder__step--level-3 { min-height: 280px; }
   .career-ladder__step--level-4 { min-height: 320px; }
   .career-ladder__step--level-5 { min-height: 360px; }
-  /* 6段階系統は同じ 200〜360px の高さレンジを 5 分割 (32px 刻み) で階段状に表現 */
+  /* 6段階系統は 5段階系統と同じ 40px 刻みで階段状に表現 (社長指摘: 32px刻み+同一高さレンジ
+     だと段差が小さく右肩上がりに見えづらかったため、レンジ拡張で明確な傾斜にした) */
   .career-ladder__step--b1 { min-height: 200px; }
-  .career-ladder__step--b2 { min-height: 232px; }
-  .career-ladder__step--b3 { min-height: 264px; }
-  .career-ladder__step--b4 { min-height: 296px; }
-  .career-ladder__step--b5 { min-height: 328px; }
-  .career-ladder__step--b6 { min-height: 360px; }
+  .career-ladder__step--b2 { min-height: 240px; }
+  .career-ladder__step--b3 { min-height: 280px; }
+  .career-ladder__step--b4 { min-height: 320px; }
+  .career-ladder__step--b5 { min-height: 360px; }
+  .career-ladder__step--b6 { min-height: 400px; }
   .career-ladder__num { width: 48px; height: 48px; font-size: var(--text-lg); }
 }
 
