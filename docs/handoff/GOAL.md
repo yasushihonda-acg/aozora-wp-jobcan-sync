@@ -133,7 +133,15 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
   - [MEDIUM-HIGH・対応見送り、次セッション検討] type-design-analyzer指摘: `CrawlResult.errors: list[dict[str,str]]`がキー有無で異種レコードを判別するstringly-typed設計で、`collected_total`計算の型安全性が弱い。tagged union化が対応候補だが影響範囲(crawler.py+テスト多数)が大きく本ラウンドでは見送り
   - [MEDIUM・対応見送り、次セッション検討] type-design-analyzer指摘: `JobSnapshot`が`sync_status=="closed"⟺closed_at is not None`の不変条件をモデル自身で検証していない。`model_validator`追加を検討したが、Firestore読み込み時(`get_all()`)に不正データで即クラッシュするリスクとのトレードオフがあり、本プロジェクトの「部分失敗は継続」方針と矛盾するため見送り(silent-failure-hunter指摘の握り込み設計とは逆方向の判断、要decision-maker確認)
   - silent-failure-hunter: `notify_slack()`の全握り込み設計・`crawl_all()`の例外網羅は「安全と確認」との評価
-  - 最終テスト221件全PASS、ruff/pyright既存ベースライン(17件、本PR起因ではない)以外エラー0件、修正2ラウンドをpush済み
+- **`pr-review-toolkit:code-reviewer`(review-code)の報告(2回のフォローアップ後に受領、5件・うち高深刻度2件)を反映**:
+  - [HIGH・修正済み] `JobcanClient._wait_for_crawl_delay()`のcheck-sleep-update手続きに排他制御が無く、`app.py`が共有する同一クライアントへの並行リクエスト下で2スレッドが同時に同じ`remaining`待機時間を計算し、Crawl-delayの間隔保証を静かにすり抜けうる(`crawler.py`の逐次利用では発生しない、`app.py`固有のレース)。`threading.Lock`で該当区間を保護して解消
+  - [HIGH・修正済み、review-codeの指摘を調査した過程で自ら発見した副次バグ] 上記スレッド安全性の調査中に、`app.py`の共有プロキシクライアントがB-1で追加した`DEFAULT_CRAWL_DELAY=3.0`(バッチクロール用)をそのまま継承していたことが判明。これはcodex/review-codeどちらも明示的に指摘していない、本セッション独自の発見で、バッチ日次実行だけでなく**本番の全ライブユーザーリクエストが3秒間隔ゲートで直列化されていた**実害バグ(review-codeのレースコンディション指摘より深刻度が高い)。`create_app()`のクライアント構築時に`JobcanClientConfig(crawl_delay=0.0)`を明示指定して解消
+  - [MED・修正済み] `test_firestore_repo.py`が`conftest.py`と同内容のフェイクFirestoreクラスを重複定義。`conftest.py`からimportする形に統一
+  - [MED・修正済み] `_FirestoreClientLike.collection()`が単一`name: str`引数のみを宣言しており、実SDK(`firestore.Client.collection(*collection_path: str)`)の可変長引数と構造的に不一致でpyrightが本物のクライアントを拒否。Protocol側も`*collection_path: str`に変更(テストフェイク側も追随)
+  - 上記reconciliation_mismatch接続(B-6)の副作用で、`test_orchestrator.py`/`test_cli.py`のリスティングHTML生成helperが`.pagination-number`を含んでおらず`expected_total`が常に0扱いになる既存ギャップが露呈(サーキットブレーカー関連テスト3件が偽の不一致でabsence-bookkeepingを抑制され失敗)。両helperに`total_count`パラメータ(既定値`len(job_ids)`)を追加して解消
+  - `review-evaluator`は合計4回のフォローアップ(idle通知への再送3回+最終確認1回)に応答なし。他4エージェント(code-reviewer/pr-test-analyzer/silent-failure-hunter/type-design-analyzer)+codex review 2ラウンドから十分な相互検証済み知見を得られたと判断し、応答を待たずレビュー完了として次工程(コミット・push・ドキュメント反映)へ進めた
+  - 最終テスト221件全PASS、ruff/pyright既存ベースライン(test_app.py 17件、本PR未変更ファイル・以前からの既知偽陽性)以外エラー0件、修正3ラウンドをpush済み(直近: `4e5b426`)
+  - **決裁者への報告待ち**: 上記全修正完了後、PR #129のマージには本田様の番号単位明示認可が必要(CLAUDE.md PRワークフロー)。まだ依頼していない
 
 ## セッション履歴: 2026-08-05〜06 決裁者チャット指示対応(PR #119〜#121、全完了・本番確認済み)
 社長からのGoogleチャット指摘3件に対応。いずれも番号単位認可を経てマージ・ローカルmain同期・本番反映確認済み。
