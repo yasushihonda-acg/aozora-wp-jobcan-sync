@@ -110,14 +110,15 @@ def create_app(
     """
     proxy_cache: Cache = cache or InMemoryCache(CacheConfig())
     _injected_repo = repo
-    _lazy_repo: list[JobCacheRepository | None] = [None]
+    _lazy_repo: JobCacheRepository | None = None
 
     def _resolve_repo() -> JobCacheRepository:
+        nonlocal _lazy_repo
         if _injected_repo is not None:
             return _injected_repo
-        if _lazy_repo[0] is None:
-            _lazy_repo[0] = JobCacheRepository(get_firestore_client())
-        return _lazy_repo[0]
+        if _lazy_repo is None:
+            _lazy_repo = JobCacheRepository(get_firestore_client())
+        return _lazy_repo
 
     app = FastAPI(
         title="Aozora Jobcan Proxy",
@@ -278,7 +279,12 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str 
             and snapshot.sync_status == "active"
             and snapshot.list_item is not None
         ]
-        cards.sort(key=lambda item: item.job_id)
+        # Numeric, not lexicographic (str sort would put "10000000" before
+        # "9999999") — job_id has no fixed digit width. Descending as a
+        # deterministic newest-first proxy: Firestore has no listing-order
+        # info to replicate Jobcan's own display order, and job_ids increase
+        # monotonically (review-code-b8 second-opinion finding).
+        cards.sort(key=lambda item: int(item.job_id), reverse=True)
         page = JobListPage(
             source_url=JOBCAN_LIST_FALLBACK.format(category_id=category_id),
             category_id=category_id,
