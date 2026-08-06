@@ -570,19 +570,22 @@
     flex: 1 1 0;
     text-align: left;
   }
+  /* 60px 刻み (旧40px)。「03 サービス提供責任者」等、役職名+年収レンジ表記が長い
+     カードはテキストの折返し行数次第で min-height を超えて実際の高さが伸びることがあり、
+     隣接カードとの差が 40px 刻みでは埋まりきらず階段の順序が崩れる場合があった
+     (実測: 隣接カードの実コンテンツ高さの差が最大で約80pxに達するケースを確認)。
+     60px 刻みへ広げ、コンテンツ量の変動を吸収しても順序が崩れない安全マージンを確保。 */
   .career-ladder__step--level-1 { min-height: 200px; }
-  .career-ladder__step--level-2 { min-height: 240px; }
-  .career-ladder__step--level-3 { min-height: 280px; }
-  .career-ladder__step--level-4 { min-height: 320px; }
-  .career-ladder__step--level-5 { min-height: 360px; }
-  /* 6段階系統は 5段階系統と同じ 40px 刻みで階段状に表現 (社長指摘: 32px刻み+同一高さレンジ
-     だと段差が小さく右肩上がりに見えづらかったため、レンジ拡張で明確な傾斜にした) */
+  .career-ladder__step--level-2 { min-height: 260px; }
+  .career-ladder__step--level-3 { min-height: 320px; }
+  .career-ladder__step--level-4 { min-height: 380px; }
+  .career-ladder__step--level-5 { min-height: 440px; }
   .career-ladder__step--b1 { min-height: 200px; }
-  .career-ladder__step--b2 { min-height: 240px; }
-  .career-ladder__step--b3 { min-height: 280px; }
-  .career-ladder__step--b4 { min-height: 320px; }
-  .career-ladder__step--b5 { min-height: 360px; }
-  .career-ladder__step--b6 { min-height: 400px; }
+  .career-ladder__step--b2 { min-height: 260px; }
+  .career-ladder__step--b3 { min-height: 320px; }
+  .career-ladder__step--b4 { min-height: 380px; }
+  .career-ladder__step--b5 { min-height: 440px; }
+  .career-ladder__step--b6 { min-height: 500px; }
   .career-ladder__num { width: 48px; height: 48px; font-size: var(--text-lg); }
 }
 
