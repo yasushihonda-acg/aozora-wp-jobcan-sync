@@ -299,6 +299,22 @@
             </li>
           </ol>
         </div>
+        <!-- 上記コメントの「site.js 初期化時に hidden 化」は defer 属性の外部スクリプトのため
+             低速回線ではペイントより後になり、その間だけ両パネルが表示されるちらつきの窓が生じる。
+             解析中に同期実行されるこの小さなインラインスクリプトで即座に非選択パネルを隠し、
+             ちらつきの窓を実質的になくす (JS 完全無効時は本スクリプトも実行されず、
+             両パネル静的表示のフォールバックはそのまま機能する)。 -->
+        <script>
+          (function () {
+            var tabs = document.querySelectorAll('.career-tabs__btn');
+            for (var i = 0; i < tabs.length; i++) {
+              if (tabs[i].getAttribute('aria-selected') !== 'true') {
+                var panel = document.getElementById(tabs[i].getAttribute('aria-controls'));
+                if (panel) panel.hidden = true;
+              }
+            }
+          })();
+        </script>
         <p class="career-ladder__note">※ 想定年収帯は目安イメージです。経験・資格・配属先により異なります。</p>
       </div>
     </section>
