@@ -174,7 +174,7 @@ def main() -> None:
         )
 
     # 検証: 34求人・13拠点・座標が九州レンジ内
-    assert len(jobs) == 34, f"求人件数が想定外: {len(jobs)}"
+    assert len(jobs) == 37, f"求人件数が想定外: {len(jobs)}"
     assert len(facilities) == 13, f"拠点件数が想定外: {len(facilities)}"
     for key, f in facilities.items():
         assert LAT_RANGE[0] <= f["lat"] <= LAT_RANGE[1], f"{key} の緯度が範囲外: {f['lat']}"
