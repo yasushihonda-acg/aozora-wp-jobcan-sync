@@ -46,6 +46,7 @@ def test_snapshot_from_offer_default_status_and_absence_count() -> None:
     snap = snapshot_from_offer(_offer(), now=datetime(2026, 8, 7, tzinfo=UTC))
     assert snap.sync_status == "active"
     assert snap.absence_count == 0
+    assert snap.first_absent_at is None
 
 
 def test_snapshot_from_offer_honours_explicit_status_and_absence_count() -> None:

@@ -1,7 +1,8 @@
 """FastAPI proxy for the Jobcan public job pages.
 
 Phase B B-8 — serves every request from Firestore `job_cache` (populated by
-the daily `sync-run` batch, `orchestrator.py`). **This service never fetches
+the periodic `sync-run` batch, `orchestrator.py`, every 6 hours as of
+2026-08-08). **This service never fetches
 Jobcan at request time** — the Phase 2A.2 live-fetch-per-request design (with
 its Jobcan-error → HTTP-status mapping, allowlists, and negative cache) is
 gone; every one of those concerns existed to protect an upstream fetch that no

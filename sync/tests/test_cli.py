@@ -6,7 +6,7 @@ plus exit-code paths (input validation, structure change, render).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -193,6 +193,11 @@ class TestSyncRunSubcommand:
 
         from sync.models import JobOffer
 
+        # first_absent_at is pinned 48h+ before the CLI's own datetime.now(UTC)
+        # call inside run_sync — both the 2-absence floor and the 48h
+        # duration gate must be satisfied for this run to trip the breaker.
+        seed_now = datetime.now(UTC)
+        first_absent_at = seed_now - timedelta(hours=48)
         repo = JobCacheRepository(fake_client)
         for i in range(1, 11):
             offer = JobOffer(
@@ -207,7 +212,10 @@ class TestSyncRunSubcommand:
                 source_url=f"https://recruit.jobcan.jp/aozora/job_offers/{i}",
                 page_title=None,
             )
-            repo.set(snapshot_from_offer(offer, now=datetime.now(UTC), absence_count=1))
+            snap = snapshot_from_offer(offer, now=seed_now, absence_count=1).model_copy(
+                update={"first_absent_at": first_absent_at}
+            )
+            repo.set(snap)
 
         # Every category lists successfully (fully_listed=True) but mentions
         # only job_id "999" — a genuine absence for jobs 1-10, not a listing

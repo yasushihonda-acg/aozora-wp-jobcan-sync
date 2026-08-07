@@ -2,14 +2,15 @@
 
 Ported from `aozora-sns-auto`'s `notifications/slack.py` (31 lines) with one
 deliberate simplification: no `tenacity` retry loop. A single failed POST is
-logged and swallowed — the daily cron already retries the whole sync
-tomorrow, so retrying one Slack POST inside a single run adds a dependency
-for marginal benefit (this project's anti-overengineering precedent:
+logged and swallowed — the cron already retries the whole sync at the next
+6-hourly run (2026-08-08: even sooner than the old once-daily cadence), so
+retrying one Slack POST inside a single run adds a dependency for marginal
+benefit (this project's anti-overengineering precedent:
 `.claude/memory/feedback_overengineering_recovery_2026-06-18.md`).
 
 Failure must never crash the calling sync run: closed-rate circuit-breaker
-alerts and daily summary posts are operational nice-to-haves, not something
-worth losing an entire day's crawl over.
+alerts and summary posts are operational nice-to-haves, not something worth
+losing a crawl over.
 """
 
 from __future__ import annotations

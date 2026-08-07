@@ -146,9 +146,10 @@ def list_(
 
 @app.command("sync-run")
 def sync_run() -> None:
-    """Daily full-catalogue sync (B-6): crawl -> diff -> closed-detection ->
+    """Full-catalogue sync (B-6): crawl -> diff -> closed-detection ->
     review-gate -> Firestore write. Entry point for the Cloud Run Job that
-    Cloud Scheduler triggers once a day; see `infra/README.md` §8."""
+    Cloud Scheduler triggers every 6 hours (2026-08-08: moved from once a
+    day); see `infra/README.md` §8."""
     now = datetime.now(tz=UTC)
     repo = JobCacheRepository(get_firestore_client())
     with JobcanClient() as client:

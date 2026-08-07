@@ -1,12 +1,20 @@
 # 同期戦略 (Sync Strategy)
 
 > **2026-08-07 追記 (Phase B 定期同期を実装、B-1〜B-6)**: 案 D を「一回性スナップショット」
-> から「日次クロール + Firestore 差分検出 + closed 判定/サーキットブレーカー + 承認
+> から「クロール + Firestore 差分検出 + closed 判定/サーキットブレーカー + 承認
 > ワークフロー」の定期同期へ拡張し実装済み (`sync/src/sync/{crawler,diff,
 > closed_detection,approval,notifications,orchestrator}.py`)。WP は求人データを
 > 一切保持しない設計に確定 (せっかく GCP でプロジェクトを組んでいるため設計を GCP に
 > 集約する決裁者判断) — §6 の WordPress CPT ブロックは不採用、履歴として残置。
 > 詳細: §7 ロードマップ、`infra/README.md` §8、CLAUDE.md 「同期復旧設計 (Phase B)」節。
+>
+> **2026-08-08 追記**: クロール頻度を日次 3:00 JST から**6時間ごと**
+> (3:00/9:00/15:00/21:00 JST) へ変更。§3 で自己申告した「頻度 6 時間に 1 回
+> 程度」およびジョブカン宛照会文面と整合させたもの (1時間ごとへの当初要望は
+> 申告済みポリシーとの矛盾のため見送り)。closed 判定は「一覧から最初に不在を
+> 観測してから48時間経過」の時間ベースへ変更 (`first_absent_at`、旧「連続2回
+> 不在」の実行回数ベースでは6時間ごとクロールで判定窓が12時間に縮み誤検知
+> リスクが上がるため)。詳細: `sync/src/sync/closed_detection.py` module docstring。
 >
 > **2026-06-17 大幅更新 (Codex セカンドオピニオン 2 回目反映)**:
 > 案 D (動的プロキシ + 自社テンプレ再表示) を採用方針に格上げ。WP CPT 不要、データ複製不要、応募導線はジョブカン直リンクで温存。
@@ -123,7 +131,9 @@ yasushi.honda@aozora-cg.com
   - Crawl-delay 3〜5 秒、`User-Agent: AozoraJobcanSync/1.0 (+contact@aozora-cg.com)`
   - 頻度 6h or 12h
   - 取得結果を **必ず Firestore キャッシュ + content_hash で差分検出**
-  - 連続 2 回不在で初めて closed、closed 率 > 30% で同期中止 + Slack アラート
+  - 一覧から最初に不在を観測してから48時間経過(かつ連続2回以上不在)で
+    初めて closed、closed 率 > 30% で同期中止 + Slack アラート
+    (2026-08-08: クロール6時間ごと化に伴い実行回数ベースから時間ベースへ変更)
   - WP 反映前に必ず差分プレビュー (初期 1 ヶ月)
 - 不採用条件: ジョブカンから「自動取得を控えてほしい」回答 → 即座に中止し案 2 のみで運用
 
@@ -201,6 +211,6 @@ Firestore: job_cache/{job_id}
 |---|---|
 | Phase A 中 | ジョブカン公式照会 (この文面送付) → 回答待ち。技術検証・実装は並行して進める (`sync/README.md` の本番デプロイ判断は引き続き回答待ち) |
 | Phase 0 (完了) | 案 D のローカル PoC。`python -m sync render/list` で単発取得・表示を確認 |
-| Phase B データ層 (実装済み、2026-08-07、B-1〜B-7) | 案 D を定期同期へ拡張。日次クロール (`crawler.py`) → Firestore 差分検出 (`diff.py`) → closed 判定 + サーキットブレーカー (`closed_detection.py`) → 承認ステータス計算 (`approval.py`) → Slack 通知 (`notifications.py`) → Cloud Scheduler + Cloud Run Job (`infra/README.md` §8)。テスト212件でカバー |
+| Phase B データ層 (実装済み、2026-08-07、B-1〜B-7) | 案 D を定期同期へ拡張。クロール (`crawler.py`、2026-08-08 に日次→6時間ごとへ変更) → Firestore 差分検出 (`diff.py`) → closed 判定 + サーキットブレーカー (`closed_detection.py`、時間ベース48h閾値) → 承認ステータス計算 (`approval.py`) → Slack 通知 (`notifications.py`) → Cloud Scheduler + Cloud Run Job (`infra/README.md` §8)。テスト244件でカバー |
 | Phase B 配信層統合 (実装済み、2026-08-07、B-8) | `app.py` を Firestore `job_cache` 読み出しへ全面書き換え (旧ジョブカン直接フェッチ経路は削除)。`JobSnapshot` に `offer`/`list_item`/`category_ids` を追加してスキーマ拡張完了。承認は Cloud Run エンドポイントではなく **`REVIEW_BYPASS=true` の常時適用による完全自動化**に決裁者判断で確定 (`approval.py`本体は残すが実運用では`pending_review`が発生しない)。テスト221件でカバー。**本番インフラは未プロビジョニング** — `infra/README.md`「B-8 初回ロールアウト順序」参照 |
 | Phase C (未着手) | ジョブカン公式 API/Webhook が提供されると回答があれば移行検討 (現時点で公式 API の存在は一次資料で未確認) |

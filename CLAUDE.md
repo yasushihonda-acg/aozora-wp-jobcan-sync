@@ -85,20 +85,22 @@ Cloud Run 動的プロキシ (`sync/src/sync/app.py`) が Firestore `job_cache` 
 に確定 (下記参照、`approval.py` の `approve()`/`reject()` 自体は残るが実運用
 では呼ばれない)。
 
-**インフラは 2026-08-07 時点で未プロビジョニング** (実装は完了したが本番未展開):
-Firestore DB自体・Secret Manager・Cloud Scheduler・Cloud Run Job `aozora-sync-daily`
-のいずれも作成されていない (`gcloud` で実測確認)。ロールアウト手順は
-`infra/README.md`「B-8 初回ロールアウト順序」に一括記載。特に**クローラは実
-ジョブカンに対して実行実績ゼロ**(ページネーション処理はフィクスチャ解析のみ)
-のため、Job作成前に dry-run 検証(`infra/README.md` §8.1b)を必ず挟む。
+**インフラは 2026-08-07 に初回ロールアウト済み** (Firestore DB・Secret Manager・
+Cloud Scheduler `aozora-sync-daily-trigger`・Cloud Run Job `aozora-sync-daily`
+いずれも作成・稼働中)。ロールアウト手順は `infra/README.md`「B-8 初回ロール
+アウト順序」に一括記載。当初は日次 3:00 JST 実行だったが、**2026-08-08 に
+6時間ごと (3:00/9:00/15:00/21:00 JST) へ変更**(`infra/README.md` §8.3)。
 
 ### 同期復旧設計 (Phase B、データ層・配信層とも実装完了、本番展開は次セッション)
 - 取得 → Firestore `job_cache/{job_id}` スナップショット (`snapshot.py`) →
   差分検出 (`diff.py`) → 承認ステータス計算 (`approval.py`, `REVIEW_BYPASS=true`
   常時適用の完全自動化に確定、当初計画していた「初期1ヶ月半自動→安定後自動化」
   の段階運用は不採用) → Cloud Run 動的プロキシが直接配信 (`app.py`、B-8で統合)
-- 連続 2 回不在で closed、closed 率 > 30% (分母は前回スナップショットの非closed
-  件数 = active + pending_review、`previous_open_count`) で同期中止 + Slack
+- 一覧から最初に不在を観測してから48時間経過 (かつ連続2回以上の不在) で
+  closed (`first_absent_at`、2026-08-08: クロール6時間ごと化に伴い実行回数
+  ベースから時間ベースへ変更、`closed_detection.py`)、closed 率 > 30%
+  (分母は前回スナップショットの非closed件数 = active + pending_review、
+  `previous_open_count`) で同期中止 + Slack
   アラート (`closed_detection.py`)。列挙にあった「一覧に出ているが詳細取得だけ
   失敗」は不在と別枠で扱う (2026-08-07 codex review で発見・修正済み、
   `crawler.py` の `listed_job_ids`/`fully_listed`)。クロール反照合
@@ -107,8 +109,8 @@ Firestore DB自体・Secret Manager・Cloud Scheduler・Cloud Run Job `aozora-sy
   第二意見レビューで発見・修正済み)
 - 募集終了は `sync_status=closed` 化 (削除しない、SEO/被リンク維持) →
   `closed_at` から 30 日後に GC (`closed_detection.find_gc_candidates` +
-  `firestore_repo.delete_many`、`orchestrator.run_sync` が日次実行内で実施)
-- 日次実行は Cloud Scheduler → Cloud Run Job (`python -m sync sync-run`)、
+  `firestore_repo.delete_many`、`orchestrator.run_sync` が6時間ごとの実行内で実施)
+- 6時間ごとの実行は Cloud Scheduler → Cloud Run Job (`python -m sync sync-run`)、
   `infra/README.md` §8 に手順あり (Terraform モジュール化はしない方針)
 
 ### 採用FAQチャットボット (`chatbot/`、2026-07-24 デプロイ済み、2026-07-24 UX改善追加)

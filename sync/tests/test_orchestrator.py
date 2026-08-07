@@ -173,11 +173,14 @@ def test_run_sync_circuit_breaker_trip_writes_nothing(monkeypatch: pytest.Monkey
 
     repo = JobCacheRepository(FakeFirestoreClient())
     # Seed 10 jobs each already 1 absence away from closing (bypassing a real
-    # prior run) — closed detection requires 2 *consecutive* absences, so a
-    # fresh absence_count=0 seed would only reach absence_count=1 this run
-    # and never trip the breaker.
+    # prior run) — closed detection requires BOTH 2 *consecutive* absences
+    # AND 48h elapsed since `first_absent_at`, so a fresh absence_count=0
+    # seed (or one with first_absent_at=_NOW) would only reach absence_count=1
+    # this run with 0h elapsed and never trip the breaker.
     for i in range(1, 11):
-        snap = snapshot_from_offer(_offer_stub(str(i)), now=_NOW, absence_count=1)
+        snap = snapshot_from_offer(_offer_stub(str(i)), now=_NOW, absence_count=1).model_copy(
+            update={"first_absent_at": _NOW - timedelta(hours=48)}
+        )
         repo.set(snap)
 
     # Every category still lists successfully (fully_listed=True) but none of
@@ -291,9 +294,12 @@ def test_run_sync_circuit_breaker_message_includes_crawl_error_warning(
     monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
     repo = JobCacheRepository(FakeFirestoreClient())
 
-    # Seed 10 jobs one absence away from closing.
+    # Seed 10 jobs one absence away from closing (both the count floor and
+    # the 48h duration gate must be satisfied for this run to close them).
     for i in range(1, 11):
-        snap = snapshot_from_offer(_offer_stub(str(i)), now=_NOW, absence_count=1)
+        snap = snapshot_from_offer(_offer_stub(str(i)), now=_NOW, absence_count=1).model_copy(
+            update={"first_absent_at": _NOW - timedelta(hours=48)}
+        )
         repo.set(snap)
 
     # Every category lists successfully (fully_listed stays True) but only
