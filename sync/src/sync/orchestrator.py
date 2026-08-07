@@ -1,10 +1,11 @@
-"""Daily full-catalogue sync orchestration (Phase B B-6).
+"""Full-catalogue sync orchestration (Phase B B-6).
 
 Wires `crawler.py` -> `diff.py` -> `closed_detection.py` -> `approval.py` ->
-`firestore_repo.py` into the single daily run Cloud Scheduler triggers.
-Kept separate from `cli.py` so the orchestration logic is testable by
-injecting a `JobcanClient` + `JobCacheRepository` directly, without having
-to monkeypatch module-level functions or reach real GCP.
+`firestore_repo.py` into the single run Cloud Scheduler triggers every 6
+hours (2026-08-08: moved from once-daily). Kept separate from `cli.py` so
+the orchestration logic is testable by injecting a `JobcanClient` +
+`JobCacheRepository` directly, without having to monkeypatch module-level
+functions or reach real GCP.
 """
 
 from __future__ import annotations
@@ -54,8 +55,8 @@ def run_sync(
     On circuit-breaker trip, **nothing is written to Firestore**
     (`written=False`) — see `closed_detection.py`'s module docstring for why
     "同期中止" is interpreted as aborting the whole write, not a partial
-    commit. The next day's run gets a clean previous-snapshot baseline to
-    diff against, rather than one built on a possibly-erroneous mass closure.
+    commit. The next run gets a clean previous-snapshot baseline to diff
+    against, rather than one built on a possibly-erroneous mass closure.
 
     After a successful write, runs the 30-day closed-job GC
     (`closed_detection.find_gc_candidates`) against the snapshot set this run

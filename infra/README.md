@@ -227,9 +227,12 @@ CLI から `gcloud billing budgets create` も可能だが、Billing Account Adm
 
 ## 8. Phase B — Cloud Run Job + Cloud Scheduler (定期同期、B-6)
 
-`sync-run` (`python -m sync sync-run`、`sync/src/sync/cli.py`) が日次実行する
-バッチ本体。§4 の FastAPI proxy サービスとは**別プロセス** (Cloud Run Job) —
-プロキシは求人ページの動的配信、Job はクロール→Firestore 書込みのみを行う。
+`sync-run` (`python -m sync sync-run`、`sync/src/sync/cli.py`) が6時間ごとに
+実行するバッチ本体 (2026-08-08: 日次から変更、`docs/specs/sync-strategy.md` §3
+の自己申告済み頻度「6h or 12h」およびジョブカン宛照会文面の「6時間に1回程度」
+と整合させたもの)。§4 の FastAPI proxy サービスとは**別プロセス** (Cloud Run
+Job) — プロキシは求人ページの動的配信、Job はクロール→Firestore 書込みのみを
+行う。
 
 Terraform モジュール化はしない (2026-06-18 の過剰設計巻き戻し方針、
 `.claude/memory/feedback_overengineering_recovery_2026-06-18.md` 参照)。`gcloud`
@@ -240,7 +243,7 @@ Terraform モジュール化はしない (2026-06-18 の過剰設計巻き戻し
 ```bash
 gcloud iam service-accounts create aozora-sync-job \
   --project=aozora-wp-jobcan-sync \
-  --display-name="aozora-sync Cloud Run Job (daily crawl)"
+  --display-name="aozora-sync Cloud Run Job (6h periodic crawl)"
 
 # Firestore 読み書き
 gcloud projects add-iam-policy-binding aozora-wp-jobcan-sync \
@@ -307,8 +310,11 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run jobs create aozora-
   半自動→安定後に自動化」の段階運用は不採用。`approval.py` の
   `pending_review` ゲート自体はコードとして残すが、この env var が `true`
   である限り実際には発生しない (`compute_target_sync_status` の既存実装)
-- `max-retries=0`: 失敗時に自動リトライしない — 翌日の Cloud Scheduler 実行が
-  実質的な再試行になるため、同日中の多重実行は避ける
+- `max-retries=0`: 失敗時に自動リトライしない — 6時間後の次回 Cloud Scheduler
+  実行が実質的な再試行になるため、同一実行枠内の多重実行は避ける
+  (2026-08-08: 日次→6時間ごと化に伴い根拠を更新。`task-timeout=3600s` と
+  スケジュール間隔 6時間の間には十分な余裕があるため、実行時間が想定
+  (約21.4分) を超えて延びても次回実行までに完了する見込み)
 - `task-timeout=3600s`: 全17カテゴリ・複数ページを crawl_delay 3秒で巡回する
   実所要時間は、計画段階のPlan agent報告(実ジョブカンへの読み取り専用
   crawl、本田様への事前報告なし)によれば実求人382件・47リストページで
@@ -328,10 +334,14 @@ gcloud run jobs update aozora-sync-daily \
   --image=asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest
 ```
 
-### 8.3 Cloud Scheduler — 日次トリガー (初回のみ)
+### 8.3 Cloud Scheduler — 6時間ごとトリガー (初回のみ、2026-08-08 日次から変更)
 
-ジョブカン側の低負荷時間帯を想定し、JST 深夜 3:00 (`cron` は UTC 基準の
-Scheduler location 設定に依存するため `--time-zone` を明示):
+ジョブカン側の低負荷時間帯を想定していた JST 深夜 3:00 を起点に保ち、
+そこから6時間おき (3:00 / 9:00 / 15:00 / 21:00 JST) に実行する (`cron` は
+UTC 基準の Scheduler location 設定に依存するため `--time-zone` を明示)。
+リソース名 (`aozora-sync-daily` / `aozora-sync-daily-trigger`) は Cloud Run
+Job / Scheduler Job が rename 不可のため歴史的経緯のまま残し、改名しない
+(新規作成+旧削除は本番リソースの破棄を伴い、機能上の利点がない):
 
 ```bash
 # Cloud Run Job を起動するための実行用 SA (Scheduler -> Cloud Run Job の OIDC 認証)
@@ -348,12 +358,27 @@ gcloud run jobs add-iam-policy-binding aozora-sync-daily \
 gcloud scheduler jobs create http aozora-sync-daily-trigger \
   --project=aozora-wp-jobcan-sync \
   --location=asia-northeast1 \
-  --schedule="0 3 * * *" \
+  --schedule="0 3,9,15,21 * * *" \
   --time-zone="Asia/Tokyo" \
   --uri="https://asia-northeast1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/aozora-wp-jobcan-sync/jobs/aozora-sync-daily:run" \
   --http-method=POST \
   --oauth-service-account-email=aozora-scheduler-invoker@aozora-wp-jobcan-sync.iam.gserviceaccount.com
 ```
+
+**すでに `aozora-sync-daily-trigger` が存在する環境** (2026-08-07 に日次
+`0 3 * * *` で作成済み) では、`create` ではなく `update` で cron 式のみ変更する:
+
+```bash
+gcloud scheduler jobs update http aozora-sync-daily-trigger \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1 \
+  --schedule="0 3,9,15,21 * * *" \
+  --time-zone="Asia/Tokyo"
+```
+
+コード側 (時間ベース closed 判定) が本番イメージに反映された**後**に実行する
+こと — 先に間隔だけ上げると、旧「実行回数ベース」ロジックのまま 6 時間ごとの
+不在が誤って早期 closed 化されるリスクがある。
 
 ### 8.4 動作確認
 
@@ -387,7 +412,7 @@ Phase B のインフラは 2026-08-07 時点で何も存在しない状態から
 3. §8.1b でクローラを実ジョブカンに対して dry-run 検証 (Firestore 書き込みなし)
 4. §8.2 で Cloud Run Job を `REVIEW_BYPASS=true` で作成し、§8.4 の手動トリガーで **1回実行** → Firestore に全求人が `active` で入る
 5. `python -m sync` 相当で Firestore の中身を確認してから §4 で Service をデプロイ (この時点で初めて配信が Firestore 由来になる)
-6. §8.3 で Cloud Scheduler を作成し、以降は日次自動運用
+6. §8.3 で Cloud Scheduler を作成し、以降は6時間ごとの自動運用
 
 ## ロールバック
 

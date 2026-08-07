@@ -1,16 +1,18 @@
 """`job_cache/{job_id}` snapshot model (Phase B Firestore schema).
 
 Schema per `docs/specs/sync-strategy.md` §6, plus fields that document
-doesn't have yet: `absence_count` (連続不在カウンタ, B-3) and `offer`/
-`list_item`/`category_ids` (B-8, 配信層統合). closed 判定は「2回連続で
-一覧に不在」で決まる(B-3)ため、1回の不在では消えない状態を Firestore 側に
-保持する必要がある。B-8 で `normalized: dict[str,str]` を `offer: JobOffer`
-に置き換えたのは、配信層 (`app.py`) が詳細ページを再描画するのに
-`body_html`/`extra_lines`/`page_title` が必要だが、旧 `normalized` はこれらを
-意図的に持たなかったため(コメント参照、差分検出は content_hash で足りるので
-Firestore ドキュメントを膨らませたくない、という判断)。B-8 実装時点で
-`job_cache` は本番に一件も書かれていない(日次 Cloud Run Job が一度も実行され
-ていない)ため、旧スキーマとの後方互換は考慮していない。
+doesn't have yet: `absence_count`/`first_absent_at` (不在ブックキーピング, B-3)
+and `offer`/`list_item`/`category_ids` (B-8, 配信層統合). closed 判定は「一覧
+から最初に不在を観測してから 48 時間経過」で決まる(B-3、2026-08-08 のクロール
+6 時間ごと化に合わせて実行回数ベースから時間ベースへ変更)ため、1回の不在では
+消えない状態を Firestore 側に保持する必要がある。B-8 で `normalized:
+dict[str,str]` を `offer: JobOffer` に置き換えたのは、配信層 (`app.py`) が
+詳細ページを再描画するのに `body_html`/`extra_lines`/`page_title` が必要だが、
+旧 `normalized` はこれらを意図的に持たなかったため(コメント参照、差分検出は
+content_hash で足りるので Firestore ドキュメントを膨らませたくない、という
+判断)。B-8 実装時点で `job_cache` は本番に一件も書かれていなかったが、
+2026-08-07 のローカル初回同期で投入済み(全件 `first_absent_at` 未設定 =
+`None`、pydantic のデフォルト値埋めにより既存ドキュメントも問題なく読める)。
 """
 
 from __future__ import annotations
@@ -61,6 +63,14 @@ class JobSnapshot(BaseModel):
     sync_status: SyncStatus = "active"
     absence_count: int = Field(
         0, ge=0, description="Consecutive crawls where this job_id was absent from its listing"
+    )
+    first_absent_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When this job_id was FIRST observed absent from its listing "
+            "(a genuine removal, not an unfetched detail page); None while present. "
+            "Closed detection requires 48h elapsed since this timestamp (B-3)."
+        ),
     )
     closed_at: datetime | None = Field(
         None, description="When sync_status first flipped to closed (B-3); None while active"

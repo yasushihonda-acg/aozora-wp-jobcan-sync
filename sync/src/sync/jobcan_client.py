@@ -19,16 +19,18 @@ from .models import JobcanClientError
 
 DEFAULT_USER_AGENT = (
     "AozoraJobcanSync/0.2 (+contact@aozora-cg.com; "
-    "Phase B periodic sync - 1x/day, gentle crawl)"
+    "Phase B periodic sync - 4x/day, gentle crawl)"
 )
 DEFAULT_TIMEOUT = 10.0  # seconds
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BASE_DELAY = 1.0  # seconds (multiplied by 2^attempt)
 # Crawl-delay between *separate* requests (not retry backoff). 3-5s is the
-# range agreed for Phase B (社長 report: 1x/day cadence + gentle per-request
-# spacing so a single sync run never resembles a burst). Applied before every
-# request, keyed off the client instance's own clock — a single JobcanClient
-# is expected to live for the duration of one crawl run.
+# range agreed for Phase B (社長 report: 6h cadence, i.e. 4x/day, + gentle
+# per-request spacing so a single sync run never resembles a burst; 2026-08-08
+# raised from 1x/day to keep listing data fresher while staying within the
+# "頻度 6h or 12h" self-imposed ceiling in sync-strategy.md §3). Applied
+# before every request, keyed off the client instance's own clock — a single
+# JobcanClient is expected to live for the duration of one crawl run.
 DEFAULT_CRAWL_DELAY = 3.0  # seconds
 
 JOBCAN_BASE_URL = "https://recruit.jobcan.jp/aozora"
