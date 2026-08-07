@@ -101,6 +101,33 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 ## 🔄 中断点（in-flight）
 - Cloud Scheduler (`aozora-sync-daily-trigger`, 日次3:00 JST) は作成・ENABLEDだが、`gcloud run jobs execute`自体はClaude Code auto modeクラシファイアにブロックされ続けたため未検証(初回本番同期はローカル`python -m sync sync-run`で代替実行)。**2026-08-08 3:00 JSTの初回自動実行を要監視** — `gcloud run jobs executions list --job=aozora-sync-daily --region=asia-northeast1`で結果確認、失敗時はCloud Run Job自体(ローカル実行と同じイメージ/コードだが未検証の実行経路)を疑う
 - Secret Manager (Slack webhook) は未設定 — `notify_slack()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
+- **[新規発見・未着手]** `mockup/index.html`のカテゴリカード「訪問介護員(ヘルパー)」「ケアマネジャー」が`jobs.html?job_type=visit`/`?job_type=care-manager`にリンクしているが、`map-search.js`はこの`job_type`クエリパラメータを一切読み取らない(職種フィルターと接続されていない、pre-existingの導線切れ)。今回の看護職修正(PR #136)の副次調査で発見、本件とは無関係のため今回は対応せず記録のみ。decision-maker確認後に着手判断
+
+## セッション履歴: 2026-08-07 Phase A看護職カテゴリの実データ復元(PR #136、decision-maker指摘を起点に調査・修正)
+
+decision-makerが公開モック`jobs.html`実機を確認し「ここについて社長からの指摘が網羅されてません」と指摘。
+調査したところ、実ジョブカンサイトの17職種カテゴリ(看護職=category_id 18983等)は既にPhase Bで正しく
+クロール済み(Firestoreに看護職85件)だったが、静的モック`jobs.html`の職種フィルターは「介護・相談/事務/IT」
+の3バケットのみで看護が存在せず、`jobs.json`の34件にも看護師求人が0件だった。加えて`jobs-nurse.html`
+(index.htmlの看護カード導線先)はcategory_id 18984/18983取り違えにより相談員の求人を看護師として誤表示。
+
+一度は「Phase Bが解決済みだから静的モック修正は不要」と誤って却下したが(PR #135)、decision-makerから
+「実際に見ている画面(静的モック)では直っていない」「元ジョブカンの選択内容をスクレイピングしてきたなら
+それが反映されるべき」との指摘で誤りを訂正。カテゴリ・サンプルを手動で決め打ちするのではなく実データ
+(Firestore/既存の`scripts/mockup-rebuild/`正本取得パイプライン)から生成する方針でplan mode実施。
+
+- **実装**: Firestore実測(category_id=18983、既存の座標登録済み拠点のみ・新規ジオコーディング不要)から
+  実求人3件(博多/正社員・永吉/短時間正社員・梅ヶ丘/パート)を選定。既存の`scripts/mockup-rebuild/`
+  パイプライン(README「Phase A中の追加ジョブ描加にも再利用可」)を拡張: 新規`add_new_cards.py`
+  (既存スクリプトが持たない「新規job_idの追加」パスを担う)、`rewrite_jobs_html.py`に看護マッピング追加
+  +対象HTMLファイルCLI引数化、給与regexの資格別内訳プレフィックス未対応バグを修正(看護データで初露見)
+- **codex review (P2×4) 対応**: 「パートアルバイト」複合雇用形態のjobs.json分割漏れ(個別フィルター一致
+  不可)・`rewrite_job_details.py`のemp_patterns順序(複合雇用形態タグ誤表示)・新規詳細ページのJobPosting
+  jobLocationが常に「福岡」表記だった(鹿児島の求人でも)、の3件を修正。残り1件(初期表示件数固定)は
+  コード確認+実機確認で誤検知と判断
+- **動作確認**: Playwrightで看護チップ表示・絞り込み・詳細ページ全セクション・`jobs-nurse.html`修正・
+  看護+パート同時選択でパートアルバイト求人が正しく1件ヒットすることを確認。既存34件は内容不変
+  (属性順の差異のみ)
 
 ## セッション履歴: 2026-08-07 Phase B 本番インフラ初回ロールアウト(decision-maker明示指示「始めてください」で実行)
 
@@ -134,13 +161,11 @@ decision-makerから「Phase B本番インフラのプロビジョニング、�
   `sync-job-detail`/`sync-job-list`のBEMクラス確認済み。存在しないjob_idで404確認済み
 - **未実施**: Secret Manager(Slack webhook、URL未提供のため次回以降)。Cloud Billing budget alert
   (§6、Console UI経由が必要)
-- **[却下] Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等)**: decision-maker
-  指摘により再検討し着手見送りへ変更。Firestoreを実測したところ category_id=18983(看護職)に**85件**
-  が正しく分類されて格納されている(`crawler.py`の`KNOWN_CATEGORY_IDS`に元々の誤りを修正したコメント
-  済みマッピングが実装されており、Phase Bはこれに基づき実ジョブカンから正しくクロール)。当初の発端
-  だった社長指摘「看護師が入ってない」はPhase Bの実データ配信で既に解消済み。静的モックは今後Phase B
-  の動的配信に置き換わる想定の一時的承認用デモであり、置き換え前提のファイルへの個別修正は価値が低い
-  と判断(2026-06-18方針転換で「モック単発修正は再発する」と見送った経緯とも整合)
+- **[却下→2026-08-07同日中に撤回・実装済み] Phase A 看護職カテゴリ不整合の静的モック修正**: 本判断は誤り
+  だった。Firestore(Phase B裏側)は看護職85件を正しく保持していたが、これは静的モック`jobs.html`の
+  表示には一切反映されない(GitHub Pagesは独立した固定データを参照)。decision-makerが実機を確認し
+  「実際に見ている画面では直っていない」と指摘、方針を訂正してPR #136で実データ(Firestore)から看護職
+  3件を静的モックへ復元・反映した。詳細は下記セッション履歴参照
 
 ## セッション履歴: 2026-08-07 Phase B 配信層統合実装(B-8、PR #129マージ後の新セッション)
 
