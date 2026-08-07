@@ -45,14 +45,16 @@
 | # | 項目 | trigger（充足条件） | 充足時のタスク | 充足確認方法 |
 |---|------|------------------|--------------|------------|
 | 1 | [GOAL.md] Cloud Scheduler初回自動実行の監視 | 2026-08-08 3:00 JST到来 | `gcloud run jobs executions list --job=aozora-sync-daily --region=asia-northeast1`で結果確認、失敗時はログ調査 | 次セッション開始時に確認 |
-| 2 | [GOAL.md] Phase A 看護職カテゴリ不整合の静的モック修正 | 本田様の着手判断(Phase B完了により trigger 充足済み、着手判断自体は待ち) | `mockup/jobs-nurse.html`等のcategory_id誤マッピング(18984↔18983)を修正 | 本田様への確認 |
-| 3 | [GOAL.md] career-ladder Lv.2〜4年収帯確定 | 決裁者から対応方針の回答(`career-ladder-salary-report.html`送信済み) | 回答内容に応じて`mockup/index.html`該当箇所を更新 | 本田様への確認 |
-| 4 | Secret Manager(Slack webhook)追加 | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
+| 2 | [GOAL.md] career-ladder Lv.2〜4年収帯確定 | 決裁者から対応方針の回答(`career-ladder-salary-report.html`送信済み) | 回答内容に応じて`mockup/index.html`該当箇所を更新 | 本田様への確認 |
+| 3 | Secret Manager(Slack webhook)追加 | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
 
 その他の decision-maker 判断待ち項目(③外国人採用特設ページ、⑤スタッフインタビュー再考、GHA WIF自動デプロイ等)は `docs/handoff/GOAL.md` に継続記録、本セッションでの新規動きなし。
 
 ### 却下候補（記録のみ）
-却下候補なし
+
+| # | 項目 | 検討経緯 | 着手しない理由 |
+|---|------|---------|--------------|
+| 1 | [GOAL.md] Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) | Phase B完了報告時に「条件待ち」として提示したが、decision-makerから「もはや不要では」との指摘 | Firestore実測でcategory_id=18983(看護職)に85件が正しく分類済みと確認(`crawler.py`の`KNOWN_CATEGORY_IDS`が元の誤りを修正済み)。発端の社長指摘「看護師が入ってない」はPhase Bの実データ配信で解消済み。静的モックはPhase Bの動的配信に置き換わる想定の一時的デモであり、個別修正の価値は低い |
 
 ## 再開可能性判定
 ✅ **再開可能** - ドキュメントから開発再開できます
