@@ -99,7 +99,6 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-- Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — **Phase B本番インフラのロールアウトが2026-08-07に完了**(下記セッション履歴参照)、着手trigger(「Phase B完了後に本田様判断」)は充足。本田様の着手判断待ち
 - Cloud Scheduler (`aozora-sync-daily-trigger`, 日次3:00 JST) は作成・ENABLEDだが、`gcloud run jobs execute`自体はClaude Code auto modeクラシファイアにブロックされ続けたため未検証(初回本番同期はローカル`python -m sync sync-run`で代替実行)。**2026-08-08 3:00 JSTの初回自動実行を要監視** — `gcloud run jobs executions list --job=aozora-sync-daily --region=asia-northeast1`で結果確認、失敗時はCloud Run Job自体(ローカル実行と同じイメージ/コードだが未検証の実行経路)を疑う
 - Secret Manager (Slack webhook) は未設定 — `notify_slack()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
 
@@ -135,6 +134,13 @@ decision-makerから「Phase B本番インフラのプロビジョニング、�
   `sync-job-detail`/`sync-job-list`のBEMクラス確認済み。存在しないjob_idで404確認済み
 - **未実施**: Secret Manager(Slack webhook、URL未提供のため次回以降)。Cloud Billing budget alert
   (§6、Console UI経由が必要)
+- **[却下] Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等)**: decision-maker
+  指摘により再検討し着手見送りへ変更。Firestoreを実測したところ category_id=18983(看護職)に**85件**
+  が正しく分類されて格納されている(`crawler.py`の`KNOWN_CATEGORY_IDS`に元々の誤りを修正したコメント
+  済みマッピングが実装されており、Phase Bはこれに基づき実ジョブカンから正しくクロール)。当初の発端
+  だった社長指摘「看護師が入ってない」はPhase Bの実データ配信で既に解消済み。静的モックは今後Phase B
+  の動的配信に置き換わる想定の一時的承認用デモであり、置き換え前提のファイルへの個別修正は価値が低い
+  と判断(2026-06-18方針転換で「モック単発修正は再発する」と見送った経緯とも整合)
 
 ## セッション履歴: 2026-08-07 Phase B 配信層統合実装(B-8、PR #129マージ後の新セッション)
 
