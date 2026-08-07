@@ -70,16 +70,16 @@ def yen_to_man(yen_str: str) -> str:
 
 def extract_salary_chip(salary: str) -> str:
     s = salary.replace("～", "〜").replace("~", "〜")
-    m = re.search(r"【?月額】?\s*([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?月額】?[^\d]*?([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
     if m:
         return f"{yen_to_man(m.group(1))}〜{yen_to_man(m.group(2))}円"
-    m = re.search(r"【?月額】?\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?月額】?[^\d]*?([\d,]+)\s*円", s)
     if m:
         return f"{yen_to_man(m.group(1))}円〜"
-    m = re.search(r"【?時給】?\s*([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?時給】?[^\d]*?([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
     if m:
         return f"時給 {m.group(1)}〜{m.group(2)} 円"
-    m = re.search(r"【?時給】?\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?時給】?[^\d]*?([\d,]+)\s*円", s)
     if m:
         return f"時給 {m.group(1)} 円〜"
     return s[:30] + ("…" if len(s) > 30 else "")
@@ -308,8 +308,15 @@ def build_new_main_html(job: dict, *, indent: str = "        ") -> str:
     labels = job["label"].split()
     # label は parser 出力で「事務職正社員」のような連結文字列 → 分割
     if not labels or len(labels) == 1:
-        # 既知パターン: 「介護職正社員」「事務職パート」等を分けるため、雇用形態キーワードで分割
-        emp_patterns = ["正社員", "パート", "アルバイト", "契約社員", "短時間正社員"]
+        # 既知パターン: 「介護職正社員」「事務職パート」等を分けるため、雇用形態キーワードで分割。
+        # 複合(長い)キーワードを先に判定しないと「看護職短時間正社員」が
+        # 「看護職短時間」+「正社員」に割れて雇用形態が誤表示される
+        # (add_new_cards.py の split_label と同一の並び順)。
+        emp_patterns = sorted(
+            ["正社員", "パート", "アルバイト", "契約社員", "短時間正社員", "パートアルバイト"],
+            key=len,
+            reverse=True,
+        )
         raw = job["label"]
         for emp in emp_patterns:
             if raw.endswith(emp):

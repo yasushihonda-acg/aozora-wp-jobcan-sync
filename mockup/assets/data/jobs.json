@@ -6,9 +6,10 @@
       "area": "fukuoka",
       "lat": 33.598984,
       "lng": 130.43248,
-      "jobCount": 1,
+      "jobCount": 2,
       "categories": [
-        "care"
+        "care",
+        "nurse"
       ]
     },
     "facility-四箇": {
@@ -83,9 +84,10 @@
       "area": "kagoshima",
       "lat": 31.602989,
       "lng": 130.53299,
-      "jobCount": 1,
+      "jobCount": 2,
       "categories": [
-        "care"
+        "care",
+        "nurse"
       ]
     },
     "facility-梅ヶ丘": {
@@ -94,9 +96,10 @@
       "area": "fukuoka",
       "lat": 33.495445,
       "lng": 130.545227,
-      "jobCount": 1,
+      "jobCount": 2,
       "categories": [
-        "care"
+        "care",
+        "nurse"
       ]
     },
     "kagoshima-hq": {
@@ -460,6 +463,34 @@
         "アルバイト"
       ],
       "area": "kagoshima"
+    },
+    {
+      "id": "137288",
+      "facilityKey": "facility-博多",
+      "category": "nurse",
+      "employment": [
+        "正社員"
+      ],
+      "area": "fukuoka"
+    },
+    {
+      "id": "1668692",
+      "facilityKey": "facility-永吉",
+      "category": "nurse",
+      "employment": [
+        "短時間正社員"
+      ],
+      "area": "kagoshima"
+    },
+    {
+      "id": "1891511",
+      "facilityKey": "facility-梅ヶ丘",
+      "category": "nurse",
+      "employment": [
+        "パート",
+        "アルバイト"
+      ],
+      "area": "fukuoka"
     }
   ]
 }

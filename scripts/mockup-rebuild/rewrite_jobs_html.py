@@ -11,13 +11,13 @@
 from __future__ import annotations
 import json
 import re
+import sys
 from pathlib import Path
 from bs4 import BeautifulSoup
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 DATA = HERE / "jobs_data.json"
-JOBS_HTML = REPO / "mockup" / "jobs.html"
 
 # 給与: 月額XXX,XXX円〜 → 「26.5 万円〜」「20.0 万円〜」
 SALARY_MONTHLY_RE = re.compile(r"月額\s*([\d,]+)\s*円")
@@ -35,6 +35,7 @@ LABEL_TO_CATEGORY = {
     "相談員": "consultant",  # 既存 illust-job-nurse.png は使用停止、consultant variant に置換
     "事務職": "office",
     "ITエンジニア職": "it",
+    "看護職": "nurse",
 }
 
 # カテゴリ別 thumbnail variant 一覧 (cycling 順)
@@ -43,6 +44,7 @@ CATEGORY_VARIANTS: dict[str, list[str]] = {
     "consultant": ["illust-job-consultant.png", "illust-job-consultant-2.png"],
     "office": ["illust-job-office.png", "illust-job-office-2.png"],
     "it": ["illust-job-it.png"],
+    "nurse": ["illust-job-nurse.png"],
 }
 
 
@@ -72,19 +74,19 @@ def extract_salary_chip(salary: str) -> str:
     """
     s = salary.replace("～", "〜").replace("~", "〜")
     # 月給範囲
-    m = re.search(r"【?月額】?\s*([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?月額】?[^\d]*?([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
     if m:
         return f"{yen_to_man(m.group(1))}〜{yen_to_man(m.group(2))}円"
     # 月給単独
-    m = re.search(r"【?月額】?\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?月額】?[^\d]*?([\d,]+)\s*円", s)
     if m:
         return f"{yen_to_man(m.group(1))}円〜"
     # 時給範囲
-    m = re.search(r"【?時給】?\s*([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?時給】?[^\d]*?([\d,]+)\s*円\s*〜\s*([\d,]+)\s*円", s)
     if m:
         return f"時給 {m.group(1)}〜{m.group(2)} 円"
     # 時給単独
-    m = re.search(r"【?時給】?\s*([\d,]+)\s*円", s)
+    m = re.search(r"【?時給】?[^\d]*?([\d,]+)\s*円", s)
     if m:
         return f"時給 {m.group(1)} 円〜"
     return s[:30] + ("…" if len(s) > 30 else "")
@@ -169,14 +171,16 @@ def simplify_address(address: str, extras: list[list[str]]) -> str:
 
 
 def main() -> None:
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "mockup" / "jobs.html"
+
     data = json.loads(DATA.read_text(encoding="utf-8"))
     jobs = {j["job_id"]: j for j in data["jobs"]}
 
-    html = JOBS_HTML.read_text(encoding="utf-8")
+    html = target.read_text(encoding="utf-8")
     soup = BeautifulSoup(html, "html.parser")
 
     cards = soup.find_all("li", class_="job-list-card")
-    print(f"Found {len(cards)} cards in jobs.html")
+    print(f"Found {len(cards)} cards in {target.name}")
 
     # カテゴリ別 thumbnail cycling 用カウンタ
     category_counters: dict[str, int] = {k: 0 for k in CATEGORY_VARIANTS}
@@ -247,8 +251,8 @@ def main() -> None:
         updated += 1
         print(f"  OK {jid}: 月給={salary_chip}, 年休={holiday_chip}")
 
-    JOBS_HTML.write_text(str(soup), encoding="utf-8")
-    print(f"\nUpdated {updated}/{len(cards)} cards in {JOBS_HTML}")
+    target.write_text(str(soup), encoding="utf-8")
+    print(f"\nUpdated {updated}/{len(cards)} cards in {target}")
     print("Thumbnail cycling counts:", category_counters)
 
 
