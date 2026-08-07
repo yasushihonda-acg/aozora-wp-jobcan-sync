@@ -74,6 +74,41 @@ def test_get_all_on_empty_collection_returns_empty_dict() -> None:
     assert repo.get_all() == {}
 
 
+def test_set_encodes_extra_lines_as_maps_not_nested_arrays() -> None:
+    """Firestore rejects an array nested directly inside another array.
+    `JobOffer.extra_lines` is `list[tuple[str, str]]`, so the stored dict
+    must NOT contain a bare tuple/list inside `offer.extra_lines` — each
+    pair must be wrapped in a map (dict) instead (2026-08-07 production
+    incident: first real `sync-run` failed with `InvalidArgument: 400
+    Property offer contains an invalid nested entity`)."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    extra_lines = [("福利厚生", "社会保険完備"), ("休日", "週休2日")]
+    offer = _offer("1").model_copy(update={"extra_lines": extra_lines})
+    snapshot = _snapshot("1").model_copy(update={"offer": offer})
+
+    repo.set(snapshot)
+
+    stored_extra_lines = client.store["1"]["offer"]["extra_lines"]
+    assert stored_extra_lines == [
+        {"header": "福利厚生", "value": "社会保険完備"},
+        {"header": "休日", "value": "週休2日"},
+    ]
+    assert all(isinstance(item, dict) for item in stored_extra_lines)
+
+
+def test_set_then_get_all_round_trips_extra_lines_back_to_tuples() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    offer = _offer("1").model_copy(update={"extra_lines": [("福利厚生", "社会保険完備")]})
+    snapshot = _snapshot("1").model_copy(update={"offer": offer})
+
+    repo.set(snapshot)
+    result = repo.get_all()
+
+    assert result["1"].offer.extra_lines == [("福利厚生", "社会保険完備")]
+
+
 def test_set_many_writes_every_snapshot() -> None:
     client = _FakeFirestoreClient()
     repo = JobCacheRepository(client)

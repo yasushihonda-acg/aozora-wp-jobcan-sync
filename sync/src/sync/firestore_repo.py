@@ -78,9 +78,36 @@ def _convert_dates_to_datetimes(obj: Any) -> Any:
     return obj
 
 
+def _encode_extra_lines(data: dict[str, Any]) -> dict[str, Any]:
+    """Rewrite `offer.extra_lines` from `list[tuple[str, str]]` to a list of maps.
+
+    Firestore rejects an array nested directly inside another array
+    ("Property offer contains an invalid nested entity") — discovered via
+    the first real `sync-run` against production Firestore (2026-08-07 B-8
+    rollout), since `model_dump(mode="python")` keeps `extra_lines` as a
+    `list[tuple[...]]`, which the SDK encodes as array-of-arrays. Wrapping
+    each pair in a `{"header", "value"}` map avoids the nested-array shape;
+    `_decode_extra_lines` below is the inverse for the read path.
+    """
+    offer = data.get("offer")
+    if isinstance(offer, dict) and offer.get("extra_lines"):
+        offer["extra_lines"] = [{"header": h, "value": v} for h, v in offer["extra_lines"]]
+    return data
+
+
+def _decode_extra_lines(data: dict[str, Any]) -> dict[str, Any]:
+    """Inverse of `_encode_extra_lines`: maps back to `(header, value)` tuples
+    so the result validates against `JobOffer.extra_lines: list[tuple[str, str]]`.
+    """
+    offer = data.get("offer")
+    if isinstance(offer, dict) and offer.get("extra_lines"):
+        offer["extra_lines"] = [(item["header"], item["value"]) for item in offer["extra_lines"]]
+    return data
+
+
 def _to_dict(snapshot: JobSnapshot) -> dict[str, Any]:
     """`JobSnapshot` -> Firestore-writable dict."""
-    return _convert_dates_to_datetimes(snapshot.model_dump(mode="python"))
+    return _convert_dates_to_datetimes(_encode_extra_lines(snapshot.model_dump(mode="python")))
 
 
 class JobCacheRepository:
@@ -112,7 +139,7 @@ class JobCacheRepository:
         snapshots: dict[str, JobSnapshot] = {}
         for doc in self._collection.stream():
             data = doc.to_dict() or {}
-            snapshots[doc.id] = JobSnapshot.model_validate(data)
+            snapshots[doc.id] = JobSnapshot.model_validate(_decode_extra_lines(data))
         return snapshots
 
     def get_all_valid(self) -> tuple[dict[str, JobSnapshot], list[str]]:
@@ -132,7 +159,7 @@ class JobCacheRepository:
         for doc in self._collection.stream():
             data = doc.to_dict() or {}
             try:
-                snapshots[doc.id] = JobSnapshot.model_validate(data)
+                snapshots[doc.id] = JobSnapshot.model_validate(_decode_extra_lines(data))
             except ValidationError:
                 _logger.error("skipping malformed job_cache doc", extra={"job_id": doc.id})
                 skipped.append(doc.id)
@@ -149,7 +176,7 @@ class JobCacheRepository:
         doc = self._collection.document(job_id).get()
         if not doc.exists:
             return None
-        return JobSnapshot.model_validate(doc.to_dict() or {})
+        return JobSnapshot.model_validate(_decode_extra_lines(doc.to_dict() or {}))
 
     def set(self, snapshot: JobSnapshot) -> None:
         self._collection.document(snapshot.job_id).set(_to_dict(snapshot))
