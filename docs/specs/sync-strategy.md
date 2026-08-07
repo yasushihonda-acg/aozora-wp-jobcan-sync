@@ -171,6 +171,7 @@ Firestore: job_cache/{job_id}
   - last_seen_at: timestamp
   - sync_status: "active" | "closed" | "pending_review"
   - absence_count: int
+  - first_absent_at: timestamp | null (2026-08-08 追加、48h時間ベースclosed判定用)
   - closed_at: timestamp | null
 ```
 
