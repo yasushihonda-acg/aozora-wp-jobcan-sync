@@ -108,11 +108,13 @@ def apply_closed_detection(
     window's start point.
 
     `skip_absence_bookkeeping=True` (pass when `CrawlResult.fully_listed` is
-    False) treats every entry in `diff.removed` the same as `unfetched`
-    instead: if any category failed to list completely this run, a "genuine"
-    absence and a "we simply never got to check" gap are indistinguishable,
-    so nothing should be counted toward closure until a run with a complete
-    picture confirms it.
+    False) holds every entry in `diff.removed` exactly as-is instead — a
+    third treatment, distinct from both the reset above and the normal
+    absence path below: if any category failed to list completely this run,
+    a "genuine" absence and a "we simply never got to check" gap are
+    indistinguishable, so nothing should be counted toward closure (no
+    advance) but also nothing should be assumed confirmed-present (no reset)
+    until a run with a complete picture settles it either way.
 
     `list_items`/`category_ids` (B-8: `CrawlResult.list_items`/`category_ids`)
     are threaded through to every freshly-built snapshot so `app.py` can serve
