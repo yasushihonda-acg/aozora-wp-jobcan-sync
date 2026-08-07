@@ -99,8 +99,42 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-- Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — 下記 Phase B 完了後に本田様判断で着手予定、未着手
-- **Phase B 本番インフラのプロビジョニング + 初回ロールアウト (未着手)**: B-8 実装完了 (下記セッション履歴参照) により配信層統合・完全自動化 (`REVIEW_BYPASS=true`) までコードは完成したが、Firestore DB/Secret Manager/Cloud Scheduler/Cloud Run Job のいずれも本番プロジェクトに存在しない (2026-08-07 `gcloud`実測確認)。`infra/README.md`「B-8 初回ロールアウト順序」に手順を一括記載済み、次セッションでの実行対象。特に §8.1b (クローラの実ジョブカン dry-run 検証、実行実績ゼロ) を Job 作成前に必ず挟むこと。**着手trigger は decision-maker の明示的な開始指示のみ**(2026-08-07 訂正: ジョブカン正式照会回答待ちを前提条件としていたが、2026-06-18 の巻き戻し方針 `feedback_overengineering_recovery_2026-06-18.md` の適用漏れと判明し撤回。`sync/README.md`「本番デプロイ禁止」行も削除済み)
+- Phase A 看護職カテゴリ不整合の静的モック修正 (`mockup/jobs-nurse.html` 等) — **Phase B本番インフラのロールアウトが2026-08-07に完了**(下記セッション履歴参照)、着手trigger(「Phase B完了後に本田様判断」)は充足。本田様の着手判断待ち
+- Cloud Scheduler (`aozora-sync-daily-trigger`, 日次3:00 JST) は作成・ENABLEDだが、`gcloud run jobs execute`自体はClaude Code auto modeクラシファイアにブロックされ続けたため未検証(初回本番同期はローカル`python -m sync sync-run`で代替実行)。**2026-08-08 3:00 JSTの初回自動実行を要監視** — `gcloud run jobs executions list --job=aozora-sync-daily --region=asia-northeast1`で結果確認、失敗時はCloud Run Job自体(ローカル実行と同じイメージ/コードだが未検証の実行経路)を疑う
+- Secret Manager (Slack webhook) は未設定 — `notify_slack()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
+
+## セッション履歴: 2026-08-07 Phase B 本番インフラ初回ロールアウト(decision-maker明示指示「始めてください」で実行)
+
+decision-makerから「Phase B本番インフラのプロビジョニング、始めてください」との明示指示を受け、
+`infra/README.md`「B-8 初回ロールアウト順序」1〜6を実行。前提だった「ジョブカン正式照会回答待ち」は
+本セッション冒頭でdecision-maker指摘により撤回済み(PR #132、2026-06-18方針転換の適用漏れと判明)。
+
+- **実行内容**: Dockerイメージビルド・push → API有効化(firestore/secretmanager/cloudscheduler)→
+  Firestore DB作成(asia-northeast1, native mode)→ サービスアカウント2種作成+IAM付与
+  (`aozora-sync-web`: datastore.viewer / `aozora-sync-job`: datastore.user)→ クローラdry-run
+  検証(実ジョブカン、382件・エラー0件・`expected_total==collected_total`・`fully_listed=True`)→
+  Cloud Run Job (`aozora-sync-daily`) 作成 → 初回本番同期実行 → Cloud Run Service再デプロイ
+  (Firestore単一ソース配信)→ Cloud Scheduler (`aozora-sync-daily-trigger`, 日次3:00 JST) 作成
+- **本番初回書き込みで発見・修正した実害バグ (PR #133)**: `JobOffer.extra_lines: list[tuple[str, str]]`
+  が`model_dump(mode="python")`でタプルのリストのまま残り、Firestoreの「配列を配列に直接ネスト
+  できない」制約に抵触し、全件書き込みが`InvalidArgument: 400 Property offer contains an invalid
+  nested entity`で失敗。`firestore_repo.py`に`_encode_extra_lines`/`_decode_extra_lines`を追加して
+  解消(回帰テスト2件追加、pytest 236件全PASS・ruff/pyright 0エラー)。修正後の再実行で382件全て
+  `active`として書き込み成功、`extra_lines`もタプルとして正しく復元されることを確認
+- **その他に遭遇した問題(コード起因ではない)**:
+  - `gcloud run jobs execute`がClaude Code auto modeクラシファイアに一貫してブロックされたため、
+    初回本番同期はdecision-maker合意のもとローカル`python -m sync sync-run`で代替実行(Cloud Run Job
+    自体の実行経路は次回スケジューラ発火まで未検証、上記🔄中断点に記録)
+  - ローカルFirestore書き込み時にgRPC(c-ares)のDNS解決だけが失敗する問題(`Could not contact DNS
+    servers`、通常のDNS解決/curlは正常)に遭遇、`GRPC_DNS_RESOLVER=native`で回避(Docker Desktop起動に
+    伴うネットワーク設定変化が疑われるが未確定、ローカル環境固有の問題でCloud Run実行環境には影響しない見込み)
+  - 修正コミット後にイメージの再ビルド・再push忘れで旧イメージのままServiceを一度デプロイし、詳細
+    ページが503(旧コードは`extra_lines`デコード未対応でPydanticバリデーションエラー)。イメージ再
+    ビルド・再デプロイで解消
+- **動作確認**: `/jobs/104625`(詳細)・`/jobs/?category_id=43764`(一覧)とも200、
+  `sync-job-detail`/`sync-job-list`のBEMクラス確認済み。存在しないjob_idで404確認済み
+- **未実施**: Secret Manager(Slack webhook、URL未提供のため次回以降)。Cloud Billing budget alert
+  (§6、Console UI経由が必要)
 
 ## セッション履歴: 2026-08-07 Phase B 配信層統合実装(B-8、PR #129マージ後の新セッション)
 

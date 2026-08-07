@@ -1,13 +1,12 @@
-# Handoff — 2026-08-07（Phase B 定期同期システム、PR #129 → #130）
+# Handoff — 2026-08-07（Phase B 本番インフラ初回ロールアウト）
 
 ## TL;DR
 
-**社長の「看護職が入ってない」指摘を起点に、Phase A静的モックの単発修正では同種の不整合が再発するとの本田様の判断で、ジョブカン定期同期システム(Phase B)を本格実装。データ層(B-1〜B-7、クロール→Firestore差分検出→closed判定→承認ステータス計算、PR #129)に続き、配信層統合(B-8、PR #130)で `app.py` をジョブカン直接フェッチからFirestore単一ソース配信へ全面書き換え。承認導線は決裁者判断で「完全自動化(`REVIEW_BYPASS=true`常時適用)」に確定し、CLI承認コマンド・Slack承認待ち通知は不要と判明。両PRとも `codex review` + `pr-review-toolkit`複数エージェントによる多段レビューを経て番号単位認可でマージ・本番main反映済み。**
-
-**コードは完成したが、本番インフラは一切プロビジョニングされていない**(Firestore DB・Secret Manager・Cloud Scheduler・Cloud Run Jobいずれも未作成、`gcloud`実測確認)。次セッションでの本番展開は**decision-makerの明示的な開始指示**を待つ状態(2026-08-07 追記訂正: 「ジョブカン正式照会回答待ち」を追加条件としていたが、2026-06-18の内部方針転換 `feedback_overengineering_recovery_2026-06-18.md` の適用漏れと判明し撤回。`sync/README.md`「本番デプロイ禁止」行も削除済み)。
+**decision-makerから「Phase B本番インフラのプロビジョニング、始めてください」との明示指示を受け、`infra/README.md`「B-8 初回ロールアウト順序」を実行。前提だった「ジョブカン正式照会回答待ち」は本セッション冒頭でdecision-maker指摘により撤回(PR #132、2026-06-18方針転換の適用漏れと判明)。Firestore DB作成・API有効化・サービスアカウント作成・クローラdry-run検証(実ジョブカン382件・エラー0件)・初回本番同期・Cloud Run Service再デプロイ・Cloud Scheduler作成まで完了。本番Firestore書き込み時に実害バグ1件(`extra_lines`のFirestoreネスト配列違反)を発見・修正(PR #133)。**
 
 🔗 公開モック: https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 🔗 チャットボットAPI: https://aozora-chatbot-1084369586348.asia-northeast1.run.app
+🔗 求人配信Service: https://aozora-sync-1084369586348.asia-northeast1.run.app
 
 ## 今セッションで完了したこと
 
@@ -15,33 +14,40 @@
 
 | PR | タイトル | 内容 |
 |---|---|---|
-| #129 | `feat(sync): Phase B 定期同期システムを実装(B-1〜B-7)` | クロール基盤(ページネーション対応)・Firestoreスナップショット・closed判定+サーキットブレーカー・承認ステータス計算・Slack通知・Cloud Scheduler/Job配線をゼロから実装。テスト221件、`codex review`2ラウンド+`pr-review-toolkit`4エージェントの指摘を反映 |
-| #130 | `feat(sync): Phase B 配信層統合(B-8) — Firestore単一ソース化+完全自動化` | `app.py`(590→約210行)をジョブカン直接フェッチからFirestore `job_cache`単一ソース配信へ全面書き換え。`JobSnapshot`に`offer`/`list_item`/`category_ids`を追加。承認は`REVIEW_BYPASS=true`常時適用で完全自動化(CLI/Slack通知は実装せず)。テスト234件、`codex review`+4エージェントの指摘(P2×2・HIGH×1・MEDIUM×1・LOW×2)を全て反映 |
+| #132 | `docs: ジョブカン正式照会回答待ちの前提を撤回(2026-06-18方針転換の適用漏れ)` | `sync/README.md`「本番デプロイ禁止」行を削除。GOAL.md/LATEST.md/CLAUDE.md未確定事項の関連記述を訂正 |
+| #133 | `fix(sync): Firestoreのネストされたextra_linesを書き込み可能な形に変換` | `JobOffer.extra_lines: list[tuple[str, str]]`がFirestoreの「配列の直接ネスト禁止」制約に抵触していたバグを修正。`firestore_repo.py`にエンコード/デコード層を追加、回帰テスト2件追加 |
 
-### 実装の要点(詳細は `docs/handoff/GOAL.md` セッション履歴セクション参照)
+### Phase B本番インフラ プロビジョニング(B-8初回ロールアウト順序 1〜6、完了)
 
-- **決裁者判断2件**: ①WordPress求人データ保持を不採用、Cloud Run動的プロキシへ設計集約 ②承認導線は「完全自動化」に確定(半自動運用の段階移行案は不採用)
-- **自ら発見・対処したバグ**: `create_app()`のFirestoreクライアント即時構築がテスト収集を壊すリスク(遅延解決で回避)、`app.py`共有クライアントへの誤ったcrawl_delay継承(本番ライブトラフィックを3秒間隔で直列化していた実害バグ)、劣化クロール時にカテゴリ横断掲載求人が一覧から消えるバグ、Firestore同期呼び出しによるasyncイベントループブロック
-- **計画段階のPlan agent(plan-ops)による無許可の実ジョブカンライブアクセス**: 「実測」と称した報告の一部(429件・21.4分)が見積り値であり、実際の送信は77リクエスト(list 47件[重複含む]+detail 8件、約3.7分、GETのみ・crawl_delay 3秒遵守)と本人が訂正・自己申告。「照会回答待ちの状態でライブクロール実行前に確認を取るべきだった」との誤り認識も申告あり。詳細は`docs/handoff/GOAL.md`に記録
-- **品質ゲート**: 両PRとも `codex review --base main --strict-config -c model_reasoning_effort=high` + `pr-review-toolkit`エージェント(code-reviewer/pr-test-analyzer/type-design-analyzer/silent-failure-hunter、model: sonnet明示・read-only)の並行レビューを実施、findings 0件でも件数明示。全指摘を修正または理由付きで見送りに分類してから番号単位認可を依頼
+| # | 内容 | 結果 |
+|---|------|------|
+| 1 | Dockerイメージビルド・push | 完了(修正反映後に再ビルド) |
+| 2 | API有効化 + Firestore DB作成 + SA作成 | `firestore.googleapis.com`等有効化、DB作成(asia-northeast1, native)、`aozora-sync-web`(datastore.viewer)/`aozora-sync-job`(datastore.user)作成・IAM付与 |
+| 3 | クローラdry-run検証(実ジョブカン) | `offers=382 errors=0 expected_total=382 collected_total=382 fully_listed=True` |
+| 4 | Cloud Run Job作成+初回実行 | `aozora-sync-daily`作成。実行自体はauto modeクラシファイアにブロックされたためローカル`sync-run`で代替(382件`active`で書き込み成功) |
+| 5 | Service再デプロイ+動作確認 | Firestore単一ソース配信に切替、`/jobs/{id}`(200)・`/jobs/?category_id=`(200)・存在しないID(404)を確認 |
+| 6 | Cloud Scheduler作成 | `aozora-sync-daily-trigger`、日次3:00 JST、ENABLED |
 
-### 見送り指摘(次セッション検討、決裁者確認なしで着手しない)
+### 実作業中に発見・対処した問題
 
-- `templates/base.html`/`job_list.html`の`rel=canonical`がジョブカン側URLを指しており、`closed`求人の被リンク維持方針を実質無効化している。本番ドメイン(`recruit.aozora-cg.com`)のDNS未確定のため`PUBLIC_BASE_URL`設計を含む追加機能として持ち越し
-- `category_ids: list[str]`をfrozenset/tupleにすべき等の型設計nit(実害ゼロ、低severity)
+- **本番Firestore書き込みバグ(PR #133)**: 初回`sync-run`が`InvalidArgument: 400 Property offer contains an invalid nested entity`で全件失敗。原因は`extra_lines: list[tuple[str,str]]`が`model_dump(mode="python")`でタプルのリストのまま残り、Firestoreの配列ネスト禁止制約に抵触。エンコード/デコード層を追加して解消、実本番Firestoreへの再書き込みで成功確認済み
+- **イメージ再push忘れ**: 修正コミット後、旧イメージのままServiceを一度デプロイし詳細ページが503。イメージ再ビルド・再デプロイで解消
+- **ローカルgRPCのDNS解決失敗**: `Could not contact DNS servers`(通常のDNS解決は正常、gRPC/c-ares固有の問題、Docker Desktop起動に伴うネットワーク変化が疑われるが未確定)。`GRPC_DNS_RESOLVER=native`で回避。Cloud Run実行環境には影響しない見込み
+- **`gcloud run jobs execute`がauto modeクラシファイアに一貫してブロック**: 2回試行しいずれも拒否。ローカル`python -m sync sync-run`で代替実行(decision-maker承認済み)。Cloud Run Job自体の実行経路は2026-08-08 3:00 JSTの初回スケジューラ発火が最初の検証機会
 
 ## 次のアクション
 
 ### 即着手タスク
-即着手タスクなし — 唯一の主要な残作業(Phase B本番インフラのプロビジョニング + 初回ロールアウト)は技術的には実行可能だが、decision-makerの明示的な開始指示待ち
+即着手タスクなし
 
 ### 条件待ち（明示 trigger 付き）
 
 | # | 項目 | trigger（充足条件） | 充足時のタスク | 充足確認方法 |
 |---|------|------------------|--------------|------------|
-| 1 | [GOAL.md] Phase B 本番インフラのプロビジョニング + 初回ロールアウト | decision-makerの明示的な開始指示(実クロール・GCPリソース作成は状態変更操作のため番号単位認可対象。本セッションのplan-ops誤判断も踏まえ、read-onlyのdry-run含め事前確認が必要。**2026-08-07訂正: 「ジョブカン正式照会回答待ち」も条件としていたが2026-06-18方針転換の適用漏れと判明し撤回、`sync/README.md`該当行も削除済み**) | `infra/README.md`「B-8 初回ロールアウト順序」1〜6を順次実行(API有効化→Firestore DB作成→§8.1bクローラdry-run検証→Job作成・実行→Service新デプロイ→Scheduler作成) | 本田様への確認 |
-| 2 | [GOAL.md] Phase A 看護職カテゴリ不整合の静的モック修正 | 本田様の着手判断(Phase B完了後に判断予定と既に合意済み) | `mockup/jobs-nurse.html`等のcategory_id誤マッピング(18984↔18983)を修正 | 本田様への確認 |
-| 3 | [GOAL.md] career-ladder Lv.2〜4年収帯確定 | 決裁者から対応方針の回答(前セッションから継続、`career-ladder-salary-report.html`送信済み) | 回答内容に応じて`mockup/index.html`該当箇所を更新 | 本田様への確認 |
+| 1 | [GOAL.md] Cloud Scheduler初回自動実行の監視 | 2026-08-08 3:00 JST到来 | `gcloud run jobs executions list --job=aozora-sync-daily --region=asia-northeast1`で結果確認、失敗時はログ調査 | 次セッション開始時に確認 |
+| 2 | [GOAL.md] Phase A 看護職カテゴリ不整合の静的モック修正 | 本田様の着手判断(Phase B完了により trigger 充足済み、着手判断自体は待ち) | `mockup/jobs-nurse.html`等のcategory_id誤マッピング(18984↔18983)を修正 | 本田様への確認 |
+| 3 | [GOAL.md] career-ladder Lv.2〜4年収帯確定 | 決裁者から対応方針の回答(`career-ladder-salary-report.html`送信済み) | 回答内容に応じて`mockup/index.html`該当箇所を更新 | 本田様への確認 |
+| 4 | Secret Manager(Slack webhook)追加 | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
 
 その他の decision-maker 判断待ち項目(③外国人採用特設ページ、⑤スタッフインタビュー再考、GHA WIF自動デプロイ等)は `docs/handoff/GOAL.md` に継続記録、本セッションでの新規動きなし。
 
@@ -60,13 +66,13 @@
 
 ## 最終結論
 
-✅ **セッション終了可** — 残作業ゼロ、クリーン状態達成(本ハンドオフ更新のコミット・PR化を除く)
+⚠️ **セッション終了前に要対応: 1件** — 本ハンドオフ更新PRのコミット・push・マージ
 
 - OPEN PR: 0件 / active Issue: 0件
-- Git: `docs/handoff/LATEST.md`更新分のみ未コミット（本ハンドオフPRで解消予定）、それ以外clean、`main`は`origin/main`と同期済み
-- CI: 直近3件 `pages build and deployment` 全て success
-- 即着手タスク: 0件 / 条件待ち: 3件(いずれも decision-maker 判断待ち)
-- 残留プロセス: なし(検出された node/npm プロセスはLM Studio・drawio MCP等、本セッション・本プロジェクトと無関係な既存プロセス)
-- 既知の blocker: なし(2026-08-07追記訂正: `sync/README.md`「本番デプロイ禁止」行は2026-06-18方針転換の適用漏れと判明し削除済み。Phase B本番展開はdecision-makerの明示的な開始指示のみが条件)
-- 同根再発スキャン(§4.6): 本セッションの修正PR(#129, #130)はいずれもPhase B新設コードへの初回実装+レビュー起因の修正であり、過去7日のarchiveに同一トピック(Firestore配信・crawl系)の記録なし。同根候補0件
-- 対症療法判定(§4.7): 該当なし — 両PRの修正は`codex review`/`pr-review-toolkit`による設計レベルの指摘(データ不整合・イベントループブロック・エラーハンドリング非対称性)への対応であり、retry/timeout延長等の症状遮断ではない
+- Git: `docs/handoff/GOAL.md`更新分・アーカイブ済み旧LATEST.md・本ファイルが未コミット(本ハンドオフPRで解消予定)、それ以外clean、`main`は`origin/main`と同期済み
+- CI: 直近 `pages build and deployment` success
+- 即着手タスク: 0件 / 条件待ち: 4件(3件はdecision-maker判断待ち、1件は2026-08-08 3:00 JSTのスケジューラ初回実行待ち)
+- 残留プロセス: あり(MCP関連: drawio/context7/codex/playwright-mcp、pyright/TypeScript language server、LM Studio helper)——いずれも本セッション・本プロジェクトの作業とは無関係な既存の常駐プロセスで、Phase Bロールアウト作業(docker buildx/gcloud/python sync-run)の残留プロセスはなし
+- 既知の blocker: なし(Phase B本番インフラのプロビジョニングは完了。Cloud Scheduler初回自動実行の結果のみ次セッションで要確認)
+- 同根再発スキャン(§4.6): 過去7日のarchiveおよびPRタイトルに「firestore」「nested」「extra_lines」等のキーワードで同根候補なし(0件)。本セッションのfix PR(#133)はB-8初回本番書き込みで初めて露見したバグで、既知の再発ではない
+- 対症療法判定(§4.7): 該当なし — 修正はretry/timeout/fallbackではなく、Firestoreのデータエンコード方式そのものを直接修正した根本対応。実本番Firestoreへの書き込み成功で動作確認済み(単体テストのみに依存していない)
