@@ -99,9 +99,45 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-- Cloud Scheduler (`aozora-sync-daily-trigger`, 日次3:00 JST) は作成・ENABLEDだが、`gcloud run jobs execute`自体はClaude Code auto modeクラシファイアにブロックされ続けたため未検証(初回本番同期はローカル`python -m sync sync-run`で代替実行)。**2026-08-08 3:00 JSTの初回自動実行を要監視** — `gcloud run jobs executions list --job=aozora-sync-daily --region=asia-northeast1`で結果確認、失敗時はCloud Run Job自体(ローカル実行と同じイメージ/コードだが未検証の実行経路)を疑う
 - Secret Manager (Slack webhook) は未設定 — `notify_slack()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
 - **[新規発見・未着手]** `mockup/index.html`のカテゴリカード「訪問介護員(ヘルパー)」「ケアマネジャー」が`jobs.html?job_type=visit`/`?job_type=care-manager`にリンクしているが、`map-search.js`はこの`job_type`クエリパラメータを一切読み取らない(職種フィルターと接続されていない、pre-existingの導線切れ)。今回の看護職修正(PR #136)の副次調査で発見、本件とは無関係のため今回は対応せず記録のみ。decision-maker確認後に着手判断
+
+## セッション履歴: 2026-08-08 スクレイピング間隔を6時間ごとへ変更 + closed判定の時間ベース化(PR #138→#139、decision-maker「スクレイピングのタイミングを1時間くらいにできますか？」を起点)
+
+decision-makerから求人データの鮮度向上を目的に「1時間ごと」への変更依頼。調査の結果、
+`docs/specs/sync-strategy.md` §3 の自己申告済みポリシー(「頻度6h or 12h」)およびジョブカン
+宛照会文面(「6時間に1回程度」)との矛盾、1回のフルクロールが約429リクエスト・21分を要し
+1時間間隔では稼働率36%・実行重複リスクが生じる点を発見。AskUserQuestionで方針確認し、
+**6時間ごと(3:00/9:00/15:00/21:00 JST)+フルクロール維持**に決定。
+
+- **closed判定の時間ベース化(plan mode実施)**: 「連続2回不在でclosed」の実行回数ベース判定は
+  日次前提(実質48時間の猶予)だったため、6時間ごとクロールにそのまま適用すると判定窓が12時間に
+  縮み誤closedリスクが増大。`JobSnapshot.first_absent_at`を新設し、`absence_count>=2 AND
+  (now - first_absent_at)>=48h`のAND条件に変更。`diff.unfetched`(一覧には出ているが詳細取得
+  のみ失敗)は「存在確認済み」としてbookkeepingをリセットする挙動に変更(旧: carry-forward
+  untouched)。境界値(47h/48h/49h)・6時間刻み8回連続不在シミュレーション等の新規テストを追加
+- **品質ゲート**: `codex review`を2回実行(push前medium effort、large tier hook指定のhigh
+  effort+`--strict-config`)、いずれもfindings 0件。`pr-review-toolkit`セカンドオピニオン4
+  エージェント並列起動(code-reviewer/pr-test-analyzer/comment-analyzer/type-design-analyzer)
+  — comment-analyzerが実際のdocstring不整合(`skip_absence_bookkeeping`時の`diff.removed`が
+  「unfetchedと同じ」という記述が、同PRでunfetched側の挙動を変えた結果不正確になっていた)を
+  検出、PR #139でフォローアップ修正。type-design-analyzerが`absence_count`/`first_absent_at`間
+  にcross-field validatorがない設計リスクを指摘したが、意図的な防御的テストケース
+  (`test_single_absence_does_not_close_even_after_48_hours`)と直接矛盾するため追加は見送り
+  (判断の記録のみ、コード変更なし)
+  - **判明した運用上の注意**: review-code/review-tests(pr-review-toolkit)は数分で完了したが、
+    review-comments/review-types の2エージェントは約25分応答なしとなり、既知のsubagentハング/
+    ゾンビバグ(reference_subagent_hang_zombie_bugs.md)を疑ってdecision-maker確認のうえ得られた
+    結果のみで進行・マージした。実際にはハングではなく、マージ完了後に両エージェントから正常な
+    結果が遅延到着した(単に遅かっただけ)。次回同様の遅延時は、ハング断定前にもう少し長く待つ
+    余地がある
+- **本番反映**: Dockerイメージ再ビルド・push → `gcloud run jobs update aozora-sync-daily
+  --image=...` → `gcloud scheduler jobs update http aozora-sync-daily-trigger --schedule="0
+  3,9,15,21 * * *"`。PR #138マージ前の状態でCloud Schedulerは日次のまま未検証だったが、本セッション
+  中に初回自動実行(2026-08-08 3:00 JST)が新イメージ・新スケジュールの反映後に発火し**成功**を確認
+  (所要21分44秒、`added=0 changed=6 unchanged=376 removed=0 newly_closed=0 gc_deleted=0
+  crawl_errors=0 written=True`、severity>=WARNINGのログなし)。旧「Cloud Scheduler初回自動実行を
+  要監視」の中断点はこれで解消(上記🔄中断点セクションから削除済み)
 
 ## セッション履歴: 2026-08-07 Phase A看護職カテゴリの実データ復元(PR #136、decision-maker指摘を起点に調査・修正)
 
