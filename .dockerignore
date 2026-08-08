@@ -1,0 +1,22 @@
+# Build context for sync/Dockerfile is now the REPO ROOT (Stage 1 of the
+# Cloud Run consolidation, 2026-08-08 — see sync/Dockerfile's top comment).
+# This repo has a lot in it (chatbot/, docs/, mockup/jobs/*.html, .git/,
+# venvs, node_modules-scale illustration sources); deny-all + explicit
+# allow-list keeps the upload small and makes "does the image need this?"
+# an explicit yes rather than an accidental include.
+#
+# Docker requires every ancestor directory of an allowed path to also be
+# un-ignored (BuildKit quirk) — hence the `!sync/` / `!mockup/` lines above
+# their children.
+*
+
+!sync/
+!sync/pyproject.toml
+!sync/uv.lock
+!sync/src/
+!sync/src/**
+
+!mockup/
+!mockup/assets/
+!mockup/assets/**
+!mockup/index.html

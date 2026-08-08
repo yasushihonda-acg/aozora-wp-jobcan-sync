@@ -109,6 +109,76 @@ def test_healthz_has_security_headers() -> None:
     assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
 
 
+# ────────────────────── / (top page) + /assets/* ──────────────────────────
+# Stage 1 of the Cloud Run consolidation (2026-08-08): the top page and its
+# static assets are now served in-house instead of only existing on the
+# Phase A GitHub Pages mockup. These tests run against the real checked-out
+# `mockup/assets`/`mockup/index.html` (the module-level default paths, same
+# files local dev and CI both see) rather than a fixture — there is nothing
+# meaningfully fake to substitute for "does the real top page render."
+
+
+def test_top_page_returns_200_html() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text.startswith("<!DOCTYPE html>")
+
+
+def test_top_page_has_security_headers() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/")
+
+    assert response.headers.get("Cache-Control") == "no-store"
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
+def test_top_page_rewrites_job_links_to_in_house_routes() -> None:
+    """The shared mockup source file still has relative
+    `jobs.html`/`jobs-care.html`/... hrefs (GitHub Pages' own routes) — this
+    service must rewrite them to its own `/jobs/?category_id=...` routes
+    rather than leaving dead links."""
+    client = _client_with(_repo_with())
+    html = client.get("/").text
+
+    assert 'href="/jobs/?category_id=18773"' in html  # 介護職
+    assert 'href="/jobs/?category_id=18983"' in html  # 看護職
+    assert 'href="/jobs/?category_id=18986"' in html  # ホームヘルパー
+    assert 'href="/jobs/?category_id=18985"' in html  # ケアマネジャー
+    assert 'href="/jobs/?category_id=58859"' in html  # 事務職
+    assert 'href="/jobs/?category_id=69384"' in html  # ITエンジニア職
+    assert 'href="jobs.html"' not in html
+    assert 'href="jobs-care.html"' not in html
+    assert "job_type=" not in html
+
+
+def test_top_page_missing_file_returns_404(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "INDEX_HTML_PATH", "/nonexistent/index.html")
+    client = _client_with(_repo_with())
+
+    response = client.get("/")
+
+    assert response.status_code == 404
+
+
+def test_static_asset_is_served() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/assets/css/tokens.css")
+
+    assert response.status_code == 200
+
+
+def test_static_asset_unknown_path_returns_404() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/assets/does-not-exist.css")
+
+    assert response.status_code == 404
+
+
 # ───────────────────────────── /jobs/{job_id} ────────────────────────────
 
 

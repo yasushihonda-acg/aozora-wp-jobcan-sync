@@ -7,6 +7,14 @@
 # Layer order is tuned for cache reuse: pyproject.toml + uv.lock change
 # rarely, source code changes every commit. Putting the deps install
 # above the COPY of src/ means most rebuilds reuse the cached venv.
+#
+# Stage 1 of the Cloud Run consolidation (2026-08-08): the build context is
+# now the REPO ROOT, not `sync/` — this image also serves the top page and
+# its static assets straight out of `mockup/` (see app.py's
+# STATIC_ASSETS_DIR/INDEX_HTML_PATH), and Docker COPY can't reach outside
+# its build context. `infra/README.md` §3 documents the resulting
+# `docker buildx build -f sync/Dockerfile .` invocation. `.dockerignore`
+# lives at the repo root now for the same reason.
 
 # ─────────────────────────────── Build stage ───────────────────────────────
 
@@ -23,7 +31,7 @@ WORKDIR /app
 
 # Copy only the files needed to resolve deps first so the layer is cached
 # until pyproject.toml / uv.lock actually change.
-COPY pyproject.toml uv.lock ./
+COPY sync/pyproject.toml sync/uv.lock ./
 
 # `uv sync --frozen --no-install-project` builds just the deps into .venv;
 # the project itself is installed in the next layer so source changes don't
@@ -32,7 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
 # Now copy the project source and install the project itself (no deps).
-COPY src/ src/
+COPY sync/src/ src/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
@@ -53,11 +61,20 @@ WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --from=builder --chown=app:app /app/src /app/src
 
+# Top page + its static assets (Stage 1 of the Cloud Run consolidation).
+# `mockup/assets` is 28MB, mostly illustrations — copied verbatim rather than
+# duplicated into `sync/` so there is exactly one copy to keep in sync with
+# the Phase A source of truth.
+COPY --chown=app:app mockup/assets /app/mockup/assets
+COPY --chown=app:app mockup/index.html /app/mockup/index.html
+
 # Make the venv the default interpreter and add the package to PYTHONPATH.
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src" \
     PYTHONUNBUFFERED=1 \
-    PORT=8080
+    PORT=8080 \
+    STATIC_ASSETS_DIR="/app/mockup/assets" \
+    INDEX_HTML_PATH="/app/mockup/index.html"
 
 USER app
 

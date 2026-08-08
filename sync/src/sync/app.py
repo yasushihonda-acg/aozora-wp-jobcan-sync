@@ -39,10 +39,13 @@ codex second-opinion review finding).
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from ._validators import is_ascii_digit_id
@@ -53,6 +56,59 @@ from .renderer import render_error, render_job_detail, render_job_list
 from .snapshot import JobSnapshot
 
 _logger = logging.getLogger(__name__)
+
+# Stage 1 of the Cloud Run consolidation (2026-08-08, see
+# docs/handoff/GOAL.md): the top page + its CSS/JS/images used to live only
+# on the Phase A GitHub Pages mockup. `PUBLIC_BASE_URL` (e.g.
+# `https://recruit.aozora-cg.com`, no trailing slash) lets this service build
+# canonical URLs pointing at itself instead of Jobcan; empty in local
+# dev/tests, where a site-root-relative canonical is fine.
+#
+# `STATIC_ASSETS_DIR`/`INDEX_HTML_PATH` default to the checked-out
+# `mockup/assets` / `mockup/index.html` two levels above this package — that
+# resolves correctly for local dev (`sync/src/sync/app.py` → repo root) but
+# NOT inside the container, where `Dockerfile` copies only `src/` (one level
+# shallower) — so the Dockerfile sets both env vars explicitly to where it
+# actually copied `mockup/`.
+_REPO_ROOT_LOCAL_DEV = Path(__file__).resolve().parents[3]
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+STATIC_ASSETS_DIR = os.environ.get(
+    "STATIC_ASSETS_DIR", str(_REPO_ROOT_LOCAL_DEV / "mockup" / "assets")
+)
+INDEX_HTML_PATH = os.environ.get(
+    "INDEX_HTML_PATH", str(_REPO_ROOT_LOCAL_DEV / "mockup" / "index.html")
+)
+
+# `mockup/index.html` is shared with the still-live Phase A GitHub Pages
+# mockup, whose job links are relative paths to sibling static files
+# (`jobs-care.html`, `jobs.html?job_type=...`) that don't exist as routes on
+# this service. Editing that shared file directly would break navigation on
+# the GitHub Pages site *before* this service is what `recruit.aozora-cg.com`
+# actually points at (Stage 5, not yet done) — so instead this service
+# rewrites the known href values at serve time, leaving the shared source
+# file untouched. Category ids from `crawler.KNOWN_CATEGORY_IDS`.
+#
+# The three plain `jobs.html` link targets ("募集職種"/"求人を見る"/"すべての
+# 求人を見る"/footer/mobile CTA — 7 occurrences) point at the largest single
+# category (介護職) as an interim stand-in: v1 deliberately ships without an
+# all-category listing (decision-maker call, 2026-08-08 — a full
+# search/map/GPS experience is Stage 3+ scope, not Stage 1).
+_TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
+    ('href="jobs.html"', 'href="/jobs/?category_id=18773"'),
+    ('href="jobs-care.html"', 'href="/jobs/?category_id=18773"'),
+    ('href="jobs-nurse.html"', 'href="/jobs/?category_id=18983"'),
+    ('href="jobs.html?job_type=visit"', 'href="/jobs/?category_id=18986"'),  # ホームヘルパー
+    ('href="jobs.html?job_type=care-manager"', 'href="/jobs/?category_id=18985"'),  # ケアマネジャー
+    ('href="jobs-office.html"', 'href="/jobs/?category_id=58859"'),
+    ('href="jobs-it.html"', 'href="/jobs/?category_id=69384"'),
+)
+
+
+def _render_top_page(raw_html: str) -> str:
+    for old, new in _TOP_PAGE_LINK_REWRITES:
+        raw_html = raw_html.replace(old, new)
+    return raw_html
+
 
 JOBCAN_DETAIL_FALLBACK = (
     "https://recruit.jobcan.jp/aozora/job_offers/{job_id}"
@@ -131,6 +187,25 @@ def create_app(
     async def add_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
         return _apply_security_headers(response)
+
+    # Stage 1 of the Cloud Run consolidation: the top page's own CSS/JS/images
+    # (`mockup/assets`) are served in-house so `/jobs/{id}` (a different path
+    # depth) can reference them by a site-root-absolute `/assets/...` URL
+    # instead of the page-relative one that used to 404 off the job routes.
+    # `check_dir=False` — a missing directory is a deploy-config bug we want
+    # a 404 on every asset request for (visible immediately), not an app
+    # startup crash that takes the whole service down.
+    app.mount(
+        "/assets", StaticFiles(directory=STATIC_ASSETS_DIR, check_dir=False), name="assets"
+    )
+
+    @app.get("/", response_class=HTMLResponse)
+    async def get_top_page() -> Response:
+        if not os.path.isfile(INDEX_HTML_PATH):
+            _logger.error("top page file missing", extra={"path": INDEX_HTML_PATH})
+            raise HTTPException(status_code=404, detail="not found")
+        raw_html = Path(INDEX_HTML_PATH).read_text(encoding="utf-8")
+        return HTMLResponse(content=_render_top_page(raw_html))
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -245,7 +320,9 @@ def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
     instead of leaking a stack trace to the client.
     """
     try:
-        return render_job_detail(snapshot.offer, closed=snapshot.sync_status == "closed")
+        return render_job_detail(
+            snapshot.offer, closed=snapshot.sync_status == "closed", base_url=PUBLIC_BASE_URL
+        )
     except Exception:
         _logger.exception("render error", extra={"kind": "detail", "job_id": job_id})
         return None
@@ -294,7 +371,7 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str 
             last_page=1,
             next_url=None,
         )
-        return render_job_list(page)
+        return render_job_list(page, base_url=PUBLIC_BASE_URL)
     except Exception:
         _logger.exception("render error", extra={"kind": "list", "category_id": category_id})
         return None
