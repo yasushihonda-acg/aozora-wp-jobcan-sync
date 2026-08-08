@@ -18,7 +18,22 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 - [x] `sync`のpytest 265件全PASS(新規テスト21件追加: トップページ・静的アセット配信・リンク書き換え・canonical・thumbnail site_relative化・chatbot .htmlリダイレクト・キャッシュヘッダー・PUBLIC_BASE_URL警告。3ラウンドのcodex review + セカンドオピニオンで発見された指摘への対応分を含む)
 - [x] 本番デプロイ完了。`aozora-sync`をリビジョン`aozora-sync-00005-mkw`へ更新(トラフィック100%)、`aozora-chatbot`のALLOWED_ORIGINSに新オリジンを追加。検証URL `https://aozora-sync-flry56mxwa-an.a.run.app/` でトップページ→カテゴリ一覧→求人詳細→チャットボット送受信(関連求人カードの`.html`リダイレクトも含む)を実機確認、console error 0件・404 0件(証明: Playwright network requests全件200、チャット実送信で実応答を確認)
 
-🎯 **Stage 1 完了**。次のStage 2(求人詳細デザインパリティ)着手は decision-maker 判断待ち(セッション終了時点で未回答)。
+🎯 **Stage 1 完了**。
+
+## 完了の定義 (Stage 2: 求人詳細ページのデザインパリティ) — 2026-08-08 実装完了・PR #144(#144後続修正込み)・本番デプロイ未実施(次回セッション)
+- [x] Phase A(`mockup/jobs/*.html`)と同じセクション構成(ヒーロー+ハッシュタグ+イラスト/サマリー/仕事内容/応募資格/待遇・福利厚生/選考フロー/entry-cta/関連求人サイドバー/固定応募バー/チャットボット)を Firestore 実データからレンダリング。Phase A 生成スクリプト(`scripts/mockup-rebuild/rewrite_job_details.py`)の抽出ロジックを `sync/src/sync/detail_sections.py` へ純粋関数として移植(37件全件で抽出結果を検証、給与regexの複数資格対応バグ1件を修正)
+- [x] `base.html` に header/hero/footer/entry_cta_bar/chat_widget の空 block を追加、`job_detail.html` を全面書き換え。`job_list.html` は無変更(Phase Aの求人一覧もチャームレスなため影響なし、Stage 3スコープ温存)
+- [x] `firestore_repo.get_by_category`(array_contains、単一フィールドのため複合インデックス不要)で関連求人3件を取得・自己除外、Firestore例外時はサイドバーのみ非表示で本体は200を維持
+- [x] `sync_status="closed"` の求人で応募導線(サマリーCTA/entry-cta/entry-cta-bar/ヘッダーCTA)を全て非表示
+- [x] `mockup/assets/css/sync-job-detail.css` を削除、`components.css`/`pages.css` へ移行
+- [x] 品質ゲート: `codex review --base main -c model_reasoning_effort=high`(findings 0件)+ `pr-review-toolkit` 3エージェント並列(code-reviewer/silent-failure-hunter/type-design-analyzer)。silent-failure-hunterがCRITICAL 1件(関連求人取得のexcept Exceptionが Firestore I/O と純粋ロジックを一括捕捉し誤ラベル)含む妥当な指摘4件を発見、type-design-analyzerが未使用フィールド`DetailView.work_items`を発見。いずれも同PR内で修正済み(discriminated union化等の設計改善提案は実害なしのため見送り、判断の記録のみ)
+- [x] pytest 340件全PASS(新規74件)、ruff/pyright 0エラー。Playwright実機確認(実Firestore、`/jobs/104625` デスクトップ1440px・モバイル375pxとも console error 0件・静的アセット全200・横スクロール無し、`/jobs/?category_id=` 側の視覚的リグレッション無し)
+
+### 既知の制約(記録のみ)
+- 本番Firestoreに `sync_status="closed"` の求人が0件のため、closed表示は自動テストのみで検証済み。実機での目視確認は次回 closed 求人が発生した際に実施
+- JobPosting JSON-LD の `datePosted`/`validThrough` は `JobSnapshot` に対応する真値が無いため出力しない(Phase A のハードコード値は引き継がない、意図的な設計)
+
+🎯 **Stage 2 実装完了・マージ済み**(本番デプロイは未実施)。次のStage 3(求人一覧デザインパリティ)着手は decision-maker 判断待ち。
 
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
