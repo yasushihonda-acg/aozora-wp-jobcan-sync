@@ -57,10 +57,15 @@ from starlette.concurrency import run_in_threadpool
 
 from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
+from .detail_sections import RelatedJob, extract_region_tag
 from .firestore_repo import JobCacheRepository, get_firestore_client
 from .models import JobListItem, JobListPage
 from .renderer import render_error, render_job_detail, render_job_list
 from .snapshot import JobSnapshot
+
+# Stage 2 (job-detail design parity, 2026-08-08): cap on the "関連する求人"
+# sidebar — matches Phase A's `mockup/jobs/*.html` (always exactly 3).
+_RELATED_JOBS_LIMIT = 3
 
 _logger = logging.getLogger(__name__)
 
@@ -331,7 +336,36 @@ def create_app(
         if snapshot is None or snapshot.sync_status == "pending_review":
             raise HTTPException(status_code=404, detail="not found")
 
-        rendered = _render_detail(snapshot, job_id=job_id)
+        category_id = _primary_category_id(snapshot)
+        related: list[RelatedJob] = []
+        if category_id is not None:
+            # A failed "related jobs" lookup costs only the sidebar, not the
+            # whole detail page — unlike the snapshot fetch above, this must
+            # not turn into a 503 (Stage 2, job-detail design parity,
+            # 2026-08-08). The Firestore read and the pure in-process
+            # candidate filtering are caught separately (second-opinion
+            # review finding) so a bug in `_build_related_jobs` itself
+            # (e.g. a malformed `job_id` breaking its numeric sort) isn't
+            # mislogged as "firestore read error" — that label must mean
+            # Firestore was actually the problem.
+            try:
+                candidates = await run_in_threadpool(
+                    lambda: _resolve_repo().get_by_category(category_id)
+                )
+            except Exception:
+                candidates = []
+                _logger.exception(
+                    "firestore read error", extra={"kind": "related", "job_id": job_id}
+                )
+            if candidates:
+                try:
+                    related = _build_related_jobs(candidates, exclude_job_id=job_id)
+                except Exception:
+                    _logger.exception(
+                        "related jobs build error", extra={"kind": "related", "job_id": job_id}
+                    )
+
+        rendered = _render_detail(snapshot, job_id=job_id, category_id=category_id, related=related)
         if rendered is None:
             fallback_url = JOBCAN_DETAIL_FALLBACK.format(job_id=job_id)
             return HTMLResponse(
@@ -411,7 +445,50 @@ def _firestore_error_response(fallback_url: str) -> Response:
     )
 
 
-def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
+def _primary_category_id(snapshot: JobSnapshot) -> str | None:
+    """The category the "related jobs" sidebar (and every back/breadcrumb
+    link) is built from — `None` for a `category_ids`-less snapshot (never
+    produced by a real `crawl_all()` run, but not schema-impossible).
+    `render_job_detail` treats `category_id=None` as "link back to `/`
+    instead of a category listing" (Stage 2, job-detail design parity,
+    2026-08-08)."""
+    return snapshot.category_ids[0] if snapshot.category_ids else None
+
+
+def _build_related_jobs(
+    candidates: list[JobSnapshot], *, exclude_job_id: str
+) -> list[RelatedJob]:
+    """Turns same-category snapshots (`firestore_repo.get_by_category`'s
+    result) into the `.aside-card__list` sidebar entries — pure, no
+    Firestore access, so this is unit-testable without a client/event loop.
+    The Firestore call itself stays inline in the route handler, matching
+    every other read in this module (`_render_list`/`_render_detail` are
+    likewise pure; `_resolve_repo()` is a `create_app()`-local closure, not
+    reachable from a module-level function).
+    """
+    # Deterministic ordering (see `_render_list`'s identical newest-first
+    # rationale) — job_id has no fixed digit width, so numeric, not
+    # lexicographic, sort.
+    filtered = [c for c in candidates if c.job_id != exclude_job_id]
+    filtered.sort(key=lambda c: int(c.job_id), reverse=True)
+    return [
+        RelatedJob(
+            job_id=c.job_id,
+            title=c.offer.title,
+            detail_url=f"/jobs/{c.job_id}",
+            region_tag=extract_region_tag(c.offer.address),
+        )
+        for c in filtered[:_RELATED_JOBS_LIMIT]
+    ]
+
+
+def _render_detail(
+    snapshot: JobSnapshot,
+    *,
+    job_id: str,
+    category_id: str | None = None,
+    related: list[RelatedJob] | None = None,
+) -> str | None:
     """Render one snapshot's detail page. `None` signals a render failure.
 
     Render-time failures (Jinja2 `TemplateError`, an unexpected attribute
@@ -422,7 +499,12 @@ def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
     """
     try:
         return render_job_detail(
-            snapshot.offer, closed=snapshot.sync_status == "closed", base_url=PUBLIC_BASE_URL
+            snapshot.offer,
+            closed=snapshot.sync_status == "closed",
+            base_url=PUBLIC_BASE_URL,
+            category_id=category_id,
+            thumbnail_url=snapshot.list_item.thumbnail_url if snapshot.list_item else None,
+            related=related,
         )
     except Exception:
         _logger.exception("render error", extra={"kind": "detail", "job_id": job_id})

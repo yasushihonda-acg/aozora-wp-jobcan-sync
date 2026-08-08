@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Any, Protocol
 
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import ValidationError
 
 from .snapshot import JobSnapshot
@@ -177,6 +178,48 @@ class JobCacheRepository:
         if not doc.exists:
             return None
         return JobSnapshot.model_validate(_decode_extra_lines(doc.to_dict() or {}))
+
+    def get_by_category(self, category_id: str) -> list[JobSnapshot]:
+        """Every `active` snapshot listing `category_id` among its
+        `category_ids` — the same-category "related jobs" sidebar (Stage 2,
+        job-detail design parity, 2026-08-08).
+
+        Uses a targeted `array_contains` query rather than `get_all_valid()`
+        + a Python-side filter (what `app.py`'s category-*listing* route
+        does): a listing page is browsed far less often than an individual
+        detail page is viewed, so paying for a full ~382-document collection
+        read on every detail-page cache miss just to find 3 related jobs
+        would be the more expensive default. `array_contains` on a single
+        field is auto-indexed by Firestore — no composite index to
+        provision.
+
+        Same lenient-skip posture as `get_all_valid()`: one malformed
+        document must not take down the sidebar on every other posting in
+        its category, and the caller (`app.py`) already treats a fully
+        empty/failed lookup as "hide the sidebar", not a rendering error.
+        Catches `KeyError` alongside `ValidationError` — a legacy-shaped
+        `extra_lines` entry missing its `header`/`value` key fails inside
+        `_decode_extra_lines` itself, before `model_validate` ever runs
+        (second-opinion review finding), so `ValidationError` alone would
+        let one such document take down every other candidate in the
+        category instead of just being skipped.
+        """
+        results: list[JobSnapshot] = []
+        category_filter = FieldFilter("category_ids", "array_contains", category_id)
+        query = self._collection.where(filter=category_filter)
+        for doc in query.stream():
+            data = doc.to_dict() or {}
+            try:
+                snapshot = JobSnapshot.model_validate(_decode_extra_lines(data))
+            except (ValidationError, KeyError):
+                _logger.error(
+                    "skipping malformed job_cache doc",
+                    extra={"job_id": doc.id, "category_id": category_id},
+                )
+                continue
+            if snapshot.sync_status == "active":
+                results.append(snapshot)
+        return results
 
     def set(self, snapshot: JobSnapshot) -> None:
         self._collection.document(snapshot.job_id).set(_to_dict(snapshot))

@@ -17,18 +17,41 @@
      replaces) — the bare `{{ base_url }}` fallback below has no path and is
      never a valid canonical on its own. #}
   <link rel="canonical" href="{% block canonical_url %}{{ base_url }}{% endblock %}">
+  {# Stage 2 (job-detail design parity, 2026-08-08): Google Fonts is only
+     the job-detail page's cost — `job_list.html` doesn't fill this block,
+     matching Phase A's own `mockup/jobs-care.html` (chromeless, no
+     Google Fonts either). Empty by default so every OTHER template stays
+     exactly as lean as its Phase A counterpart. #}
+  {% block preconnect %}{% endblock %}
   {# Shared design tokens from the Phase A mockup, served by this service's
      own `/assets` StaticFiles mount (Stage 1 of the Cloud Run consolidation,
      2026-08-08 — see app.py). Site-root-absolute so it still resolves
      correctly from nested paths like `/jobs/{id}`. #}
   <link rel="stylesheet" href="/assets/css/tokens.css">
-  {% block extra_css %}
-  <link rel="stylesheet" href="/assets/css/sync-job-detail.css">
-  {% endblock %}
+  {# Empty by default (Stage 2) — components.css/pages.css are a job-detail-
+     only cost (see `preconnect` above); `job_list.html` overrides this with
+     just its own `sync-job-list.css`, matching Phase A's chromeless listing
+     pages exactly. #}
+  {% block extra_css %}{% endblock %}
+  {% block structured_data %}{% endblock %}
 </head>
 <body>
+  {# Site header/footer/entry-cta-bar/chat-widget are job-detail-only
+     additions (Stage 2) — Phase A's own listing pages (`mockup/jobs-*.html`)
+     are chromeless too, so `job_list.html` intentionally leaves every block
+     below empty rather than inheriting them. #}
+  {% block header %}{% endblock %}
+  {# `.job-detail-hero` is a full-bleed section that sits BEFORE `<main>` in
+     Phase A (`mockup/jobs/*.html`) — it has its own nested `.container` for
+     content width, independent of `<main>`'s own `.container` class. Putting
+     it inside `<main class="container">` would double-nest the width
+     constraint and clip the hero's full-width background. #}
+  {% block hero %}{% endblock %}
   <main class="{% block main_class %}job-detail{% endblock %}">
     {% block content %}{% endblock %}
   </main>
+  {% block footer %}{% endblock %}
+  {% block entry_cta_bar %}{% endblock %}
+  {% block chat_widget %}{% endblock %}
 </body>
 </html>

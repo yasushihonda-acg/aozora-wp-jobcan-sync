@@ -27,7 +27,7 @@ TOKENS_CSS = REPO_ROOT / "mockup" / "assets" / "css" / "tokens.css"
 
 # Sync-side CSS files that reference tokens.css variables.
 SYNC_CSS_DIRS = [
-    REPO_ROOT / "mockup" / "assets" / "css",  # sync-job-detail.css and any future sync-*.css
+    REPO_ROOT / "mockup" / "assets" / "css",  # sync-job-list.css and any future sync-*.css
 ]
 SYNC_CSS_PATTERNS = ["sync-*.css"]
 

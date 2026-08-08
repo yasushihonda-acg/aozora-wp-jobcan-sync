@@ -111,7 +111,7 @@ class TestRenderSubcommandStillWorks:
         )
         assert result.exit_code == 0, result.output
         assert "<!DOCTYPE html>" in result.stdout
-        assert "job-detail__title" in result.stdout
+        assert "job-detail-hero__title" in result.stdout
 
 
 def _detail_html(job_id: str) -> str:

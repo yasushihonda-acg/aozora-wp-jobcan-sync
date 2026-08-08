@@ -257,8 +257,9 @@ def test_get_job_detail_active_renders_200() -> None:
     response = client.get("/jobs/1")
 
     assert response.status_code == 200
-    assert "job-detail" in response.text
-    assert "job-detail__apply-btn" in response.text
+    assert "job-detail-hero" in response.text
+    assert "job-detail-summary__cta" in response.text
+    assert "entry-cta-bar" in response.text
 
 
 def test_get_job_detail_unknown_id_returns_404() -> None:
@@ -278,13 +279,18 @@ def test_get_job_detail_pending_review_returns_404() -> None:
 
 
 def test_get_job_detail_closed_renders_200_without_apply_cta() -> None:
+    """No apply CTA anywhere — summary button, entry-cta section, header
+    button, or the fixed bottom bar (Stage 2, job-detail design parity)."""
     repo = _repo_with(_snapshot("1", sync_status="closed"))
     client = _client_with(repo)
 
     response = client.get("/jobs/1")
 
     assert response.status_code == 200
-    assert "job-detail__apply-btn" not in response.text
+    assert "job-detail-summary__cta" not in response.text
+    assert "entry-cta-bar" not in response.text
+    assert "この求人に応募する" not in response.text
+    assert 'class="site-header__cta"' not in response.text
     assert "募集は終了しました" in response.text
 
 
@@ -356,6 +362,74 @@ def test_get_job_detail_firestore_read_failure_returns_503(monkeypatch: Any) -> 
 
     assert response.status_code == 503
     assert "データの取得に問題が発生している可能性があります" in response.text
+
+
+# ───────────────────── /jobs/{job_id} — related jobs sidebar ──────────────
+# Stage 2 (job-detail design parity, 2026-08-08).
+
+
+def test_get_job_detail_related_shows_same_category_excludes_self() -> None:
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18773"]),
+        _snapshot("3", category_ids=["58859"]),  # different category
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
+
+    assert response.status_code == 200
+    aside = response.text.split('class="aside-card__list"')[1]
+    assert 'href="/jobs/2"' in aside
+    assert 'href="/jobs/1"' not in aside  # self excluded
+    assert 'href="/jobs/3"' not in aside  # different category excluded
+
+
+def test_get_job_detail_related_capped_at_three() -> None:
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        *(_snapshot(str(n), category_ids=["18773"]) for n in range(2, 7)),  # 5 more
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
+
+    assert response.status_code == 200
+    assert response.text.count("aside-card__list") == 1
+    # 5 candidates (2..6) minus the cap — exactly 3 survive.
+    shown = sum(f'/jobs/{n}"' in response.text for n in range(2, 7))
+    assert shown == 3
+
+
+def test_get_job_detail_no_category_ids_hides_sidebar() -> None:
+    repo = _repo_with(_snapshot("1", category_ids=[]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
+
+    assert response.status_code == 200
+    assert "aside-card" not in response.text
+    # No category_ids also means the back/breadcrumb links fall back to "/"
+    # rather than a `?category_id=None` dead link.
+    assert "category_id=None" not in response.text
+
+
+def test_get_job_detail_related_lookup_failure_still_renders_200(monkeypatch: Any) -> None:
+    """A `get_by_category` failure must cost only the sidebar, not the whole
+    detail page — unlike the primary snapshot fetch, which 503s."""
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+
+    def _raise(_category_id: str) -> None:
+        raise RuntimeError("simulated Firestore outage")
+
+    monkeypatch.setattr(repo, "get_by_category", _raise)
+    client = _client_with(repo)
+
+    response = client.get("/jobs/1")
+
+    assert response.status_code == 200
+    assert "aside-card" not in response.text
+    assert "job-detail-summary__cta" in response.text  # rest of the page is intact
 
 
 # ──────────────────────────── /jobs/?category_id= ─────────────────────────
