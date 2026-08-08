@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "jobcan_responses"
 SAMPLE_JOB_ID = "1777023"
@@ -46,6 +47,25 @@ class _FakeDocRef:
         return _FakeDocSnapshot(self.id, self._store.get(self.id))
 
 
+class _FakeQuery:
+    """Minimal double for the SDK's `Query` — just enough of `.where(...)`'s
+    return type for `JobCacheRepository.get_by_category` to run against
+    (`array_contains` only, matching the one filter this codebase issues)."""
+
+    def __init__(self, store: dict, field: str, value: object) -> None:
+        self._store = store
+        self._field = field
+        self._value = value
+
+    def stream(self) -> list[_FakeDocSnapshot]:
+        matches = []
+        for doc_id, data in self._store.items():
+            haystack = data.get(self._field, []) if data else []
+            if isinstance(haystack, list) and self._value in haystack:
+                matches.append(_FakeDocSnapshot(doc_id, data))
+        return matches
+
+
 class _FakeCollection:
     def __init__(self, store: dict) -> None:
         self._store = store
@@ -55,6 +75,15 @@ class _FakeCollection:
 
     def stream(self) -> list[_FakeDocSnapshot]:
         return [_FakeDocSnapshot(doc_id, data) for doc_id, data in self._store.items()]
+
+    def where(self, *, filter: FieldFilter) -> _FakeQuery:
+        # Structurally matches only what `get_by_category` actually passes:
+        # a `FieldFilter(field, "array_contains", value)` — this fake
+        # supports exactly one operator on purpose, not the full Query API.
+        assert filter.op_string == "array_contains", (
+            f"_FakeQuery only supports array_contains, got {filter.op_string!r}"
+        )
+        return _FakeQuery(self._store, filter.field_path, filter.value)
 
 
 class _FakeBatch:

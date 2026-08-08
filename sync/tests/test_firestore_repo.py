@@ -291,3 +291,72 @@ def test_get_all_valid_on_a_fully_valid_collection_skips_nothing() -> None:
 
     assert set(snapshots) == {"1", "2"}
     assert skipped == []
+
+
+# ─────────────────────────── get_by_category ──────────────────────────────
+# Stage 2 (job-detail design parity, 2026-08-08) — the "related jobs" sidebar.
+
+
+def test_get_by_category_returns_only_matching_active_snapshots() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many(
+        [
+            _snapshot("1").model_copy(update={"category_ids": ["18773"]}),
+            _snapshot("2").model_copy(update={"category_ids": ["58859"]}),  # different category
+            _snapshot("3").model_copy(
+                update={"category_ids": ["18773", "58859"]}
+            ),  # multi-category, still matches
+        ]
+    )
+
+    result = repo.get_by_category("18773")
+
+    assert {s.job_id for s in result} == {"1", "3"}
+
+
+def test_get_by_category_excludes_non_active_snapshots() -> None:
+    """The sidebar must not link to a closed/pending posting — filtered in
+    Python after the query (Firestore's `array_contains` query can't also
+    filter on `sync_status` without a composite index, see the method's
+    docstring)."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set_many(
+        [
+            _snapshot("1").model_copy(
+                update={"category_ids": ["18773"], "sync_status": "active"}
+            ),
+            _snapshot("2").model_copy(
+                update={"category_ids": ["18773"], "sync_status": "closed"}
+            ),
+            _snapshot("3").model_copy(
+                update={"category_ids": ["18773"], "sync_status": "pending_review"}
+            ),
+        ]
+    )
+
+    result = repo.get_by_category("18773")
+
+    assert {s.job_id for s in result} == {"1"}
+
+
+def test_get_by_category_no_match_returns_empty_list() -> None:
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set(_snapshot("1").model_copy(update={"category_ids": ["58859"]}))
+
+    assert repo.get_by_category("18773") == []
+
+
+def test_get_by_category_skips_a_malformed_doc_and_keeps_the_rest() -> None:
+    """Same lenient-skip posture as `get_all_valid()` — one bad document
+    must not take down the sidebar for every other posting in the category."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set(_snapshot("1").model_copy(update={"category_ids": ["18773"]}))
+    client.store["bad"] = {"job_id": "bad", "category_ids": ["18773"]}
+
+    result = repo.get_by_category("18773")
+
+    assert {s.job_id for s in result} == {"1"}

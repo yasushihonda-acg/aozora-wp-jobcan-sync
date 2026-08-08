@@ -1,52 +1,319 @@
 {% extends "base.html" %}
 
+{# Stage 2 (job-detail design parity, 2026-08-08): this template now mirrors
+   Phase A's `mockup/jobs/*.html` structure/BEM classes section-for-section —
+   see `sync/src/sync/detail_sections.py` for how `view` (a `DetailView`) and
+   `related` (a list of `RelatedJob`) are derived. Every optional section
+   below is guarded by an `{% if %}` so a posting missing that data hides the
+   section instead of rendering an empty heading (AC-3). #}
+
 {% block canonical_url %}{{ base_url }}/jobs/{{ job.job_id }}{% endblock %}
 
-{% block content %}
-<article class="job-detail__article">
-  <header class="job-detail__header">
-    <p class="job-detail__label">{{ job.label }}</p>
-    <h1 class="job-detail__title">{{ job.title }}</h1>
-    <p class="job-detail__address">{{ job.address }}</p>
-  </header>
+{% block preconnect %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@600&display=swap">
+{% endblock %}
 
-  <section class="job-detail__summary">
-    <dl class="job-detail__summary-list">
-      <div class="job-detail__summary-item">
-        <dt class="job-detail__summary-key">勤務地</dt>
-        <dd class="job-detail__summary-val">{{ job.location }}</dd>
-      </div>
-      <div class="job-detail__summary-item">
-        <dt class="job-detail__summary-key">給与</dt>
-        <dd class="job-detail__summary-val">{{ job.salary }}</dd>
-      </div>
-      {% for header, value in job.extra_lines %}
-      <div class="job-detail__summary-item">
-        <dt class="job-detail__summary-key">{{ header }}</dt>
-        <dd class="job-detail__summary-val">{{ value }}</dd>
-      </div>
-      {% endfor %}
-    </dl>
-  </section>
+{% block extra_css %}
+<link rel="stylesheet" href="/assets/css/components.css">
+<link rel="stylesheet" href="/assets/css/pages.css">
+<link rel="stylesheet" href="/assets/css/chat-widget.css">
+{% endblock %}
 
-  <section class="job-detail__body">
-    <h2 class="job-detail__section-title">仕事内容</h2>
-    <div class="job-detail__body-content">
-      {{ job.body_html | safe }}
-    </div>
-  </section>
+{% block structured_data %}
+<meta name="theme-color" content="#0a52b8">
+{% if view.lead %}
+<meta name="description" content="{{ view.lead }}">
+{% endif %}
+{# `json_ld` is pre-serialised in renderer.py (json.dumps + `</` escaping) —
+   see `detail_sections.build_job_posting_json_ld`. Building it here with a
+   plain Jinja `tojson` filter isn't an option: this project's `Environment`
+   is vanilla Jinja2 (Flask supplies `tojson`, this app doesn't), and hand-
+   rolling the JSON in template syntax would lose the `</script>`-breakout
+   guard a real serializer gives for free. #}
+<script type="application/ld+json">{{ json_ld | safe }}</script>
+{% endblock %}
 
-  <footer class="job-detail__footer">
-    {% if closed %}
-    <p class="job-detail__closed-banner">この求人の募集は終了しました。</p>
-    {% else %}
-    <a class="job-detail__apply-btn" href="{{ job.apply_url }}" rel="noopener">
-      この求人に応募する
+{% block header %}
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="site-header__brand" href="/" aria-label="A.C.G あおぞらケアグループ 採用情報トップ">
+      <img class="site-logo__image" src="/assets/img/logo-acg-light.png" alt="A.C.G あおぞらケアグループ">
+      <span class="site-logo__role">採用</span>
     </a>
-    <p class="job-detail__source-note">
-      応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
-    </p>
+    <nav class="site-nav" aria-label="グローバルナビ">
+      <ul class="site-nav__list">
+        <li><a class="site-nav__link" href="/">採用トップ</a></li>
+        <li><a class="site-nav__link" aria-current="page" href="{{ category_url }}">募集職種</a></li>
+      </ul>
+    </nav>
+    {% if not closed %}
+    <a class="site-header__cta" href="{{ job.apply_url }}" target="_blank" rel="noopener">応募する</a>
     {% endif %}
-  </footer>
-</article>
+  </div>
+</header>
+{% endblock %}
+
+{% block hero %}
+<section class="job-detail-hero">
+  <div class="container">
+    <nav class="job-detail__back-nav" aria-label="ナビゲーション">
+      <a class="job-detail__back-link" href="{{ category_url }}">
+        <span class="job-detail__back-arrow" aria-hidden="true">←</span>求人一覧へ戻る
+      </a>
+    </nav>
+    <p class="breadcrumb">
+      <a href="/">採用トップ</a>
+      <span class="breadcrumb__sep">/</span>
+      <a href="{{ category_url }}">募集職種一覧</a>
+      <span class="breadcrumb__sep">/</span>
+      <span>{{ job.title }}</span>
+    </p>
+    <div class="job-detail-hero__inner">
+      <div class="job-detail-hero__copy">
+        {% if view.labels %}
+        <div class="job-detail-hero__tags">
+          {% for label in view.labels %}
+          <span class="job-card__tag">{{ label }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <h1 class="job-detail-hero__title">{{ job.title }}</h1>
+        {% if view.lead %}
+        <p class="job-detail-hero__lead">{{ view.lead }}</p>
+        {% endif %}
+        {% if view.hashtags %}
+        <ul class="job-hashtags">
+          {% for tag in view.hashtags %}
+          <li class="job-hashtags__item">{{ tag }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% if thumbnail_url %}
+      <div class="job-detail-hero__media">
+        <img src="{{ thumbnail_url | site_relative }}" alt="" loading="eager">
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block main_class %}container{% endblock %}
+
+{% block content %}
+<div class="page-job-detail__layout">
+  <article class="page-job-detail__main">
+
+    <header class="job-detail-summary">
+      <dl class="job-detail-summary__meta">
+        <div>
+          <dt>月給</dt>
+          {% if view.salary_detail %}
+          <dd class="is-accent">{{ view.salary_chip }}<small>{{ view.salary_detail }}</small></dd>
+          {% else %}
+          <dd class="is-accent">{{ view.salary_chip }}</dd>
+          {% endif %}
+        </div>
+        <div>
+          <dt>勤務地</dt>
+          {% if view.location_detail %}
+          <dd>{{ view.location_primary }}<small>{{ view.location_detail }}</small></dd>
+          {% else %}
+          <dd>{{ view.location_primary }}</dd>
+          {% endif %}
+        </div>
+        <div><dt>雇用形態</dt><dd>{{ view.employment_type }}</dd></div>
+        {% if view.work_time_short %}
+        <div>
+          <dt>勤務時間</dt>
+          {% if view.work_time_detail %}
+          <dd>{{ view.work_time_short }}<small>{{ view.work_time_detail }}</small></dd>
+          {% else %}
+          <dd>{{ view.work_time_short }}</dd>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if view.holiday_chip %}
+        <div>
+          <dt>年間休日</dt>
+          {% if view.holiday_paragraph %}
+          <dd>{{ view.holiday_chip }}<small>{{ view.holiday_paragraph }}</small></dd>
+          {% else %}
+          <dd>{{ view.holiday_chip }}</dd>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if view.capacity %}
+        <div><dt>募集定員</dt><dd>{{ view.capacity }}</dd></div>
+        {% endif %}
+      </dl>
+      {% if closed %}
+      <p class="job-detail__closed-banner">この求人の募集は終了しました。</p>
+      {% else %}
+      <div class="job-detail-summary__cta">
+        <a class="btn btn--primary" href="{{ job.apply_url }}" target="_blank" rel="noopener">この求人に応募する</a>
+        <a class="btn btn--ghost" href="{{ category_url }}">他の求人を見る</a>
+      </div>
+      <p class="notice-bar" style="margin-top: var(--space-5);">応募ボタンを押すと、外部サイト (ジョブカン採用管理) の応募フォームに遷移します。</p>
+      {% endif %}
+    </header>
+
+    {% if view.work_blocks %}
+    <section class="job-detail-section">
+      <div class="job-detail-section__head">
+        <span class="job-detail-section__en">Job Description</span>
+        <h2 class="job-detail-section__title">仕事内容</h2>
+      </div>
+      <div class="job-detail-section__body">
+        {% for block in view.work_blocks %}
+          {% if block.kind == "p" %}
+        <p>{{ block.text }}</p>
+          {% else %}
+        <ul>
+          {% for item in block.items %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if view.qualifications %}
+    <section class="job-detail-section">
+      <div class="job-detail-section__head">
+        <span class="job-detail-section__en">Qualifications</span>
+        <h2 class="job-detail-section__title">応募資格</h2>
+      </div>
+      <div class="job-detail-section__body">
+        <ul class="job-qualification">
+          {% for row in view.qualifications %}
+          <li class="job-qualification__row">
+            <span class="job-qualification__key{{ ' job-qualification__key--accent' if row.kind == '必須' else '' }}">{{ row.kind }}</span>
+            <div class="job-qualification__val">{{ row.text }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if view.benefit_chips or view.benefit_paragraphs %}
+    <section class="job-detail-section">
+      <div class="job-detail-section__head">
+        <span class="job-detail-section__en">Benefits</span>
+        <h2 class="job-detail-section__title">待遇・福利厚生</h2>
+      </div>
+      <div class="job-detail-section__body">
+        {% if view.benefit_chips %}
+        <ul class="job-benefits">
+          {% for chip in view.benefit_chips %}
+          <li class="job-benefits__item">{{ chip }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% for para in view.benefit_paragraphs %}
+        <p{% if loop.first and view.benefit_chips %} style="margin-top: var(--space-5);"{% endif %}><strong>{{ para.heading }}</strong> ／ {{ para.content }}</p>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if view.selection_steps %}
+    <section class="job-detail-section">
+      <div class="job-detail-section__head">
+        <span class="job-detail-section__en">Selection Flow</span>
+        <h2 class="job-detail-section__title">選考の流れ</h2>
+      </div>
+      <div class="job-detail-section__body">
+        <ol class="selection-flow">
+          {% for step in view.selection_steps %}
+          <li class="selection-flow__step">{{ step }}</li>
+          {% endfor %}
+        </ol>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if not closed %}
+    <section style="padding-top: var(--space-10);">
+      <div class="entry-cta">
+        <div>
+          <span class="eyebrow" style="color: rgba(255,255,255,0.78);">Apply Now</span>
+          <h2 class="entry-cta__title">この求人に応募する</h2>
+          <p class="entry-cta__lead">ジョブカン応募フォームへ進みます。</p>
+        </div>
+        <div>
+          <div class="entry-cta__actions">
+            <a class="btn btn--on-dark" href="{{ job.apply_url }}" target="_blank" rel="noopener">エントリーフォームへ進む</a>
+          </div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+  </article>
+
+  {% if related %}
+  <aside class="page-job-detail__aside">
+    <div class="aside-card">
+      <h3 class="aside-card__title">関連する求人</h3>
+      <ul class="aside-card__list">
+        {% for item in related %}
+        <li>
+          <a href="{{ item.detail_url }}">
+            <span>{{ item.title }}</span>
+            {% if item.region_tag %}
+            <span class="aside-card__meta">{{ item.region_tag }}</span>
+            {% endif %}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block footer %}
+<footer class="site-footer">
+  <div class="container">
+    <div class="site-footer__grid">
+      <div>
+        <img class="site-footer__brand-image" src="/assets/img/logo-acg-footer.png" alt="A.C.G あおぞらケアグループ">
+        <address class="site-footer__address">
+          福岡県・鹿児島県で介護・看護・在宅支援を提供する事業者グループ。<br>
+          地域とともに、長く続けられる介護を。
+        </address>
+        <a href="https://aozora-cg.com/" target="_blank" rel="noopener">コーポレートサイト →</a>
+      </div>
+      <div>
+        <h4>採用情報</h4>
+        <ul class="site-footer__nav">
+          <li><a href="/">採用トップ</a></li>
+          <li><a href="{{ category_url }}">募集職種一覧</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="site-footer__copy">
+      <span>© 2026 Aozora Care Group</span>
+    </p>
+  </div>
+</footer>
+{% endblock %}
+
+{% block entry_cta_bar %}
+{% if not closed %}
+<div class="entry-cta-bar" role="region" aria-label="固定エントリーバー">
+  <a class="btn btn--primary" href="{{ job.apply_url }}" target="_blank" rel="noopener">応募する</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block chat_widget %}
+<script defer src="/assets/js/chat-widget.js" data-endpoint="https://aozora-chatbot-1084369586348.asia-northeast1.run.app/chat"></script>
 {% endblock %}

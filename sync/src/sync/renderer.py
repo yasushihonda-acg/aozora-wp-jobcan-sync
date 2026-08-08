@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from .detail_sections import RelatedJob, build_detail_view, build_job_posting_json_ld
 from .models import JobListPage, JobOffer
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -49,6 +51,9 @@ def render_job_detail(
     *,
     closed: bool = False,
     base_url: str = "",
+    category_id: str | None = None,
+    thumbnail_url: str | None = None,
+    related: list[RelatedJob] | None = None,
     env: Environment | None = None,
 ) -> str:
     """Render a single job offer into HTML using `job_detail.html`.
@@ -66,10 +71,40 @@ def render_job_detail(
     "keep closed listings up for SEO" design intent). Empty string (the
     default, used by local dev / tests that don't care about SEO) renders a
     site-root-relative canonical instead of a fully qualified one.
+
+    Stage 2 (job-detail design parity, 2026-08-08) additions:
+
+    - `category_id` builds every "back to listing" link (`category_url`
+      below). `None` (a posting with no `category_ids`, or the caller opted
+      not to look one up) falls back to the top page `/` rather than
+      emitting a query string with a literal `None` in it — `/jobs/` alone
+      404s (`category_id` is a required query param on that route).
+    - `thumbnail_url` is the hero illustration — `None` hides that block
+      entirely (`job_detail.html`), matching `render_job_list`'s existing
+      "no thumbnail, no `<img>`" behaviour for `JobListItem`.
+    - `related` is the same-category sidebar (`app.py` looks these up via
+      `firestore_repo.get_by_category`); an empty/`None` list hides the
+      `<aside>` entirely rather than rendering an empty card.
     """
     env = env or make_environment()
     template = env.get_template("job_detail.html")
-    return template.render(job=job, page_title=job.page_title, closed=closed, base_url=base_url)
+    view = build_detail_view(job)
+    json_ld = json.dumps(
+        build_job_posting_json_ld(job, view), ensure_ascii=False, indent=2
+    ).replace("</", "<\\/")
+    category_url = f"/jobs/?category_id={category_id}" if category_id else "/"
+    return template.render(
+        job=job,
+        view=view,
+        json_ld=json_ld,
+        page_title=job.page_title,
+        closed=closed,
+        base_url=base_url,
+        category_id=category_id,
+        category_url=category_url,
+        thumbnail_url=thumbnail_url,
+        related=related or [],
+    )
 
 
 def render_job_list(
