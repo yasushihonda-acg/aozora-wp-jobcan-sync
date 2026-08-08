@@ -8,7 +8,7 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 ## 背景・why
 社長から「実際のJobcan環境では今も382件の実求人が公開されている。それを勝手に減らして見せる(Phase Aモックは37件のみ)のは非常にまずいのでは」との指摘(2026-08-08)。GitHub Pagesモックは既に一般公開URLであり、求職者が実際の募集内容より少ない件数しか見えない状態を「求人一覧」として公開し続けることは募集機会の毀損につながるリスクがあると判断し、Phase B前倒しを決定。調査の結果、単なるDNS切替ではなくPhase Bテンプレートのデザインパリティ・トップページの配信元決定が必要と判明。decision-maker判断: ①トップページもCloud Runに全面集約(WordPress統合は既に撤回済み、GitHub Pagesは仮置き) ②v1はカテゴリ別一覧でリリース(地図検索+GPS+フリーワード横断検索はStage 3以降)。段階リリース(Stage1: 静的配信基盤+トップページ移植 → Stage2: 求人詳細デザインパリティ → Stage3: 求人一覧デザインパリティ → Stage4: 本番公開前の健全性対応 → Stage5: ドメイン切替)で進行中、各Stage完了後に決裁者確認を挟む。
 
-## 完了の定義 (Stage 1: 静的配信基盤 + トップページ移植 + リンク付け替え) — 2026-08-08 実装完了・ローカル実機確認済み・本番未デプロイ
+## 完了の定義 (Stage 1: 静的配信基盤 + トップページ移植 + リンク付け替え) — 2026-08-08 実装完了・本番デプロイ済み・PR #142
 - [x] `sync/src/sync/app.py` に `/assets` StaticFilesマウント + `/`(トップページ)ルートを追加
 - [x] `base.html`/`job_list.html`/`job_detail.html` の CSS参照・canonical・戻りリンクをサイトルート絶対パス化、`PUBLIC_BASE_URL` 環境変数導入
 - [x] `job_list.html` の求人カードサムネイル(`thumbnail_url`)も相対パス起因の404を `site_relative` フィルタで解消(選択当初は未想定、Playwright実機確認で発見)
@@ -16,7 +16,9 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 - [x] `sync/Dockerfile` のビルドコンテキストをリポジトリルートに変更し `mockup/assets`/`mockup/index.html` を同梱、`infra/README.md` のデプロイ手順を更新
 - [x] ローカル`docker build`実機確認(トップページ・静的アセット200)、`uvicorn`+実Firestore+Playwrightでトップページ→カテゴリ一覧→求人詳細の遷移をクリックで確認、console error 0件・404 0件(証明: network requests全件200)
 - [x] `sync`のpytest 265件全PASS(新規テスト21件追加: トップページ・静的アセット配信・リンク書き換え・canonical・thumbnail site_relative化・chatbot .htmlリダイレクト・キャッシュヘッダー・PUBLIC_BASE_URL警告。3ラウンドのcodex review + セカンドオピニオンで発見された指摘への対応分を含む)
-- [ ] 本番デプロイ・decision-maker確認(次アクション、Stage 2着手前に必要)
+- [x] 本番デプロイ完了。`aozora-sync`をリビジョン`aozora-sync-00005-mkw`へ更新(トラフィック100%)、`aozora-chatbot`のALLOWED_ORIGINSに新オリジンを追加。検証URL `https://aozora-sync-flry56mxwa-an.a.run.app/` でトップページ→カテゴリ一覧→求人詳細→チャットボット送受信(関連求人カードの`.html`リダイレクトも含む)を実機確認、console error 0件・404 0件(証明: Playwright network requests全件200、チャット実送信で実応答を確認)
+
+🎯 **Stage 1 完了**。次のStage 2(求人詳細デザインパリティ)着手は decision-maker 判断待ち(セッション終了時点で未回答)。
 
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
@@ -115,7 +117,23 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 
 ## 🔄 中断点（in-flight）
 - Secret Manager (Slack webhook) は未設定 — `notify_slack()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
-- **[新規発見・未着手]** `mockup/index.html`のカテゴリカード「訪問介護員(ヘルパー)」「ケアマネジャー」が`jobs.html?job_type=visit`/`?job_type=care-manager`にリンクしているが、`map-search.js`はこの`job_type`クエリパラメータを一切読み取らない(職種フィルターと接続されていない、pre-existingの導線切れ)。今回の看護職修正(PR #136)の副次調査で発見、本件とは無関係のため今回は対応せず記録のみ。decision-maker確認後に着手判断
+- `mockup/index.html`の「訪問介護員(ヘルパー)」「ケアマネジャー」カードの`job_type`クエリ導線切れは、**Phase B(Cloud Run)側では2026-08-08 Stage 1で解消済み**(サーバ側リンク書き換えで`category_id=18986`/`18985`へ正しく遷移)。ただしPhase A(GitHub Pages、Stage 5のドメイン切替までは並行して本番公開中)の`map-search.js`は引き続き`job_type`を読まないため、GitHub Pages側では未解消のまま(Stage 5完了でGitHub Pagesがリクルート用途から外れれば自然消滅する想定、それまでは記録のみ)
+
+## セッション履歴: 2026-08-08 mockup反映漏れ修正 + Phase B Stage1本番デプロイ(PR #141→#142、社長指摘「実際のJobcanより少ない件数を見せているのはまずい」を起点)
+
+社長から「実際のJobcan環境では382件公開されているが、それより少ない件数を求人一覧として見せているのは実データなのか、勝手に減らしているのではないか」との指摘。
+
+**調査(全ページ突合)**: `mockup/jobs-care.html`が2026年7月以降更新されておらず介護カテゴリ20件中10件が欠落、チャットボット知識ベースも3件欠落と判明・修正(PR #141)。あわせてFirestore job_cache(Phase B、6時間ごと自動クロール)を突合したところ、Jobcan上の実際のactive求人は**382件**、Phase Aモックは**37件(約9.7%)**のみのサンプル設計だったことが判明。これはPhase A設計当初からの意図的なサンプリングだが、GitHub Pagesが既に一般公開URLである以上「求人一覧として少なすぎる件数を見せている」というリスクは実在すると判断。
+
+**decision-maker判断**: ①Phase B(Cloud Run+Firestore、382件全件反映済み)への本番切替を前倒し ②トップページもCloud Runへ全面集約(WordPress統合は既に撤回済み、GitHub Pagesは仮置き) ③v1はカテゴリ別一覧でリリース(地図検索+GPS+横断検索はStage 3以降)。plan mode(Explore 3並列)で調査したところ、単なるDNS切替ではなくPhase Bテンプレートのデザインパリティ不足・静的アセット配信欠如・トップページ配信元未定が判明。
+
+**実装(Stage 1、PR #142)**: `/assets` StaticFilesマウント+`/`ルート追加、CSS/canonical/戻りリンクの絶対パス化(`PUBLIC_BASE_URL`導入)、`mockup/index.html`はGitHub Pages(現在も本番公開中)と共有のためサーバ側リンク書き換え方式を採用(直接編集で一度revertする場面あり)、Dockerfileのビルドコンテキストをリポジトリルートへ変更。
+
+**品質ゲート(4ラウンド)**: codex review×3回・セカンドオピニオンエージェント×2回(うち1回は実際にTestClientで挙動を検証する実測ベースのレビューで35分を要した)。発見・修正した実害バグ: index.html自己リンク404・チャットボット関連求人リンク404・静的アセットの`no-store`キャッシュ・`/assets`404のキャッシュ汚染・`check_dir=False`のコメントと実挙動の乖離(実際はRuntimeError)・`/`ルートの`run_in_threadpool`未使用・トップページcanonicalが`PUBLIC_BASE_URL`未追従。
+
+**本番デプロイ完了**: `aozora-sync`リビジョン`aozora-sync-00005-mkw`(トラフィック100%)、`aozora-chatbot`のALLOWED_ORIGINS更新。検証URL(`https://aozora-sync-flry56mxwa-an.a.run.app/`)でPlaywright実機確認(トップ→カテゴリ一覧→求人詳細→チャットボット送受信→関連求人`.html`リダイレクト、console error/404 0件)。**まだ`recruit.aozora-cg.com`には未接続**(Stage 5でドメイン切替するまでは検証用URLのみ、一般求職者への影響なし)。
+
+pytest 266件全PASS(新規29件追加)、ruff check clean。
 
 ## セッション履歴: 2026-08-08 スクレイピング間隔を6時間ごとへ変更 + closed判定の時間ベース化(PR #138→#139、decision-maker「スクレイピングのタイミングを1時間くらいにできますか？」を起点)
 
