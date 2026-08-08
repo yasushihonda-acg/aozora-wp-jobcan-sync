@@ -20,7 +20,7 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 
 🎯 **Stage 1 完了**。
 
-## 完了の定義 (Stage 2: 求人詳細ページのデザインパリティ) — 2026-08-08 実装完了・PR #144(#144後続修正込み)・本番デプロイ未実施(次回セッション)
+## 完了の定義 (Stage 2: 求人詳細ページのデザインパリティ) — 2026-08-08 実装完了・PR #144(#144後続修正込み)、2026-08-09 本番デプロイ完了
 - [x] Phase A(`mockup/jobs/*.html`)と同じセクション構成(ヒーロー+ハッシュタグ+イラスト/サマリー/仕事内容/応募資格/待遇・福利厚生/選考フロー/entry-cta/関連求人サイドバー/固定応募バー/チャットボット)を Firestore 実データからレンダリング。Phase A 生成スクリプト(`scripts/mockup-rebuild/rewrite_job_details.py`)の抽出ロジックを `sync/src/sync/detail_sections.py` へ純粋関数として移植(37件全件で抽出結果を検証、給与regexの複数資格対応バグ1件を修正)
 - [x] `base.html` に header/hero/footer/entry_cta_bar/chat_widget の空 block を追加、`job_detail.html` を全面書き換え。`job_list.html` は無変更(Phase Aの求人一覧もチャームレスなため影響なし、Stage 3スコープ温存)
 - [x] `firestore_repo.get_by_category`(array_contains、単一フィールドのため複合インデックス不要)で関連求人3件を取得・自己除外、Firestore例外時はサイドバーのみ非表示で本体は200を維持
@@ -33,7 +33,12 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 - 本番Firestoreに `sync_status="closed"` の求人が0件のため、closed表示は自動テストのみで検証済み。実機での目視確認は次回 closed 求人が発生した際に実施
 - JobPosting JSON-LD の `datePosted`/`validThrough` は `JobSnapshot` に対応する真値が無いため出力しない(Phase A のハードコード値は引き継がない、意図的な設計)
 
-🎯 **Stage 2 実装完了・マージ済み**(本番デプロイは未実施)。次のStage 3(求人一覧デザインパリティ)着手は decision-maker 判断待ち。
+### 本番デプロイ(2026-08-09、`infra/README.md` §3・§4bの手順、revision `aozora-sync-00006-5f6`)
+- Docker image をリポジトリルートから `sync/Dockerfile` でビルド + push、`gcloud run deploy` で新イメージへ切替(SA/IAM等の初回設定は既存のため不要、image差し替えのみ)
+- Playwright実機確認(`https://aozora-sync-flry56mxwa-an.a.run.app`): トップページ・静的アセット・求人一覧(`?category_id=18773`)・求人詳細(`/jobs/2264205`)いずれも200、console error 0件(favicon.ico 404はブラウザ自動リクエストによる既知の想定内挙動)。求人詳細の全セクション(サマリー/仕事内容/応募資格/待遇/選考フロー/entry-cta/関連求人サイドバー)を目視確認
+- チャットボット疎通確認: 起動→サジェスト質問クリック→回答受信(関連求人リンク3件、`.html`互換リダイレクト308含む)まで正常動作、`aozora-chatbot`側CORS(`ALLOWED_ORIGINS`)も既存設定のまま機能
+
+🎯 **Stage 2 完了(実装・本番デプロイとも完了)**。次のStage 3(求人一覧デザインパリティ)着手は decision-maker 判断待ち。
 
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
