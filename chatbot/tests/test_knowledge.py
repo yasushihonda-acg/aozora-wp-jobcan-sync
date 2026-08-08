@@ -29,7 +29,7 @@ def test_context_includes_job_summary_aggregates() -> None:
     context = bundled_knowledge().context
 
     assert "13 拠点" in context
-    assert "34 件" in context
+    assert "37 件" in context
     assert "fukuoka" in context
     assert "kagoshima" in context
 
@@ -93,17 +93,17 @@ def test_jobs_detail_service_types_title_override_for_specialist_role() -> None:
     assert by_id["90447"]["service_types"] == ["相談支援"]
 
 
-def test_jobs_detail_has_34_entries_matching_jobs_json() -> None:
+def test_jobs_detail_has_37_entries_matching_jobs_json() -> None:
     """Regression test: `jobs_detail.json` must stay in sync with
     `mockup/assets/data/jobs.json` (same ids) — see
-    `scripts/build_jobs_detail.py` for how it's regenerated."""
+    `chatbot/scripts/build_jobs_detail.py` for how it's regenerated."""
     detail = json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
     repo_root = Path(__file__).resolve().parents[2]
     jobs_json = json.loads(
         (repo_root / "mockup" / "assets" / "data" / "jobs.json").read_text(encoding="utf-8")
     )
 
-    assert len(detail) == 34
+    assert len(detail) == 37
     assert {job["id"] for job in detail} == {job["id"] for job in jobs_json["jobs"]}
     for job in detail:
         assert job["url"] == f"jobs/{job['id']}.html"
