@@ -10,13 +10,20 @@
      If you add a third template, override these or Jinja2 will raise
      UndefinedError. #}
   <title>{% block page_title %}{{ page_title or job.title }}{% endblock %}</title>
-  <link rel="canonical" href="{% block canonical_url %}{{ job.source_url }}{% endblock %}">
-  {# Shared design tokens from the Phase A mockup. Component CSS is local to
-     this package; the rendered HTML is served from `mockup/` (Phase 0 preview).
-     Phase 2 (FastAPI) will inline these or use `/static` URL routing. #}
-  <link rel="stylesheet" href="assets/css/tokens.css">
+  {# canonical_url is site-root-relative by default (base_url=""), which is
+     fine for local dev/tests; app.py passes the real PUBLIC_BASE_URL in
+     production so this resolves to a fully-qualified URL. Every template
+     that extends this one MUST override this block (see the comment this
+     replaces) — the bare `{{ base_url }}` fallback below has no path and is
+     never a valid canonical on its own. #}
+  <link rel="canonical" href="{% block canonical_url %}{{ base_url }}{% endblock %}">
+  {# Shared design tokens from the Phase A mockup, served by this service's
+     own `/assets` StaticFiles mount (Stage 1 of the Cloud Run consolidation,
+     2026-08-08 — see app.py). Site-root-absolute so it still resolves
+     correctly from nested paths like `/jobs/{id}`. #}
+  <link rel="stylesheet" href="/assets/css/tokens.css">
   {% block extra_css %}
-  <link rel="stylesheet" href="assets/css/sync-job-detail.css">
+  <link rel="stylesheet" href="/assets/css/sync-job-detail.css">
   {% endblock %}
 </head>
 <body>

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
 {% block page_title %}求人一覧 | あおぞらケアグループ採用{% endblock %}
-{% block canonical_url %}{{ page.source_url }}{% endblock %}
+{% block canonical_url %}{{ base_url }}/jobs/?category_id={{ page.category_id }}{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="assets/css/sync-job-list.css">
+<link rel="stylesheet" href="/assets/css/sync-job-list.css">
 {% endblock %}
 {% block main_class %}job-list{% endblock %}
 
 {% block content %}
 <nav class="job-list__breadcrumb" aria-label="パンくず">
-  <a class="job-list__back" href="index.html">
+  <a class="job-list__back" href="/">
     <span class="job-list__back-arrow" aria-hidden="true">←</span>
     採用トップへ戻る
   </a>
@@ -27,7 +27,7 @@
       {% if item.thumbnail_url %}
       <div class="job-list-card__thumb">
         <img class="job-list-card__thumb-img"
-             src="{{ item.thumbnail_url }}"
+             src="{{ item.thumbnail_url | site_relative }}"
              alt=""
              loading="lazy">
       </div>

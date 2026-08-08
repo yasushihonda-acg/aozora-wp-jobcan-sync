@@ -109,6 +109,144 @@ def test_healthz_has_security_headers() -> None:
     assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
 
 
+# ────────────────────── / (top page) + /assets/* ──────────────────────────
+# Stage 1 of the Cloud Run consolidation (2026-08-08): the top page and its
+# static assets are now served in-house instead of only existing on the
+# Phase A GitHub Pages mockup. These tests run against the real checked-out
+# `mockup/assets`/`mockup/index.html` (the module-level default paths, same
+# files local dev and CI both see) rather than a fixture — there is nothing
+# meaningfully fake to substitute for "does the real top page render."
+
+
+def test_top_page_returns_200_html() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.text.startswith("<!DOCTYPE html>")
+
+
+def test_top_page_has_security_headers() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/")
+
+    assert response.headers.get("Cache-Control") == "no-store"
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
+def test_top_page_rewrites_job_links_to_in_house_routes() -> None:
+    """The shared mockup source file still has relative
+    `jobs.html`/`jobs-care.html`/... hrefs (GitHub Pages' own routes) — this
+    service must rewrite them to its own `/jobs/?category_id=...` routes
+    rather than leaving dead links."""
+    client = _client_with(_repo_with())
+    html = client.get("/").text
+
+    assert 'href="/jobs/?category_id=18773"' in html  # 介護職
+    assert 'href="/jobs/?category_id=18983"' in html  # 看護職
+    assert 'href="/jobs/?category_id=18986"' in html  # ホームヘルパー
+    assert 'href="/jobs/?category_id=18985"' in html  # ケアマネジャー
+    assert 'href="/jobs/?category_id=58859"' in html  # 事務職
+    assert 'href="/jobs/?category_id=69384"' in html  # ITエンジニア職
+    assert 'href="/"' in html  # logo / 採用トップ nav / footer self-links
+    assert 'href="jobs.html"' not in html
+    assert 'href="jobs-care.html"' not in html
+    assert 'href="index.html"' not in html
+    assert "job_type=" not in html
+
+
+def test_top_page_canonical_uses_public_base_url_when_set(monkeypatch: Any) -> None:
+    """2026-08-08 codex review finding: the shared source's hard-coded
+    `https://recruit.aozora-cg.com/` canonical/og:url is the *eventual*
+    Stage 5 domain, not wherever this is actually being served from during
+    Stages 1-4 — must follow `PUBLIC_BASE_URL` like the job pages do."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://aozora-sync-flry56mxwa-an.a.run.app")
+    client = _client_with(_repo_with())
+
+    html = client.get("/").text
+
+    assert 'href="https://aozora-sync-flry56mxwa-an.a.run.app/"' in html
+    assert 'content="https://aozora-sync-flry56mxwa-an.a.run.app/"' in html
+    assert "recruit.aozora-cg.com" not in html
+
+
+def test_top_page_canonical_left_as_is_without_public_base_url() -> None:
+    """`base_url=""` (local dev, the module default) — no better value to
+    substitute, the eventual-domain placeholder is harmless there."""
+    client = _client_with(_repo_with())
+    html = client.get("/").text
+
+    assert 'href="https://recruit.aozora-cg.com/"' in html
+
+
+def test_render_top_page_logs_when_rewrite_target_not_found(caplog: Any) -> None:
+    """2026-08-08 second-opinion review finding: `_TOP_PAGE_LINK_REWRITES` is
+    exact-substring matching with no static guarantee against
+    `mockup/index.html` drifting out from under it — a target that matches
+    nothing must be loud, not a silently dead link in production."""
+    import logging
+
+    from sync.app import _TOP_PAGE_LINK_REWRITES, _render_top_page
+
+    with caplog.at_level(logging.ERROR, logger="sync.app"):
+        html = _render_top_page("<html><body>no job links here</body></html>")
+
+    assert "no job links here" in html  # unrelated content passes through unchanged
+    assert any("rewrite target not found" in record.message for record in caplog.records)
+    # One error per unmatched target, not one for the whole table
+    assert len(caplog.records) == len(_TOP_PAGE_LINK_REWRITES)
+
+
+def test_top_page_missing_file_returns_404(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "INDEX_HTML_PATH", "/nonexistent/index.html")
+    client = _client_with(_repo_with())
+
+    response = client.get("/")
+
+    assert response.status_code == 404
+
+
+def test_static_asset_is_served() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/assets/css/tokens.css")
+
+    assert response.status_code == 200
+
+
+def test_static_asset_is_cacheable_unlike_dynamic_pages() -> None:
+    """2026-08-08 second-opinion review finding: `no-store` on every asset
+    request forced a re-download on every navigation, unlike the Phase A
+    GitHub Pages mockup this replaces."""
+    client = _client_with(_repo_with())
+    response = client.get("/assets/css/tokens.css")
+
+    assert response.headers.get("Cache-Control") == "public, max-age=3600"
+
+
+def test_static_asset_unknown_path_returns_404() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/assets/does-not-exist.css")
+
+    assert response.status_code == 404
+
+
+def test_static_asset_404_is_not_cached() -> None:
+    """2026-08-08 second-opinion review finding: the first version of the
+    static-asset cache-control fix applied `public, max-age=3600` to 404s
+    too — a genuinely missing file (or a transient revision-rollout
+    mismatch) would then stay "not found" in browser/CDN caches for an
+    hour after the real file became available."""
+    client = _client_with(_repo_with())
+    response = client.get("/assets/does-not-exist.css")
+
+    assert response.headers.get("Cache-Control") == "no-store"
+
+
 # ───────────────────────────── /jobs/{job_id} ────────────────────────────
 
 
@@ -172,6 +310,17 @@ def test_get_job_detail_rejects_non_ascii_digits() -> None:
     client = _client_with(_repo_with())
     response = client.get("/jobs/１２３")
     assert response.status_code == 404
+
+
+def test_get_job_detail_html_suffix_redirects_to_canonical_route() -> None:
+    """The chatbot widget's related-job links resolve to `/jobs/{id}.html`
+    (page-relative `job.url` from `/`) — this must redirect, not 404
+    (2026-08-08 codex review finding)."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/1777023.html", follow_redirects=False)
+
+    assert response.status_code == 308
+    assert response.headers["location"] == "/jobs/1777023"
 
 
 def test_get_job_detail_render_failure_returns_500(monkeypatch: Any) -> None:
@@ -381,6 +530,56 @@ def test_create_app_does_not_require_repo_at_construction_time() -> None:
     require GCP credentials (see app.py's `_resolve_repo` docstring)."""
     app = create_app()
     assert app is not None
+
+
+def test_create_app_warns_when_public_base_url_unset_on_cloud_run(
+    monkeypatch: Any, caplog: Any
+) -> None:
+    """2026-08-08 second-opinion review finding: forgetting `--set-env-vars
+    PUBLIC_BASE_URL=...` on a real Cloud Run deploy silently degrades every
+    canonical URL — this must be loud, not silent."""
+    import logging
+
+    from sync import app as app_module
+
+    monkeypatch.setenv("K_SERVICE", "aozora-sync")
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "")
+
+    with caplog.at_level(logging.WARNING, logger="sync.app"):
+        create_app()
+
+    assert any("PUBLIC_BASE_URL is unset" in record.message for record in caplog.records)
+
+
+def test_create_app_does_not_warn_when_public_base_url_is_set(
+    monkeypatch: Any, caplog: Any
+) -> None:
+    import logging
+
+    from sync import app as app_module
+
+    monkeypatch.setenv("K_SERVICE", "aozora-sync")
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+
+    with caplog.at_level(logging.WARNING, logger="sync.app"):
+        create_app()
+
+    assert not any("PUBLIC_BASE_URL is unset" in record.message for record in caplog.records)
+
+
+def test_create_app_does_not_warn_outside_cloud_run(monkeypatch: Any, caplog: Any) -> None:
+    """Local dev / tests never set `K_SERVICE` — no warning noise there."""
+    import logging
+
+    from sync import app as app_module
+
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "")
+
+    with caplog.at_level(logging.WARNING, logger="sync.app"):
+        create_app()
+
+    assert not any("PUBLIC_BASE_URL is unset" in record.message for record in caplog.records)
 
 
 def test_resolve_repo_builds_the_client_at_most_once(monkeypatch: Any) -> None:

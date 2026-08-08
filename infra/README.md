@@ -1,9 +1,19 @@
 # Phase 2B — Cloud Run sync proxy deployment
 
 Phase 2A.2 / 2A.3 で完成した FastAPI proxy を Cloud Run に deploy する手順。
-**WP 統合前提**のため custom domain mapping は使用せず、Cloud Run の
-service URL (`xxx.run.app`) を WP からの server-to-server fetch ターゲットに
-使う。
+
+**2026-08-08 更新 (Stage 1: Cloud Run 全面集約)**: 「WP 統合前提」という
+上記の旧方針は決裁者判断で撤回済み。社長から「実際のJobcan(382件)より少ない
+件数(37件)を求人一覧として公開し続けるのはまずいのでは」との指摘を受け、
+Phase A(GitHub Pages、37件のみのサンプル)を Phase B(この Cloud Run
+サービス、382件全件を Firestore 経由で自動反映)へ本番切替する方針に転換した。
+トップページ・静的アセット(`mockup/assets`)もこのサービスに同梱し、
+`recruit.aozora-cg.com` を最終的に直接このサービスへ向ける(custom domain
+mapping は Stage 5 で対応、それまでは `xxx.run.app` の service URL が唯一の
+公開先)。段階リリース(Stage 1: 静的配信基盤+トップページ移植 → Stage 2:
+求人詳細デザインパリティ → Stage 3: 求人一覧デザインパリティ → Stage 4:
+本番公開前の健全性対応 → Stage 5: ドメイン切替)の詳細は
+`docs/handoff/GOAL.md` を参照。
 
 ## 前提
 
@@ -108,16 +118,21 @@ gcloud artifacts repositories set-cleanup-policies aozora-sync \
 
 ## 3. Docker image build + push
 
+**2026-08-08 更新 (Stage 1)**: `sync/Dockerfile` はトップページ+静的アセット
+(`mockup/assets`, `mockup/index.html`) も同梱するため、build context が
+`sync/` から**リポジトリルート**に変わった(`-f sync/Dockerfile` で
+Dockerfile の場所を明示、`.dockerignore` もリポジトリルートへ移動済み)。
+`cd sync` していた旧手順との違いに注意。
+
 ```bash
 # 3a. Artifact Registry 認証 (初回のみ)
 CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
 
-# 3b. buildx で linux/amd64 cross-build + push を一括実行
-cd sync
+# 3b. buildx で linux/amd64 cross-build + push を一括実行 (リポジトリルートから実行)
 CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync \
 docker buildx build --platform linux/amd64 --push \
+  -f sync/Dockerfile \
   -t asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest .
-cd ..
 ```
 
 タグは `latest` 固定。再 deploy 時は同じタグで上書き、cleanup policy により
@@ -160,8 +175,25 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run deploy aozora-sync 
   --cpu=1 \
   --concurrency=10 \
   --timeout=30s \
-  --set-env-vars=GCP_PROJECT_ID=aozora-wp-jobcan-sync,FIRESTORE_DATABASE="(default)"
+  --set-env-vars=GCP_PROJECT_ID=aozora-wp-jobcan-sync,FIRESTORE_DATABASE="(default)",PUBLIC_BASE_URL="https://aozora-sync-flry56mxwa-an.a.run.app"
 ```
+
+`PUBLIC_BASE_URL` (2026-08-08 Stage 1 追加): canonical URL をこのサービス自身
+のURLで組み立てるための値(末尾スラッシュなし)。`gcloud run services describe
+aozora-sync --format='value(status.url)'` が返す値(ハッシュ形式)を使う —
+project number 形式(`https://aozora-sync-1084369586348.asia-northeast1.run.app`)
+も疎通するが(§5 動作確認と同じ「両方とも有効」)、`gcloud describe` の報告値
+をそのまま使うのが取り違え防止として最も確実。**Stage 5 でドメインを
+`recruit.aozora-cg.com` に切り替えたら、この値も合わせて更新すること**
+(忘れると canonical が古い `*.run.app` URLを指したままになる)。
+`STATIC_ASSETS_DIR`/`INDEX_HTML_PATH` は `Dockerfile` の `ENV` で固定済みの
+ため `--set-env-vars` に含める必要はない。
+
+**忘れやすい関連手順 (2026-08-08 codex review で発覚)**: 埋め込み済みチャット
+ボットウィジェット(`mockup/index.html` に既に組み込み済み、PR #97)がこの
+サービスのオリジンから動くようにするため、`aozora-chatbot` サービスの
+`ALLOWED_ORIGINS` にもこのサービスのURLを追加すること(§4.5 参照)。忘れると
+チャット送信がCORSで全滅する。
 
 設定根拠:
 - `min-instances=0`: 検証用、cold start を受け入れる代わりにアイドル課金ゼロ
@@ -178,6 +210,24 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run deploy aozora-sync 
 deploy 完了後、コマンド出力末尾に Service URL が出る:
 `https://aozora-sync-XXXX-an.a.run.app` (新形式) または
 `https://aozora-sync-1084369586348.asia-northeast1.run.app` (project number 形式、両方とも有効)。
+
+## 4.5 チャットボット CORS の追従 (2026-08-08 Stage 1 で新規追加、codex review で発覚)
+
+`mockup/index.html`(このサービスの `/` が配信するトップページ)には既に
+チャットボットウィジェットが埋め込み済み(PR #97)。ウィジェットは別サービス
+`aozora-chatbot` へ `fetch` するため、`aozora-chatbot` 側の `ALLOWED_ORIGINS`
+にこのサービスの origin を追加しないと、ブラウザの CORS で全チャット送信が
+失敗する(サイレント失敗 — チャット欄自体は表示されるが送信すると無反応)。
+
+```bash
+CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run services update aozora-chatbot \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --update-env-vars=ALLOWED_ORIGINS="https://yasushihonda-acg.github.io,http://localhost:8989,http://localhost:8080,https://aozora-sync-flry56mxwa-an.a.run.app,https://aozora-sync-1084369586348.asia-northeast1.run.app"
+```
+
+**Stage 5 でドメインを `recruit.aozora-cg.com` に切り替えたら、この値にも
+最終ドメインを追加すること**(`PUBLIC_BASE_URL` の更新と同時に対応)。
 
 ## 5. 動作確認
 
@@ -204,6 +254,14 @@ grep "sync-job-detail" /tmp/job.html  # 自社 BEM class 確認
 # 5c. 一覧ページ (§8 の Job 実行後、実在する category_id に差し替えて実行)
 curl -o /tmp/list.html "${SERVICE_URL}/jobs/?category_id=18773"
 grep "sync-job-list" /tmp/list.html
+
+# 5d. トップページ (2026-08-08 Stage 1 追加、Firestore 不要)
+curl -s -o /dev/null -w "%{http_code}\n" "${SERVICE_URL}/"
+# → 200
+
+# 5e. 静的アセット (同上)
+curl -s -o /dev/null -w "%{http_code}\n" "${SERVICE_URL}/assets/css/tokens.css"
+# → 200
 ```
 
 ## 6. Cloud Billing budget alert (推奨)

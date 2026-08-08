@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block canonical_url %}{{ base_url }}/jobs/{{ job.job_id }}{% endblock %}
+
 {% block content %}
 <article class="job-detail__article">
   <header class="job-detail__header">

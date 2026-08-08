@@ -11,8 +11,11 @@ longer happens here. A short positive-only HTML cache remains, because a
 
 # Routing surface
 
+    GET /                             → top page (`mockup/index.html`, link-rewritten)
+    GET /assets/*                     → static CSS/JS/images (`mockup/assets`)
     GET /healthz                      → 200 OK, no Firestore touch
     GET /jobs/{job_id}                → in-house HTML from `job_cache/{job_id}`
+    GET /jobs/{job_id}.html           → 308 redirect to /jobs/{job_id}
     GET /jobs/?category_id=...        → in-house listing, filtered from `job_cache`
 
 # Status → response mapping
@@ -29,20 +32,27 @@ longer happens here. A short positive-only HTML cache remains, because a
 | Firestore read failure      | 503, HTML page with a Jobcan fallback link   |
 | render failure (Jinja2 etc.)| 500, HTML page with a Jobcan fallback link   |
 
-All responses add `Cache-Control: no-store` and `X-Robots-Tag: noindex,
-nofollow` via middleware. Every Firestore read happens inside
-`run_in_threadpool` — the SDK is synchronous, and running it directly on the
-event loop would serialize every concurrent request behind it (2026-08-07
-codex second-opinion review finding).
+All responses add `X-Robots-Tag: noindex, nofollow` via middleware, plus
+`Cache-Control: no-store` — except successful `/assets/*` responses, which
+get `public, max-age=3600` instead (2026-08-08, so the top page's CSS/JS/
+images don't re-download on every navigation like the rest of this
+service's genuinely-dynamic pages must). Every synchronous I/O call
+(Firestore reads, and — 2026-08-08 — the top page's local file read) happens
+inside `run_in_threadpool`; running either directly on the event loop would
+serialize every concurrent request behind it (2026-08-07 codex second-
+opinion review finding, reconfirmed for the top page 2026-08-08).
 """
 
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from ._validators import is_ascii_digit_id
@@ -53,6 +63,110 @@ from .renderer import render_error, render_job_detail, render_job_list
 from .snapshot import JobSnapshot
 
 _logger = logging.getLogger(__name__)
+
+# Stage 1 of the Cloud Run consolidation (2026-08-08, see
+# docs/handoff/GOAL.md): the top page + its CSS/JS/images used to live only
+# on the Phase A GitHub Pages mockup. `PUBLIC_BASE_URL` (e.g.
+# `https://recruit.aozora-cg.com`, no trailing slash) lets this service build
+# canonical URLs pointing at itself instead of Jobcan; empty in local
+# dev/tests, where a site-root-relative canonical is fine.
+#
+# `STATIC_ASSETS_DIR`/`INDEX_HTML_PATH` default to the checked-out
+# `mockup/assets` / `mockup/index.html` two levels above this package — that
+# resolves correctly for local dev (`sync/src/sync/app.py` → repo root) but
+# NOT inside the container, where `Dockerfile` copies only `src/` (one level
+# shallower) — so the Dockerfile sets both env vars explicitly to where it
+# actually copied `mockup/`.
+_REPO_ROOT_LOCAL_DEV = Path(__file__).resolve().parents[3]
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+STATIC_ASSETS_DIR = os.environ.get(
+    "STATIC_ASSETS_DIR", str(_REPO_ROOT_LOCAL_DEV / "mockup" / "assets")
+)
+INDEX_HTML_PATH = os.environ.get(
+    "INDEX_HTML_PATH", str(_REPO_ROOT_LOCAL_DEV / "mockup" / "index.html")
+)
+
+# `mockup/index.html` is shared with the still-live Phase A GitHub Pages
+# mockup, whose job links are relative paths to sibling static files
+# (`jobs-care.html`, `jobs.html?job_type=...`) that don't exist as routes on
+# this service. Editing that shared file directly would break navigation on
+# the GitHub Pages site *before* this service is what `recruit.aozora-cg.com`
+# actually points at (Stage 5, not yet done) — so instead this service
+# rewrites the known href values at serve time, leaving the shared source
+# file untouched. Category ids from `crawler.KNOWN_CATEGORY_IDS`.
+#
+# The three plain `jobs.html` link targets ("募集職種"/"求人を見る"/"すべての
+# 求人を見る"/footer/mobile CTA — 7 occurrences) point at the largest single
+# category (介護職) as an interim stand-in: v1 deliberately ships without an
+# all-category listing (decision-maker call, 2026-08-08 — a full
+# search/map/GPS experience is Stage 3+ scope, not Stage 1).
+_TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
+    # Logo / "採用トップ" nav / footer (3 occurrences) — self-links back to
+    # the top page, which this service serves at site root, not
+    # `index.html` (2026-08-08 codex review finding).
+    ('href="index.html"', 'href="/"'),
+    ('href="jobs.html"', 'href="/jobs/?category_id=18773"'),
+    ('href="jobs-care.html"', 'href="/jobs/?category_id=18773"'),
+    ('href="jobs-nurse.html"', 'href="/jobs/?category_id=18983"'),
+    ('href="jobs.html?job_type=visit"', 'href="/jobs/?category_id=18986"'),  # ホームヘルパー
+    ('href="jobs.html?job_type=care-manager"', 'href="/jobs/?category_id=18985"'),  # ケアマネジャー
+    ('href="jobs-office.html"', 'href="/jobs/?category_id=58859"'),
+    ('href="jobs-it.html"', 'href="/jobs/?category_id=69384"'),
+)
+
+
+def _render_top_page(raw_html: str, *, base_url: str = "") -> str:
+    """Apply `_TOP_PAGE_LINK_REWRITES`, logging (not raising — a missing
+    target degrades to a dead link, not a broken page) any target that
+    matched nothing.
+
+    Exact-substring matching has no static guarantee the shared
+    `mockup/index.html` source still contains what this table expects
+    (2026-08-08 second-opinion review finding) — a future markup change
+    (attribute order, quoting) could make a target silently stop matching,
+    which is exactly the kind of dead-link regression this rewriting exists
+    to prevent in the first place. This turns that into a loud log line
+    instead of a link that quietly 404s in production with no signal.
+
+    `base_url` (2026-08-08 codex review finding): the shared source has a
+    hard-coded `https://recruit.aozora-cg.com/` canonical + `og:url` — the
+    *eventual* Stage 5 domain, not wherever this is actually being served
+    from during Stages 1-4. Left untouched when `base_url=""` (local dev):
+    there is no better value to substitute, and the eventual-domain
+    placeholder is harmless there.
+    """
+    for old, new in _TOP_PAGE_LINK_REWRITES:
+        if old not in raw_html:
+            _logger.error(
+                "top page link rewrite target not found in mockup/index.html "
+                "— markup may have changed, this href is now a dead link",
+                extra={"expected": old},
+            )
+            continue
+        raw_html = raw_html.replace(old, new)
+
+    if base_url:
+        raw_html = raw_html.replace(
+            'href="https://recruit.aozora-cg.com/"', f'href="{base_url}/"'
+        ).replace('content="https://recruit.aozora-cg.com/"', f'content="{base_url}/"')
+
+    return raw_html
+
+
+def _load_top_page() -> str | None:
+    """Synchronous file read + string rewriting for `GET /` — kept as a
+    plain function (not inlined in the route) so it can run inside
+    `run_in_threadpool` (see module docstring) rather than blocking the
+    event loop directly. Returns `None` on a missing file so the route can
+    map that to its own typed 404, matching every other route's style of
+    resolving I/O outside the handler and mapping the result afterward.
+    """
+    if not os.path.isfile(INDEX_HTML_PATH):
+        _logger.error("top page file missing", extra={"path": INDEX_HTML_PATH})
+        return None
+    raw_html = Path(INDEX_HTML_PATH).read_text(encoding="utf-8")
+    return _render_top_page(raw_html, base_url=PUBLIC_BASE_URL)
+
 
 JOBCAN_DETAIL_FALLBACK = (
     "https://recruit.jobcan.jp/aozora/job_offers/{job_id}"
@@ -68,14 +182,28 @@ def _error_html(title: str, message: str, fallback_url: str) -> str:
     return render_error(title=title, message=message, fallback_url=fallback_url)
 
 
-def _apply_security_headers(response: Response) -> Response:
+def _apply_security_headers(response: Response, *, is_static_asset: bool = False) -> Response:
     """Stamp the response with the headers every proxy reply must carry.
 
-    Cache-Control prevents intermediaries from holding pages past this
-    service's own short cache TTL; X-Robots-Tag keeps non-canonical/preview
-    URLs out of search indexes.
+    Cache-Control prevents intermediaries from holding *dynamic* (Firestore-
+    backed) pages past this service's own short cache TTL; X-Robots-Tag
+    keeps non-canonical/preview URLs out of search indexes.
+
+    `is_static_asset=True` (the `/assets/*` mount, 2026-08-08 second-opinion
+    review finding) gets a real `max-age` instead — `no-store` on every CSS/
+    JS/image request forced a re-download on every single navigation, unlike
+    the Phase A GitHub Pages mockup this replaces (which caches normally).
+    Filenames aren't content-hashed, so this stays short rather than
+    `immutable`: a stale asset would resolve itself within an hour instead
+    of needing a hard refresh. Only applied when the response actually
+    succeeded (`< 400`) — a 404 (e.g. a genuinely missing file, or a
+    transient revision-rollout mismatch) must not itself get cached for an
+    hour, and 304 Not Modified is fine to leave cacheable (2026-08-08
+    second-opinion review finding: the first version of this cached 404s
+    too).
     """
-    response.headers["Cache-Control"] = "no-store"
+    is_cacheable_asset = is_static_asset and response.status_code < 400
+    response.headers["Cache-Control"] = "public, max-age=3600" if is_cacheable_asset else "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
@@ -109,6 +237,19 @@ def create_app(
     `import sync.app` itself require GCP credentials — breaking test
     collection and any tooling that imports this module without ADC set up.
     """
+    # `K_SERVICE` is set by Cloud Run on every revision (not by local dev /
+    # tests) — if it's present without `PUBLIC_BASE_URL` also being set, the
+    # deploy command's `--set-env-vars` was forgotten, and canonical URLs
+    # silently degrade to site-root-relative (2026-08-08 second-opinion
+    # review finding: same failure *shape* as the bug Stage 1 fixed —
+    # canonical pointing somewhere wrong — via a different, easy-to-forget
+    # path this time).
+    if os.environ.get("K_SERVICE") and not PUBLIC_BASE_URL:
+        _logger.warning(
+            "PUBLIC_BASE_URL is unset on a Cloud Run revision — canonical URLs "
+            "will render site-root-relative instead of fully-qualified"
+        )
+
     proxy_cache: Cache = cache or InMemoryCache(CacheConfig())
     _injected_repo = repo
     _lazy_repo: JobCacheRepository | None = None
@@ -130,11 +271,46 @@ def create_app(
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        return _apply_security_headers(response)
+        is_static_asset = request.url.path.startswith("/assets/")
+        return _apply_security_headers(response, is_static_asset=is_static_asset)
+
+    # Stage 1 of the Cloud Run consolidation: the top page's own CSS/JS/images
+    # (`mockup/assets`) are served in-house so `/jobs/{id}` (a different path
+    # depth) can reference them by a site-root-absolute `/assets/...` URL
+    # instead of the page-relative one that used to 404 off the job routes.
+    # `check_dir` left at its Starlette default (True): a missing directory
+    # is a deploy-config bug, and failing loudly at construction time here
+    # means the bad revision never starts serving traffic at all (Cloud Run
+    # keeps routing to the last good revision) instead of *every* asset
+    # request 500ing forever once traffic does reach it — `check_dir=False`
+    # doesn't skip that check the way its name suggests, it only moves it to
+    # per-request (Starlette re-raises the same `RuntimeError` from inside
+    # `StaticFiles.__call__` on the first hit and again on every hit after,
+    # since `config_checked` only latches `True` on success — 2026-08-08
+    # second-opinion review finding, confirmed against Starlette's source).
+    app.mount("/assets", StaticFiles(directory=STATIC_ASSETS_DIR), name="assets")
+
+    @app.get("/", response_class=HTMLResponse)
+    async def get_top_page() -> Response:
+        rendered = await run_in_threadpool(_load_top_page)
+        if rendered is None:
+            raise HTTPException(status_code=404, detail="not found")
+        return HTMLResponse(content=rendered)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "healthy"}
+
+    # The chatbot widget (embedded in the top page — `mockup/index.html`
+    # already carries its `<script>` tag, PR #97) resolves related-job card
+    # links from `job.url` ("jobs/{id}.html", the Phase A static filename
+    # shape) as a *page-relative* href. From `/` that resolves to
+    # `/jobs/{id}.html`, which the numeric-only route below 404s on
+    # (2026-08-08 codex review finding). Registered before `/jobs/{job_id}`
+    # so the more specific `.html`-suffixed pattern wins the match.
+    @app.get("/jobs/{job_id}.html")
+    async def redirect_legacy_html_detail_url(job_id: str) -> Response:
+        return RedirectResponse(url=f"/jobs/{job_id}", status_code=308)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def get_job_detail(job_id: str) -> Response:
@@ -245,7 +421,9 @@ def _render_detail(snapshot: JobSnapshot, *, job_id: str) -> str | None:
     instead of leaking a stack trace to the client.
     """
     try:
-        return render_job_detail(snapshot.offer, closed=snapshot.sync_status == "closed")
+        return render_job_detail(
+            snapshot.offer, closed=snapshot.sync_status == "closed", base_url=PUBLIC_BASE_URL
+        )
     except Exception:
         _logger.exception("render error", extra={"kind": "detail", "job_id": job_id})
         return None
@@ -294,7 +472,7 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str 
             last_page=1,
             next_url=None,
         )
-        return render_job_list(page)
+        return render_job_list(page, base_url=PUBLIC_BASE_URL)
     except Exception:
         _logger.exception("render error", extra={"kind": "list", "category_id": category_id})
         return None
