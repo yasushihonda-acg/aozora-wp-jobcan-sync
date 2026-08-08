@@ -108,7 +108,7 @@ _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
 )
 
 
-def _render_top_page(raw_html: str) -> str:
+def _render_top_page(raw_html: str, *, base_url: str = "") -> str:
     """Apply `_TOP_PAGE_LINK_REWRITES`, logging (not raising — a missing
     target degrades to a dead link, not a broken page) any target that
     matched nothing.
@@ -120,6 +120,13 @@ def _render_top_page(raw_html: str) -> str:
     which is exactly the kind of dead-link regression this rewriting exists
     to prevent in the first place. This turns that into a loud log line
     instead of a link that quietly 404s in production with no signal.
+
+    `base_url` (2026-08-08 codex review finding): the shared source has a
+    hard-coded `https://recruit.aozora-cg.com/` canonical + `og:url` — the
+    *eventual* Stage 5 domain, not wherever this is actually being served
+    from during Stages 1-4. Left untouched when `base_url=""` (local dev):
+    there is no better value to substitute, and the eventual-domain
+    placeholder is harmless there.
     """
     for old, new in _TOP_PAGE_LINK_REWRITES:
         if old not in raw_html:
@@ -130,6 +137,12 @@ def _render_top_page(raw_html: str) -> str:
             )
             continue
         raw_html = raw_html.replace(old, new)
+
+    if base_url:
+        raw_html = raw_html.replace(
+            'href="https://recruit.aozora-cg.com/"', f'href="{base_url}/"'
+        ).replace('content="https://recruit.aozora-cg.com/"', f'content="{base_url}/"')
+
     return raw_html
 
 
@@ -250,7 +263,7 @@ def create_app(
             _logger.error("top page file missing", extra={"path": INDEX_HTML_PATH})
             raise HTTPException(status_code=404, detail="not found")
         raw_html = Path(INDEX_HTML_PATH).read_text(encoding="utf-8")
-        return HTMLResponse(content=_render_top_page(raw_html))
+        return HTMLResponse(content=_render_top_page(raw_html, base_url=PUBLIC_BASE_URL))
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:

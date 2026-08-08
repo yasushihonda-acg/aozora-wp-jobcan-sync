@@ -156,6 +156,32 @@ def test_top_page_rewrites_job_links_to_in_house_routes() -> None:
     assert "job_type=" not in html
 
 
+def test_top_page_canonical_uses_public_base_url_when_set(monkeypatch: Any) -> None:
+    """2026-08-08 codex review finding: the shared source's hard-coded
+    `https://recruit.aozora-cg.com/` canonical/og:url is the *eventual*
+    Stage 5 domain, not wherever this is actually being served from during
+    Stages 1-4 — must follow `PUBLIC_BASE_URL` like the job pages do."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://aozora-sync-flry56mxwa-an.a.run.app")
+    client = _client_with(_repo_with())
+
+    html = client.get("/").text
+
+    assert 'href="https://aozora-sync-flry56mxwa-an.a.run.app/"' in html
+    assert 'content="https://aozora-sync-flry56mxwa-an.a.run.app/"' in html
+    assert "recruit.aozora-cg.com" not in html
+
+
+def test_top_page_canonical_left_as_is_without_public_base_url() -> None:
+    """`base_url=""` (local dev, the module default) — no better value to
+    substitute, the eventual-domain placeholder is harmless there."""
+    client = _client_with(_repo_with())
+    html = client.get("/").text
+
+    assert 'href="https://recruit.aozora-cg.com/"' in html
+
+
 def test_render_top_page_logs_when_rewrite_target_not_found(caplog: Any) -> None:
     """2026-08-08 second-opinion review finding: `_TOP_PAGE_LINK_REWRITES` is
     exact-substring matching with no static guarantee against
