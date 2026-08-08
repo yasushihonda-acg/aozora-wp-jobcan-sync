@@ -197,6 +197,12 @@ class JobCacheRepository:
         document must not take down the sidebar on every other posting in
         its category, and the caller (`app.py`) already treats a fully
         empty/failed lookup as "hide the sidebar", not a rendering error.
+        Catches `KeyError` alongside `ValidationError` — a legacy-shaped
+        `extra_lines` entry missing its `header`/`value` key fails inside
+        `_decode_extra_lines` itself, before `model_validate` ever runs
+        (second-opinion review finding), so `ValidationError` alone would
+        let one such document take down every other candidate in the
+        category instead of just being skipped.
         """
         results: list[JobSnapshot] = []
         category_filter = FieldFilter("category_ids", "array_contains", category_id)
@@ -205,8 +211,11 @@ class JobCacheRepository:
             data = doc.to_dict() or {}
             try:
                 snapshot = JobSnapshot.model_validate(_decode_extra_lines(data))
-            except ValidationError:
-                _logger.error("skipping malformed job_cache doc", extra={"job_id": doc.id})
+            except (ValidationError, KeyError):
+                _logger.error(
+                    "skipping malformed job_cache doc",
+                    extra={"job_id": doc.id, "category_id": category_id},
+                )
                 continue
             if snapshot.sync_status == "active":
                 results.append(snapshot)

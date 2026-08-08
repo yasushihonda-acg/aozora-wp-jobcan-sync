@@ -145,7 +145,6 @@ class DetailView(BaseModel):
     hashtags: list[str]
     lead: str
 
-    work_items: list[WorkItem]
     work_blocks: list[WorkBlock]
     qualifications: list[QualificationRow]
     benefit_chips: list[str]
@@ -581,7 +580,6 @@ def build_detail_view(offer: JobOffer) -> DetailView:
         capacity=capacity,
         hashtags=extract_hashtags(offer.body_html),
         lead=extract_lead_paragraph(offer.body_html),
-        work_items=work_items,
         work_blocks=group_work_items(work_items),
         qualifications=extract_qualifications(offer.extra_lines),
         benefit_chips=benefit_chips,

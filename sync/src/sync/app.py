@@ -339,19 +339,31 @@ def create_app(
         category_id = _primary_category_id(snapshot)
         related: list[RelatedJob] = []
         if category_id is not None:
+            # A failed "related jobs" lookup costs only the sidebar, not the
+            # whole detail page — unlike the snapshot fetch above, this must
+            # not turn into a 503 (Stage 2, job-detail design parity,
+            # 2026-08-08). The Firestore read and the pure in-process
+            # candidate filtering are caught separately (second-opinion
+            # review finding) so a bug in `_build_related_jobs` itself
+            # (e.g. a malformed `job_id` breaking its numeric sort) isn't
+            # mislogged as "firestore read error" — that label must mean
+            # Firestore was actually the problem.
             try:
                 candidates = await run_in_threadpool(
                     lambda: _resolve_repo().get_by_category(category_id)
                 )
-                related = _build_related_jobs(candidates, exclude_job_id=job_id)
             except Exception:
-                # A failed "related jobs" lookup costs only the sidebar, not
-                # the whole detail page — unlike the snapshot fetch above,
-                # this must not turn into a 503 (Stage 2, job-detail design
-                # parity, 2026-08-08).
+                candidates = []
                 _logger.exception(
                     "firestore read error", extra={"kind": "related", "job_id": job_id}
                 )
+            if candidates:
+                try:
+                    related = _build_related_jobs(candidates, exclude_job_id=job_id)
+                except Exception:
+                    _logger.exception(
+                        "related jobs build error", extra={"kind": "related", "job_id": job_id}
+                    )
 
         rendered = _render_detail(snapshot, job_id=job_id, category_id=category_id, related=related)
         if rendered is None:

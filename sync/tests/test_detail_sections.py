@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from sync.detail_sections import (
     BenefitParagraph,
     QualificationRow,
+    WorkBlock,
     WorkItem,
     build_detail_view,
     extract_benefits,
@@ -373,9 +374,9 @@ class TestBuildDetailView:
         assert view.capacity == "2 名"
         assert view.hashtags == ["#ケア重視"]
         assert view.lead == "施設紹介文です。"
-        assert view.work_items == [
-            WorkItem(kind="p", text="介護業務全般"),
-            WorkItem(kind="li", text="食事介助"),
+        assert view.work_blocks == [
+            WorkBlock(kind="p", text="介護業務全般"),
+            WorkBlock(kind="ul", items=["食事介助"]),
         ]
         assert view.qualifications == [
             QualificationRow(kind="必須", text="介護福祉士"),
@@ -412,7 +413,7 @@ class TestBuildDetailView:
         view = build_detail_view(offer)
         assert view.qualifications == []
         assert view.benefit_paragraphs == []
-        assert view.work_items == []
+        assert view.work_blocks == []
         assert view.lead == ""
 
 

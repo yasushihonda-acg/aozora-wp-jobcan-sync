@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from sync.parser import parse_job_detail
 from sync.renderer import _site_relative, render_job_detail
 
@@ -150,6 +153,44 @@ class TestRenderRealJob:
         # have data for still render.
         assert "job-detail-summary__cta" in html
         assert "仕事内容" in html
+
+    def test_logs_warning_when_work_description_section_is_empty(
+        self, caplog: Any
+    ) -> None:
+        """Unlike 応募資格/待遇/選考フロー, every real Jobcan posting has a
+        「【仕事内容】」 heading — an empty result is the strongest available
+        signal of `body_html` format drift, and that degrade must be
+        observable in production, not silent (second-opinion review
+        finding)."""
+        from sync.models import JobOffer
+
+        offer = JobOffer(
+            job_id="999",
+            title="テスト求人",
+            body_html="<p>仕事内容の見出しがない本文</p>",
+            address="テスト支店",
+            label="介護職正社員",
+            location="テスト駅から徒歩5分",
+            salary="応相談",
+            apply_url="https://recruit.jobcan.jp/aozora/entry/new/999",
+            source_url="https://recruit.jobcan.jp/aozora/job_offers/999",
+            page_title=None,
+            extra_lines=[],
+        )
+        with caplog.at_level(logging.WARNING, logger="sync.renderer"):
+            render_job_detail(offer)
+
+        assert any("仕事内容" in record.message for record in caplog.records)
+        assert any(record.job_id == "999" for record in caplog.records)  # type: ignore[attr-defined]
+
+    def test_no_warning_when_work_description_section_is_present(
+        self, sample_html: str, caplog: Any
+    ) -> None:
+        offer = parse_job_detail(sample_html, SAMPLE_SOURCE_URL, SAMPLE_JOB_ID)
+        with caplog.at_level(logging.WARNING, logger="sync.renderer"):
+            render_job_detail(offer)
+
+        assert caplog.records == []
 
 
 class TestRenderJobList:

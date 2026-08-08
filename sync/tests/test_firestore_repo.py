@@ -360,3 +360,24 @@ def test_get_by_category_skips_a_malformed_doc_and_keeps_the_rest() -> None:
     result = repo.get_by_category("18773")
 
     assert {s.job_id for s in result} == {"1"}
+
+
+def test_get_by_category_skips_a_doc_with_legacy_shaped_extra_lines() -> None:
+    """A `extra_lines` entry missing its `header`/`value` key fails inside
+    `_decode_extra_lines` itself (`KeyError`), before `model_validate` ever
+    runs — `ValidationError` alone would miss this and let it propagate,
+    taking down every other candidate in the category (second-opinion
+    review finding)."""
+    client = _FakeFirestoreClient()
+    repo = JobCacheRepository(client)
+    repo.set(_snapshot("1").model_copy(update={"category_ids": ["18773"]}))
+    good = client.store["1"]
+    client.store["legacy"] = {
+        **good,
+        "job_id": "legacy",
+        "offer": {**good["offer"], "extra_lines": [{"not_header": "x", "not_value": "y"}]},
+    }
+
+    result = repo.get_by_category("18773")
+
+    assert {s.job_id for s in result} == {"1"}

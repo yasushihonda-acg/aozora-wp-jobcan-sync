@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -11,6 +12,7 @@ from .detail_sections import RelatedJob, build_detail_view, build_job_posting_js
 from .models import JobListPage, JobOffer
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+_logger = logging.getLogger(__name__)
 
 
 def _site_relative(url: str | None) -> str:
@@ -89,6 +91,20 @@ def render_job_detail(
     env = env or make_environment()
     template = env.get_template("job_detail.html")
     view = build_detail_view(job)
+    if not view.work_blocks:
+        # Unlike 応募資格/待遇/選考フロー (genuinely absent on some real
+        # postings — confirmed against all 37 Phase A sample jobs), every
+        # real Jobcan posting's body_html contains "【仕事内容】"
+        # (`detail_sections.extract_work_description`'s anchor). An empty
+        # result here is the strongest available signal that Jobcan's body
+        # format drifted in a way the extractor doesn't recognise — the
+        # section still degrades to "hidden" rather than failing the page
+        # (`detail_sections.py`'s documented contract), but that degrade
+        # must not be silent in production (second-opinion review finding).
+        _logger.warning(
+            "job detail missing 仕事内容 section — possible body_html format drift",
+            extra={"job_id": job.job_id},
+        )
     json_ld = json.dumps(
         build_job_posting_json_ld(job, view), ensure_ascii=False, indent=2
     ).replace("</", "<\\/")
