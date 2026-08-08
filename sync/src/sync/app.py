@@ -11,8 +11,11 @@ longer happens here. A short positive-only HTML cache remains, because a
 
 # Routing surface
 
+    GET /                             → top page (`mockup/index.html`, link-rewritten)
+    GET /assets/*                     → static CSS/JS/images (`mockup/assets`)
     GET /healthz                      → 200 OK, no Firestore touch
     GET /jobs/{job_id}                → in-house HTML from `job_cache/{job_id}`
+    GET /jobs/{job_id}.html           → 308 redirect to /jobs/{job_id}
     GET /jobs/?category_id=...        → in-house listing, filtered from `job_cache`
 
 # Status → response mapping
@@ -29,11 +32,15 @@ longer happens here. A short positive-only HTML cache remains, because a
 | Firestore read failure      | 503, HTML page with a Jobcan fallback link   |
 | render failure (Jinja2 etc.)| 500, HTML page with a Jobcan fallback link   |
 
-All responses add `Cache-Control: no-store` and `X-Robots-Tag: noindex,
-nofollow` via middleware. Every Firestore read happens inside
-`run_in_threadpool` — the SDK is synchronous, and running it directly on the
-event loop would serialize every concurrent request behind it (2026-08-07
-codex second-opinion review finding).
+All responses add `X-Robots-Tag: noindex, nofollow` via middleware, plus
+`Cache-Control: no-store` — except successful `/assets/*` responses, which
+get `public, max-age=3600` instead (2026-08-08, so the top page's CSS/JS/
+images don't re-download on every navigation like the rest of this
+service's genuinely-dynamic pages must). Every synchronous I/O call
+(Firestore reads, and — 2026-08-08 — the top page's local file read) happens
+inside `run_in_threadpool`; running either directly on the event loop would
+serialize every concurrent request behind it (2026-08-07 codex second-
+opinion review finding, reconfirmed for the top page 2026-08-08).
 """
 
 from __future__ import annotations
@@ -146,6 +153,21 @@ def _render_top_page(raw_html: str, *, base_url: str = "") -> str:
     return raw_html
 
 
+def _load_top_page() -> str | None:
+    """Synchronous file read + string rewriting for `GET /` — kept as a
+    plain function (not inlined in the route) so it can run inside
+    `run_in_threadpool` (see module docstring) rather than blocking the
+    event loop directly. Returns `None` on a missing file so the route can
+    map that to its own typed 404, matching every other route's style of
+    resolving I/O outside the handler and mapping the result afterward.
+    """
+    if not os.path.isfile(INDEX_HTML_PATH):
+        _logger.error("top page file missing", extra={"path": INDEX_HTML_PATH})
+        return None
+    raw_html = Path(INDEX_HTML_PATH).read_text(encoding="utf-8")
+    return _render_top_page(raw_html, base_url=PUBLIC_BASE_URL)
+
+
 JOBCAN_DETAIL_FALLBACK = (
     "https://recruit.jobcan.jp/aozora/job_offers/{job_id}"
     "?hide_breadcrumb=true&hide_search=true"
@@ -173,9 +195,15 @@ def _apply_security_headers(response: Response, *, is_static_asset: bool = False
     the Phase A GitHub Pages mockup this replaces (which caches normally).
     Filenames aren't content-hashed, so this stays short rather than
     `immutable`: a stale asset would resolve itself within an hour instead
-    of needing a hard refresh.
+    of needing a hard refresh. Only applied when the response actually
+    succeeded (`< 400`) — a 404 (e.g. a genuinely missing file, or a
+    transient revision-rollout mismatch) must not itself get cached for an
+    hour, and 304 Not Modified is fine to leave cacheable (2026-08-08
+    second-opinion review finding: the first version of this cached 404s
+    too).
     """
-    response.headers["Cache-Control"] = "public, max-age=3600" if is_static_asset else "no-store"
+    is_cacheable_asset = is_static_asset and response.status_code < 400
+    response.headers["Cache-Control"] = "public, max-age=3600" if is_cacheable_asset else "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
@@ -250,20 +278,24 @@ def create_app(
     # (`mockup/assets`) are served in-house so `/jobs/{id}` (a different path
     # depth) can reference them by a site-root-absolute `/assets/...` URL
     # instead of the page-relative one that used to 404 off the job routes.
-    # `check_dir=False` — a missing directory is a deploy-config bug we want
-    # a 404 on every asset request for (visible immediately), not an app
-    # startup crash that takes the whole service down.
-    app.mount(
-        "/assets", StaticFiles(directory=STATIC_ASSETS_DIR, check_dir=False), name="assets"
-    )
+    # `check_dir` left at its Starlette default (True): a missing directory
+    # is a deploy-config bug, and failing loudly at construction time here
+    # means the bad revision never starts serving traffic at all (Cloud Run
+    # keeps routing to the last good revision) instead of *every* asset
+    # request 500ing forever once traffic does reach it — `check_dir=False`
+    # doesn't skip that check the way its name suggests, it only moves it to
+    # per-request (Starlette re-raises the same `RuntimeError` from inside
+    # `StaticFiles.__call__` on the first hit and again on every hit after,
+    # since `config_checked` only latches `True` on success — 2026-08-08
+    # second-opinion review finding, confirmed against Starlette's source).
+    app.mount("/assets", StaticFiles(directory=STATIC_ASSETS_DIR), name="assets")
 
     @app.get("/", response_class=HTMLResponse)
     async def get_top_page() -> Response:
-        if not os.path.isfile(INDEX_HTML_PATH):
-            _logger.error("top page file missing", extra={"path": INDEX_HTML_PATH})
+        rendered = await run_in_threadpool(_load_top_page)
+        if rendered is None:
             raise HTTPException(status_code=404, detail="not found")
-        raw_html = Path(INDEX_HTML_PATH).read_text(encoding="utf-8")
-        return HTMLResponse(content=_render_top_page(raw_html, base_url=PUBLIC_BASE_URL))
+        return HTMLResponse(content=rendered)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:

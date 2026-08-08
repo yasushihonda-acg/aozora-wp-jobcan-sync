@@ -235,6 +235,18 @@ def test_static_asset_unknown_path_returns_404() -> None:
     assert response.status_code == 404
 
 
+def test_static_asset_404_is_not_cached() -> None:
+    """2026-08-08 second-opinion review finding: the first version of the
+    static-asset cache-control fix applied `public, max-age=3600` to 404s
+    too — a genuinely missing file (or a transient revision-rollout
+    mismatch) would then stay "not found" in browser/CDN caches for an
+    hour after the real file became available."""
+    client = _client_with(_repo_with())
+    response = client.get("/assets/does-not-exist.css")
+
+    assert response.headers.get("Cache-Control") == "no-store"
+
+
 # ───────────────────────────── /jobs/{job_id} ────────────────────────────
 
 

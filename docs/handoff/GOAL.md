@@ -15,7 +15,7 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 - [x] `mockup/index.html` は GitHub Pages(Phase A、現在も本番公開中)と共有のため直接編集はせず、Cloud Run配信時にサーバ側でリンクを書き換える方式(`_render_top_page`)を採用。カテゴリ別12箇所の遷移先を `crawler.KNOWN_CATEGORY_IDS` の category_id へ対応、全件横断リンク7箇所は暫定的に最大カテゴリ(介護職 `18773`)へ
 - [x] `sync/Dockerfile` のビルドコンテキストをリポジトリルートに変更し `mockup/assets`/`mockup/index.html` を同梱、`infra/README.md` のデプロイ手順を更新
 - [x] ローカル`docker build`実機確認(トップページ・静的アセット200)、`uvicorn`+実Firestore+Playwrightでトップページ→カテゴリ一覧→求人詳細の遷移をクリックで確認、console error 0件・404 0件(証明: network requests全件200)
-- [x] `sync`のpytest 257件全PASS(新規テスト13件追加: トップページ・静的アセット配信・リンク書き換え・canonical・thumbnail site_relative化)
+- [x] `sync`のpytest 265件全PASS(新規テスト21件追加: トップページ・静的アセット配信・リンク書き換え・canonical・thumbnail site_relative化・chatbot .htmlリダイレクト・キャッシュヘッダー・PUBLIC_BASE_URL警告。3ラウンドのcodex review + セカンドオピニオンで発見された指摘への対応分を含む)
 - [ ] 本番デプロイ・decision-maker確認(次アクション、Stage 2着手前に必要)
 
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
