@@ -96,7 +96,7 @@ def test_jobs_detail_service_types_title_override_for_specialist_role() -> None:
 def test_jobs_detail_has_37_entries_matching_jobs_json() -> None:
     """Regression test: `jobs_detail.json` must stay in sync with
     `mockup/assets/data/jobs.json` (same ids) — see
-    `scripts/build_jobs_detail.py` for how it's regenerated."""
+    `chatbot/scripts/build_jobs_detail.py` for how it's regenerated."""
     detail = json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
     repo_root = Path(__file__).resolve().parents[2]
     jobs_json = json.loads(

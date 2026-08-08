@@ -39,7 +39,7 @@ DATA = HERE / "jobs_data.json"
 DETAIL_TEMPLATE = REPO / "mockup" / "jobs" / "1777023.html"
 
 sys.path.insert(0, str(HERE))
-from rewrite_jobs_html import CATEGORY_VARIANTS, LABEL_TO_CATEGORY  # noqa: E402
+from rewrite_jobs_html import CATEGORY_VARIANTS, CSS_CLASS_OVERRIDE, LABEL_TO_CATEGORY  # noqa: E402
 
 # チップUIの表示ラベル (ジョブカン正本の職種名を短縮した表示コピー、既存の
 # 「介護・相談」「事務」「IT」と同じ短縮方針)。category は実データ由来だが、
@@ -107,8 +107,9 @@ def clean_meta_description(body_html: str, max_len: int = 120) -> str:
 def build_skeleton_card(job: dict, category: str) -> str:
     labels = split_label(job["label"])
     thumb = CATEGORY_VARIANTS.get(category, ["illust-job-care.png"])[0]
+    css_class = CSS_CLASS_OVERRIDE.get(category, category)
     li = (
-        f'<li class="job-list-card job-list-card--{category}">\n'
+        f'<li class="job-list-card job-list-card--{css_class}">\n'
         f'<a class="job-list-card__link" href="jobs/{job["job_id"]}.html" rel="noopener">\n'
         f'<div class="job-list-card__thumb">\n'
         f'<img alt="" class="job-list-card__thumb-img" loading="lazy" src="assets/img/{thumb}"/>\n'

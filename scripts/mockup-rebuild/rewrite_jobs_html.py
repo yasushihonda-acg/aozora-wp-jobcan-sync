@@ -47,6 +47,13 @@ CATEGORY_VARIANTS: dict[str, list[str]] = {
     "nurse": ["illust-job-nurse.png"],
 }
 
+# job-list-card--<class> の CSS クラス名は consultant を独立させず care に統合する
+# (jobs.json の category も相談員求人を "care" として扱っており、
+# .job-list-card--consultant というCSSクラスは components.css 側に定義が存在しない
+# ため、そのまま使うと無色のカードになる)。サムネイル cycling だけは
+# CATEGORY_VARIANTS["consultant"] の専用バリエーションを維持する。
+CSS_CLASS_OVERRIDE: dict[str, str] = {"consultant": "care"}
+
 
 def detect_category(card) -> str | None:
     """カードの 1 件目 label からカテゴリ key を判定."""

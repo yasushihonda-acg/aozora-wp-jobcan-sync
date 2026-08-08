@@ -58,9 +58,9 @@ DEFAULT_JOBS_DETAIL_URL = (
 # formats each job as a `|`-delimited row and each FAQ/job field is embedded
 # directly into the system prompt (the model's highest-trust input) — a
 # fetched title containing e.g. a newline could forge a new prompt line, and
-# a literal `|` could forge an extra column. Verified against all 34 current
-# titles/facilities: none contain these characters, so this rejects nothing
-# in practice today.
+# a literal `|` could forge an extra column. Verified against all current
+# titles/facilities (see test_jobs_detail_has_37_entries_matching_jobs_json):
+# none contain these characters, so this rejects nothing in practice today.
 _FORBIDDEN_CHARS_RE = re.compile(
     r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069|\uff5c]"
 )
@@ -85,7 +85,7 @@ class _StrictJobDetail(JobDetail):
     # (`jobs/{id}.html`) — the whole reason `url` itself is discarded and
     # recomputed. A forbidden character in `id` would forge a fake context
     # row exactly like an unvalidated `title` would, and would also corrupt
-    # the very `url` recomputation meant to be the safe alternative. All 34
+    # the very `url` recomputation meant to be the safe alternative. All
     # current ids are purely numeric, so pinning the shape is free today.
     id: str = Field(pattern=r"^[0-9]+$")
 
