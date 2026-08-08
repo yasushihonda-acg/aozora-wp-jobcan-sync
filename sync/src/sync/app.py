@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -94,6 +94,10 @@ INDEX_HTML_PATH = os.environ.get(
 # all-category listing (decision-maker call, 2026-08-08 — a full
 # search/map/GPS experience is Stage 3+ scope, not Stage 1).
 _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
+    # Logo / "採用トップ" nav / footer (3 occurrences) — self-links back to
+    # the top page, which this service serves at site root, not
+    # `index.html` (2026-08-08 codex review finding).
+    ('href="index.html"', 'href="/"'),
     ('href="jobs.html"', 'href="/jobs/?category_id=18773"'),
     ('href="jobs-care.html"', 'href="/jobs/?category_id=18773"'),
     ('href="jobs-nurse.html"', 'href="/jobs/?category_id=18983"'),
@@ -105,7 +109,26 @@ _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
 
 
 def _render_top_page(raw_html: str) -> str:
+    """Apply `_TOP_PAGE_LINK_REWRITES`, logging (not raising — a missing
+    target degrades to a dead link, not a broken page) any target that
+    matched nothing.
+
+    Exact-substring matching has no static guarantee the shared
+    `mockup/index.html` source still contains what this table expects
+    (2026-08-08 second-opinion review finding) — a future markup change
+    (attribute order, quoting) could make a target silently stop matching,
+    which is exactly the kind of dead-link regression this rewriting exists
+    to prevent in the first place. This turns that into a loud log line
+    instead of a link that quietly 404s in production with no signal.
+    """
     for old, new in _TOP_PAGE_LINK_REWRITES:
+        if old not in raw_html:
+            _logger.error(
+                "top page link rewrite target not found in mockup/index.html "
+                "— markup may have changed, this href is now a dead link",
+                extra={"expected": old},
+            )
+            continue
         raw_html = raw_html.replace(old, new)
     return raw_html
 
@@ -124,14 +147,22 @@ def _error_html(title: str, message: str, fallback_url: str) -> str:
     return render_error(title=title, message=message, fallback_url=fallback_url)
 
 
-def _apply_security_headers(response: Response) -> Response:
+def _apply_security_headers(response: Response, *, is_static_asset: bool = False) -> Response:
     """Stamp the response with the headers every proxy reply must carry.
 
-    Cache-Control prevents intermediaries from holding pages past this
-    service's own short cache TTL; X-Robots-Tag keeps non-canonical/preview
-    URLs out of search indexes.
+    Cache-Control prevents intermediaries from holding *dynamic* (Firestore-
+    backed) pages past this service's own short cache TTL; X-Robots-Tag
+    keeps non-canonical/preview URLs out of search indexes.
+
+    `is_static_asset=True` (the `/assets/*` mount, 2026-08-08 second-opinion
+    review finding) gets a real `max-age` instead — `no-store` on every CSS/
+    JS/image request forced a re-download on every single navigation, unlike
+    the Phase A GitHub Pages mockup this replaces (which caches normally).
+    Filenames aren't content-hashed, so this stays short rather than
+    `immutable`: a stale asset would resolve itself within an hour instead
+    of needing a hard refresh.
     """
-    response.headers["Cache-Control"] = "no-store"
+    response.headers["Cache-Control"] = "public, max-age=3600" if is_static_asset else "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
@@ -165,6 +196,19 @@ def create_app(
     `import sync.app` itself require GCP credentials — breaking test
     collection and any tooling that imports this module without ADC set up.
     """
+    # `K_SERVICE` is set by Cloud Run on every revision (not by local dev /
+    # tests) — if it's present without `PUBLIC_BASE_URL` also being set, the
+    # deploy command's `--set-env-vars` was forgotten, and canonical URLs
+    # silently degrade to site-root-relative (2026-08-08 second-opinion
+    # review finding: same failure *shape* as the bug Stage 1 fixed —
+    # canonical pointing somewhere wrong — via a different, easy-to-forget
+    # path this time).
+    if os.environ.get("K_SERVICE") and not PUBLIC_BASE_URL:
+        _logger.warning(
+            "PUBLIC_BASE_URL is unset on a Cloud Run revision — canonical URLs "
+            "will render site-root-relative instead of fully-qualified"
+        )
+
     proxy_cache: Cache = cache or InMemoryCache(CacheConfig())
     _injected_repo = repo
     _lazy_repo: JobCacheRepository | None = None
@@ -186,7 +230,8 @@ def create_app(
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        return _apply_security_headers(response)
+        is_static_asset = request.url.path.startswith("/assets/")
+        return _apply_security_headers(response, is_static_asset=is_static_asset)
 
     # Stage 1 of the Cloud Run consolidation: the top page's own CSS/JS/images
     # (`mockup/assets`) are served in-house so `/jobs/{id}` (a different path
@@ -210,6 +255,17 @@ def create_app(
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "healthy"}
+
+    # The chatbot widget (embedded in the top page — `mockup/index.html`
+    # already carries its `<script>` tag, PR #97) resolves related-job card
+    # links from `job.url` ("jobs/{id}.html", the Phase A static filename
+    # shape) as a *page-relative* href. From `/` that resolves to
+    # `/jobs/{id}.html`, which the numeric-only route below 404s on
+    # (2026-08-08 codex review finding). Registered before `/jobs/{job_id}`
+    # so the more specific `.html`-suffixed pattern wins the match.
+    @app.get("/jobs/{job_id}.html")
+    async def redirect_legacy_html_detail_url(job_id: str) -> Response:
+        return RedirectResponse(url=f"/jobs/{job_id}", status_code=308)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def get_job_detail(job_id: str) -> Response:

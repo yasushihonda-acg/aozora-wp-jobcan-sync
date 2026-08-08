@@ -175,15 +175,25 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run deploy aozora-sync 
   --cpu=1 \
   --concurrency=10 \
   --timeout=30s \
-  --set-env-vars=GCP_PROJECT_ID=aozora-wp-jobcan-sync,FIRESTORE_DATABASE="(default)",PUBLIC_BASE_URL="https://aozora-sync-1084369586348.asia-northeast1.run.app"
+  --set-env-vars=GCP_PROJECT_ID=aozora-wp-jobcan-sync,FIRESTORE_DATABASE="(default)",PUBLIC_BASE_URL="https://aozora-sync-flry56mxwa-an.a.run.app"
 ```
 
 `PUBLIC_BASE_URL` (2026-08-08 Stage 1 追加): canonical URL をこのサービス自身
-のURLで組み立てるための値(末尾スラッシュなし)。**Stage 5 でドメインを
+のURLで組み立てるための値(末尾スラッシュなし)。`gcloud run services describe
+aozora-sync --format='value(status.url)'` が返す値(ハッシュ形式)を使う —
+project number 形式(`https://aozora-sync-1084369586348.asia-northeast1.run.app`)
+も疎通するが(§5 動作確認と同じ「両方とも有効」)、`gcloud describe` の報告値
+をそのまま使うのが取り違え防止として最も確実。**Stage 5 でドメインを
 `recruit.aozora-cg.com` に切り替えたら、この値も合わせて更新すること**
 (忘れると canonical が古い `*.run.app` URLを指したままになる)。
 `STATIC_ASSETS_DIR`/`INDEX_HTML_PATH` は `Dockerfile` の `ENV` で固定済みの
 ため `--set-env-vars` に含める必要はない。
+
+**忘れやすい関連手順 (2026-08-08 codex review で発覚)**: 埋め込み済みチャット
+ボットウィジェット(`mockup/index.html` に既に組み込み済み、PR #97)がこの
+サービスのオリジンから動くようにするため、`aozora-chatbot` サービスの
+`ALLOWED_ORIGINS` にもこのサービスのURLを追加すること(§4.5 参照)。忘れると
+チャット送信がCORSで全滅する。
 
 設定根拠:
 - `min-instances=0`: 検証用、cold start を受け入れる代わりにアイドル課金ゼロ
@@ -200,6 +210,24 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run deploy aozora-sync 
 deploy 完了後、コマンド出力末尾に Service URL が出る:
 `https://aozora-sync-XXXX-an.a.run.app` (新形式) または
 `https://aozora-sync-1084369586348.asia-northeast1.run.app` (project number 形式、両方とも有効)。
+
+## 4.5 チャットボット CORS の追従 (2026-08-08 Stage 1 で新規追加、codex review で発覚)
+
+`mockup/index.html`(このサービスの `/` が配信するトップページ)には既に
+チャットボットウィジェットが埋め込み済み(PR #97)。ウィジェットは別サービス
+`aozora-chatbot` へ `fetch` するため、`aozora-chatbot` 側の `ALLOWED_ORIGINS`
+にこのサービスの origin を追加しないと、ブラウザの CORS で全チャット送信が
+失敗する(サイレント失敗 — チャット欄自体は表示されるが送信すると無反応)。
+
+```bash
+CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run services update aozora-chatbot \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --update-env-vars=ALLOWED_ORIGINS="https://yasushihonda-acg.github.io,http://localhost:8989,http://localhost:8080,https://aozora-sync-flry56mxwa-an.a.run.app,https://aozora-sync-1084369586348.asia-northeast1.run.app"
+```
+
+**Stage 5 でドメインを `recruit.aozora-cg.com` に切り替えたら、この値にも
+最終ドメインを追加すること**(`PUBLIC_BASE_URL` の更新と同時に対応)。
 
 ## 5. 動作確認
 
