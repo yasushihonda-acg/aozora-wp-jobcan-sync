@@ -520,5 +520,53 @@
       "訪問介護"
     ],
     "url": "jobs/2215706.html"
+  },
+  {
+    "id": "137288",
+    "title": "【社】正看護師（博多／デイ・有料）",
+    "category": "nurse",
+    "employment": [
+      "正社員"
+    ],
+    "area": "fukuoka",
+    "facility": "あおぞらケアグループ博多（デイ・有料）",
+    "city": "福岡市博多区",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
+    "url": "jobs/137288.html"
+  },
+  {
+    "id": "1668692",
+    "title": "【社・週休３日制】正看護師（永吉／デイ・有料）",
+    "category": "nurse",
+    "employment": [
+      "短時間正社員"
+    ],
+    "area": "kagoshima",
+    "facility": "あおぞらケアグループ永吉（デイ・有料）",
+    "city": "鹿児島市",
+    "service_types": [
+      "デイサービス",
+      "有料老人ホーム"
+    ],
+    "url": "jobs/1668692.html"
+  },
+  {
+    "id": "1891511",
+    "title": "【パート】日勤・看護スタッフ（梅ヶ丘／特養）",
+    "category": "nurse",
+    "employment": [
+      "パート",
+      "アルバイト"
+    ],
+    "area": "fukuoka",
+    "facility": "あおぞらケアグループ梅ヶ丘（特養）",
+    "city": "太宰府市",
+    "service_types": [
+      "特別養護老人ホーム"
+    ],
+    "url": "jobs/1891511.html"
   }
 ]

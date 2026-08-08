@@ -188,7 +188,7 @@ def test_fetch_failure_keeps_bundled_data_and_app_stays_up(
         chat = client.post("/chat", json={"message": "こんにちは"})
 
     assert len(seen) == 1  # fetch was attempted, not skipped
-    assert health["knowledge"] == {"source": "bundled", "job_count": 34}
+    assert health["knowledge"] == {"source": "bundled", "job_count": 37}
     assert chat.status_code == 200
     assert any("knowledge refresh failed" in record.message for record in caplog.records)
 
@@ -205,7 +205,7 @@ def test_empty_jobs_detail_url_disables_fetch() -> None:
         health = client.get("/health").json()
 
     assert seen == []
-    assert health["knowledge"] == {"source": "bundled", "job_count": 34}
+    assert health["knowledge"] == {"source": "bundled", "job_count": 37}
 
 
 def test_no_fetch_without_lifespan_context_manager() -> None:
