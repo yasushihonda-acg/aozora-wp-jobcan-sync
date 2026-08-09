@@ -409,9 +409,30 @@ def create_app(
         itself asking for JSON/an asset (`_prefers_html_error`) — a 405 on
         `/healthz`, or a future non-404 HTTPException, falls through to
         FastAPI's own default handler unchanged.
+
+        `render_not_found()` itself is wrapped in try/except (silent-failure-
+        hunter finding, 2026-08-09) — every other render call in this module
+        (`_render_detail`/`_render_list`) keeps "fetch" and "render" in
+        separate try/excepts so a Jinja2 failure degrades to a *branded*
+        500 with a logged, structured event instead of an unbranded, silent
+        one; this handler had skipped that same pattern for its own render
+        call.
         """
         if exc.status_code == 404 and _prefers_html_error(request.url.path):
-            return HTMLResponse(content=render_not_found(), status_code=404)
+            try:
+                return HTMLResponse(content=render_not_found(), status_code=404)
+            except Exception:
+                _logger.exception(
+                    "render error", extra={"kind": "not_found", "path": request.url.path}
+                )
+                return HTMLResponse(
+                    content=_error_html(
+                        title="一時的に表示できません",
+                        message="一時的な問題が発生しました。",
+                        fallback_url="/",
+                    ),
+                    status_code=500,
+                )
         return await _default_http_exception_handler(request, exc)
 
     # Stage 1 of the Cloud Run consolidation: the top page's own CSS/JS/images
@@ -476,7 +497,15 @@ def create_app(
             )
 
         urls = _build_sitemap_urls(snapshots, base_url=PUBLIC_BASE_URL)
-        rendered = render_sitemap(urls)
+        try:
+            rendered = render_sitemap(urls)
+        except Exception:
+            # silent-failure-hunter finding (2026-08-09): fetch was already
+            # protected above, but this Jinja2 render call was not — the
+            # same "fetch/render split protection" every other route in this
+            # module applies (`_render_detail`/`_render_list`'s callers).
+            _logger.exception("render error", extra={"kind": "sitemap", "url_count": len(urls)})
+            return Response(content="temporarily unavailable", status_code=503)
         proxy_cache.set_list(_SITEMAP_CACHE_KEY, rendered)
         _logger.info("cache miss → rendered", extra={"kind": "sitemap", "url_count": len(urls)})
         return Response(content=rendered, media_type="application/xml")

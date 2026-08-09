@@ -381,6 +381,30 @@ def test_missing_top_page_returns_branded_html_404(monkeypatch: Any) -> None:
     assert "見つかりません" in response.text
 
 
+def test_404_render_failure_degrades_to_branded_500(monkeypatch: Any) -> None:
+    """silent-failure-hunter finding (2026-08-09): `render_not_found()` was
+    called directly inside the exception handler with no try/except —
+    unlike every other render call in this module, a Jinja2 failure there
+    fell all the way through to an unbranded, unlogged 500 with no
+    Cache-Control/X-Robots-Tag at all (the security-headers middleware never
+    got a chance to run on the raw ASGI error response)."""
+    from sync import app as app_module
+
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
+
+    monkeypatch.setattr(app_module, "render_not_found", _raise)
+    client = _client_with(_repo_with())
+
+    response = client.get("/jobs/9999999")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert "一時的な問題が発生しました" in response.text
+    assert response.headers.get("Cache-Control") == "no-store"
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
 # ───────────────────────────── /jobs/{job_id} ────────────────────────────
 
 
@@ -594,6 +618,7 @@ def test_get_job_detail_render_failure_returns_500(monkeypatch: Any) -> None:
     response = client.get("/jobs/1")
 
     assert response.status_code == 500
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
     assert "一時的な問題が発生しました" in response.text
 
 
@@ -613,6 +638,7 @@ def test_get_job_detail_firestore_read_failure_returns_503(monkeypatch: Any) -> 
     response = client.get("/jobs/1")
 
     assert response.status_code == 503
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
     assert "データの取得に問題が発生している可能性があります" in response.text
 
 
@@ -815,6 +841,7 @@ def test_get_job_list_firestore_read_failure_returns_503(monkeypatch: Any) -> No
     response = client.get("/jobs/?category_id=18773")
 
     assert response.status_code == 503
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
     assert "データの取得に問題が発生している可能性があります" in response.text
 
 
@@ -1104,6 +1131,45 @@ def test_job_list_route_serves_ogp_tags() -> None:
     assert html.count('property="og:image"') == 1
 
 
+def test_job_detail_route_ogp_urls_are_absolute_when_public_base_url_set(
+    monkeypatch: Any,
+) -> None:
+    """pr-test-analyzer finding (2026-08-09): `render_job_detail(base_url=...)`
+    is unit-tested for absolute og:url/og:image in `test_renderer.py`, but
+    nothing previously confirmed `app.py` actually threads `PUBLIC_BASE_URL`
+    through to that call on the real route — a wiring regression there
+    (e.g. a future refactor dropping the `base_url=` kwarg at the call site)
+    would go undetected by route-level tests that never set the env var."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with(_snapshot("1")))
+
+    html = client.get("/jobs/1").text
+
+    assert 'property="og:url" content="https://recruit.aozora-cg.com/jobs/1"' in html
+    assert (
+        'property="og:image" content="https://recruit.aozora-cg.com/assets/img/sky-hero.jpg"'
+        in html
+    )
+
+
+def test_job_list_route_ogp_urls_are_absolute_when_public_base_url_set(
+    monkeypatch: Any,
+) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with(_snapshot("1")))
+
+    html = client.get("/jobs/?category_id=18773").text
+
+    assert (
+        'property="og:image" content="https://recruit.aozora-cg.com/assets/img/sky-hero.jpg"'
+        in html
+    )
+
+
 # ─────────────── sitemap.xml / robots.txt (Stage 4 P1-1/P1-2) ────────────
 
 import xml.etree.ElementTree as ET  # noqa: E402
@@ -1187,6 +1253,28 @@ def test_sitemap_returns_503_on_firestore_error(monkeypatch: Any) -> None:
     )
 
     response = client.get("/sitemap.xml")
+    assert response.status_code == 503
+    assert "<urlset" not in response.text
+    assert response.headers.get("Cache-Control") == "no-store"
+
+
+def test_sitemap_render_failure_returns_503(monkeypatch: Any) -> None:
+    """silent-failure-hunter finding (2026-08-09): the Firestore read was
+    already protected by try/except, but the subsequent `render_sitemap()`
+    Jinja2 call was not — same "fetch protected, render not" gap as the
+    404 handler's own finding."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
+
+    monkeypatch.setattr(app_module, "render_sitemap", _raise)
+    client = _client_with(_repo_with(_snapshot("1")))
+
+    response = client.get("/sitemap.xml")
+
     assert response.status_code == 503
     assert "<urlset" not in response.text
 
@@ -1279,3 +1367,14 @@ def test_robots_txt_has_no_robots_tag() -> None:
     response = client.get("/robots.txt")
 
     assert "X-Robots-Tag" not in response.headers
+
+
+def test_robots_txt_is_cacheable() -> None:
+    """pr-test-analyzer finding (2026-08-09): `_apply_security_headers`'s
+    docstring says `/robots.txt` rides the same real-max-age branch as
+    `/sitemap.xml` and the static assets, but no test previously asserted
+    that for robots.txt specifically."""
+    client = _client_with(_repo_with())
+    response = client.get("/robots.txt")
+
+    assert response.headers.get("Cache-Control") == "public, max-age=3600"
