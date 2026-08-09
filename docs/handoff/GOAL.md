@@ -83,6 +83,19 @@ decision-maker指示「Stage 3を進めて」を受け、スコープを「検�
 
 🎯 **完了**。GitHub Pagesは以後Cloud Runへの導線としてのみ機能し、37件版が決裁者の目に触れることは無くなった。
 
+## 完了の定義 (AIチャット知識ベースをPhase B連携へ移行) — 2026-08-09 実装完了・本番デプロイ完了・実機検証完了・PR #154
+
+decision-maker指摘「AIチャットのほうの機能も今回のアップデートに追随できてる？定期スクレイピングのときの情報が常にAIチャットの対象ソース(RAG)になるのが本来必要な要件ですよね？」を起点に調査した結果、AIチャットボット(`chatbot/`)の求人知識ベースがPhase Aの静的37件データのまま2026-08-08(PR #141)を最後に更新停止しており、サイト本体(Firestore、6時間ごと自動同期・実求人390件)と情報不整合を起こしていた本番不具合を発見・修正。
+
+- [x] `sync`側に新規 `GET /jobs/chatbot-knowledge.json`(`chatbot_knowledge.build_chatbot_knowledge`)を追加。Firestoreスナップショットからchatbot向け9フィールド形状(id/title/category/employment/area/facility/city/service_types/url)を都度生成。`service_types_from_address()`で施設名タグ(全角括弧内、11種の語彙)からサービス種別を導出
+- [x] `chatbot`側の`DEFAULT_JOBS_DETAIL_URL`を上記エンドポイントへ切替。同梱の古い`jobs_detail.json`(37件固定)+手動更新スクリプト(`build_jobs_detail.py`)を完全削除。`bundled_knowledge()`はFAQのみのフォールバックに変更(求人0件時はコンテキストで推薦を明示的に抑止、古いデータを実データとして答えてしまう経路を構造的に除去)
+- [x] 品質ゲート: codex review 3回(P1 1件・P2 2件を検出・修正、最終ラウンドはfindings 0件) + pr-review-toolkit 2エージェント(pr-test-analyzer/silent-failure-hunter、CRITICAL 1件・HIGH 1件・Important 3件を検出・修正)。修正過程で`_install()`の非原子性という新たな実バグを自己発見・修正
+- [x] 設計変更: 当初のasyncioバックグラウンドタイマー方式の定期リフレッシュは、Cloud Runの既定CPU割り当て(リクエスト処理中のみ、`aozora-chatbot`が`cpu-throttling`既定=有効であることを実測確認)の下では機能しないと判明し、`/chat`リクエスト駆動の遅延リフレッシュ方式へ全面再設計(`_maybe_refresh_knowledge`)。`/health`に`seconds_since_last_success`/`stale`フィールドを追加し可観測性を改善
+- [x] pytest: sync 463件・chatbot 86件全PASS、ruff/pyright とも0エラー
+- [x] 本番デプロイ(sync→chatbotの順)+ 実機検証完了: `chatbot-knowledge.json`が382件を正しい形状で返す、chatbot `/health`が`{"source":"fetched","job_count":382}`、Playwrightで実機チャットから「鹿児島で訪問看護」「博多で介護職」を質問し正しい求人(サービス種別・エリアとも一致)と正しい詳細URL(`/jobs/{id}`、`.html`なし)が返ることを確認。コンテキストサイズ実測: system_instruction 32,589文字(旧5,109文字の約6.4倍、圧縮は今回のスコープ外、必要になれば別対応)
+
+🎯 **完了**。AIチャットは以後、人手の作業なしに6時間ごとのスクレイピング結果を自動的に反映する。
+
 ## Stage 5 調査結果(2026-08-09、実行はしていない・decision-maker判断待ち)
 
 decision-makerから「今日Cloud Runページを決裁者に見せ、カスタムドメインを当てて移行を進める想定(システム部にDNS依頼)、GA4設定も検討」との方針共有を受け、実際に`gcloud`コマンドで検証した結果:
