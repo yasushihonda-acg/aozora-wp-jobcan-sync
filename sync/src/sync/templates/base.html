@@ -33,6 +33,27 @@
      just its own `sync-job-list.css`, matching Phase A's chromeless listing
      pages exactly. #}
   {% block extra_css %}{% endblock %}
+  {# Stage 4-E (launch readiness, 2026-08-09): OGP / Twitter Card. Phase A's
+     `mockup/index.html` already had og:title/description/type/url +
+     theme-color, so Phase B shipping without them was a regression (shared
+     links rendered as a bare URL, no card). `self.page_title()` /
+     `self.canonical_url()` re-render the blocks above, so a child template
+     that overrides either one gets a matching og:title/og:url for free —
+     no second, drift-prone copy of the same string. `site_name` /
+     `site_description` / `og_image_path` come from renderer.py's module
+     constants. #}
+  {% block social_meta %}
+  <meta name="description" content="{% block meta_description %}{{ site_description }}{% endblock %}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:title" content="{{ self.page_title() }}">
+  <meta property="og:description" content="{{ self.meta_description() }}">
+  <meta property="og:url" content="{{ self.canonical_url() }}">
+  <meta property="og:image" content="{{ base_url }}{{ og_image_path }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="{% block theme_color %}#0a52b8{% endblock %}">
+  {% endblock %}
   {% block structured_data %}{% endblock %}
 </head>
 <body>

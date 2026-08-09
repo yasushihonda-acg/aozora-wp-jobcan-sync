@@ -15,6 +15,20 @@ from .models import JobListPage, JobOffer
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 _logger = logging.getLogger(__name__)
 
+# Stage 4-E (launch readiness, 2026-08-09): OGP / Twitter Card defaults,
+# rendered by `base.html`'s `social_meta` block. Kept here rather than in the
+# template so every page shares one string and the tests can assert against
+# the same constant the templates use.
+SITE_NAME = "あおぞらケアグループ 採用情報"
+SITE_DESCRIPTION = (
+    "あおぞらケアグループ採用情報。介護職・看護職・IT エンジニア・事務職など、"
+    "福岡県・鹿児島県で地域に根ざす介護のしごとを募集しています。"
+)
+# Site-root-absolute: served by this app's own `/assets` StaticFiles mount
+# over `mockup/assets` (app.py), and prefixed with `base_url` in the template
+# so the og:image is the fully-qualified URL crawlers require.
+OG_IMAGE_PATH = "/assets/img/sky-hero.jpg"
+
 
 def _site_relative(url: str | None) -> str:
     """Prefix a page-relative stored asset URL with `/` so it resolves the
@@ -121,6 +135,9 @@ def render_job_detail(
         category_url=category_url,
         thumbnail_url=thumbnail_url,
         related=related or [],
+        site_name=SITE_NAME,
+        site_description=SITE_DESCRIPTION,
+        og_image_path=OG_IMAGE_PATH,
     )
 
 
@@ -161,6 +178,9 @@ def render_job_list(
         cards_by_job_id=cards_by_job_id,
         search_mode=search_mode,
         search_index_url=search_index_url,
+        site_name=SITE_NAME,
+        site_description=SITE_DESCRIPTION,
+        og_image_path=OG_IMAGE_PATH,
     )
 
 
@@ -182,3 +202,31 @@ def render_error(
     env = env or make_environment()
     template = env.get_template("error.html")
     return template.render(title=title, message=message, fallback_url=fallback_url)
+
+
+def render_not_found(*, env: Environment | None = None) -> str:
+    """Render the FastAPI proxy's public-facing 404 page using
+    `not_found.html` (Stage 4 P0-2, 2026-08-09).
+
+    Static content — no per-request data to interpolate, so this takes no
+    arguments beyond the environment override every other `render_*`
+    function accepts (matches `render_error`'s pattern for consistency).
+    """
+    env = env or make_environment()
+    template = env.get_template("not_found.html")
+    return template.render()
+
+
+def render_sitemap(urls: list[str], *, env: Environment | None = None) -> str:
+    """Render `sitemap.xml` from a pre-built list of absolute URLs (Stage 4
+    P1-1, 2026-08-09).
+
+    Deliberately takes the final URL list rather than `JobSnapshot`s — the
+    active/closed filtering and category-URL construction is `app.py`'s
+    concern (`_build_sitemap_urls`), kept separate so that function stays
+    unit-testable without a Jinja2 environment, matching `_render_list`'s
+    existing split between "decide what to show" and "render it."
+    """
+    env = env or make_environment()
+    template = env.get_template("sitemap.xml")
+    return template.render(urls=urls)

@@ -1,0 +1,28 @@
+{#
+  Stage 4 P0-2 (2026-08-09): dedicated 404 page. Does NOT extend base.html —
+  base.html requires every child to override `canonical_url` (see its own
+  top comment), and a 404 has no canonical URL of its own to declare. Kept
+  as a standalone template in the same "narrow blast radius" family as
+  error.html (no shared CSS dependency), but unlike error.html this page
+  targets a public visitor who followed a bad/stale link, not an operator
+  chasing a Firestore outage — so it gets real branding + internal links
+  instead of a Jobcan fallback link (there is no Jobcan URL that corresponds
+  to a 404 on this side).
+#}<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>ページが見つかりません | あおぞらケアグループ 採用情報</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+</head>
+<body>
+<main class="container" style="padding: 4rem 1rem; text-align: center;">
+  <h1>ページが見つかりません</h1>
+  <p>お探しのページは移動または削除された可能性があります。</p>
+  <p><a href="/">採用トップページへ戻る</a></p>
+  <p><a href="/jobs/">求人一覧を見る</a></p>
+</main>
+</body>
+</html>

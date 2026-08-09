@@ -9,6 +9,16 @@
 
 {% block canonical_url %}{{ base_url }}/jobs/{{ job.job_id }}{% endblock %}
 
+{# Stage 4-E (2026-08-09): a job posting is `article`, not `website`. The
+   lead paragraph is the natural share-card description, but it is genuinely
+   optional (`detail_sections.extract_lead_paragraph` returns "" for a
+   posting whose body starts straight at 「【仕事内容】」) — falling back to
+   `site_description` keeps the card from degrading to an empty snippet.
+   The `theme-color` / `description` metas this template used to carry
+   itself now live in `base.html`'s `social_meta` block (single source). #}
+{% block og_type %}article{% endblock %}
+{% block meta_description %}{{ view.lead or site_description }}{% endblock %}
+
 {% block preconnect %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,10 +32,6 @@
 {% endblock %}
 
 {% block structured_data %}
-<meta name="theme-color" content="#0a52b8">
-{% if view.lead %}
-<meta name="description" content="{{ view.lead }}">
-{% endif %}
 {# `json_ld` is pre-serialised in renderer.py (json.dumps + `</` escaping) —
    see `detail_sections.build_job_posting_json_ld`. Building it here with a
    plain Jinja `tojson` filter isn't an option: this project's `Environment`

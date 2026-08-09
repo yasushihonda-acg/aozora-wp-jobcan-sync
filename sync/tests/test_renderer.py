@@ -3,12 +3,40 @@
 from __future__ import annotations
 
 import logging
+import re
+from pathlib import Path
 from typing import Any
 
 from sync.parser import parse_job_detail
 from sync.renderer import _site_relative, render_job_detail
 
 from .conftest import SAMPLE_JOB_ID, SAMPLE_SOURCE_URL
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _meta_contents(html: str, attr: str, value: str) -> list[str]:
+    """Every `content="..."` of the `<meta {attr}="{value}">` tags in `html`.
+
+    Returns a list (not a single value) on purpose: the duplicate-tag
+    regressions this module guards against (`theme-color` living in BOTH
+    `base.html` and `job_detail.html`) are only visible as a count.
+    """
+    pattern = re.compile(
+        rf'<meta\s+[^>]*\b{re.escape(attr)}="{re.escape(value)}"[^>]*>'
+    )
+    contents: list[str] = []
+    for tag in pattern.findall(html):
+        match = re.search(r'content="([^"]*)"', tag)
+        if match:
+            contents.append(match.group(1))
+    return contents
+
+
+def _one_meta(html: str, attr: str, value: str) -> str:
+    found = _meta_contents(html, attr, value)
+    assert len(found) == 1, f"expected exactly one {attr}={value} meta, got {found}"
+    return found[0]
 
 
 class TestSiteRelative:
@@ -285,3 +313,121 @@ class TestRenderJobList:
         page = parse_job_list(self._list_html(), self._src())
         html = render_job_list(page)
         assert f'href="/jobs/?category_id={page.category_id}"' in html
+
+
+class TestSocialMeta:
+    """Stage 4-E (2026-08-09): `base.html` had no `og:*`/`twitter:*` tags at
+    all, so Phase B was a regression from Phase A's own
+    `mockup/index.html` (og:title/description/type/url + theme-color) —
+    shared links rendered as a bare URL with no card. The tags now live in
+    `base.html`'s `social_meta` block and reuse the existing
+    `page_title`/`canonical_url` blocks via Jinja2's `self.<block>()`, so
+    every child template gets a correct og:title/og:url for free."""
+
+    @staticmethod
+    def _detail_html(**kwargs: Any) -> str:
+        path = (
+            Path(__file__).parent
+            / "fixtures"
+            / "jobcan_responses"
+            / f"job_{SAMPLE_JOB_ID}.html"
+        )
+        offer = parse_job_detail(
+            path.read_text(encoding="utf-8"), SAMPLE_SOURCE_URL, SAMPLE_JOB_ID
+        )
+        return render_job_detail(offer, **kwargs)
+
+    @staticmethod
+    def _list_html(**kwargs: Any) -> str:
+        from sync.parser import parse_job_list
+        from sync.renderer import render_job_list
+
+        path = (
+            Path(__file__).parent / "fixtures" / "jobcan_responses" / "list_care.html"
+        )
+        page = parse_job_list(
+            path.read_text(encoding="utf-8"),
+            "https://recruit.jobcan.jp/aozora/list?category_id=18773",
+        )
+        return render_job_list(page, **kwargs)
+
+    def test_detail_has_every_core_og_tag_exactly_once(self) -> None:
+        html = self._detail_html(base_url="https://recruit.aozora-cg.com")
+        assert _one_meta(html, "property", "og:type") == "article"
+        assert _one_meta(html, "property", "og:site_name")
+        assert _one_meta(html, "property", "og:locale") == "ja_JP"
+        assert _one_meta(html, "property", "og:title")
+        assert _one_meta(html, "property", "og:description")
+        assert (
+            _one_meta(html, "property", "og:url")
+            == f"https://recruit.aozora-cg.com/jobs/{SAMPLE_JOB_ID}"
+        )
+        assert (
+            _one_meta(html, "property", "og:image")
+            == "https://recruit.aozora-cg.com/assets/img/sky-hero.jpg"
+        )
+        assert _one_meta(html, "name", "twitter:card") == "summary_large_image"
+
+    def test_list_has_website_og_type_and_meta_description(self) -> None:
+        """The direct regression check: Phase A's `mockup/index.html` has
+        both, Phase B's listing page had neither."""
+        html = self._list_html()
+        assert _one_meta(html, "property", "og:type") == "website"
+        description = _one_meta(html, "name", "description")
+        assert description  # not an empty attribute
+
+    def test_og_title_matches_title_tag(self) -> None:
+        """Wiring check for `{{ self.page_title() }}` — a stale hard-coded
+        og:title would silently drift from the real page title."""
+        for html in (self._detail_html(), self._list_html()):
+            title = re.search(r"<title>(.*?)</title>", html, re.S)
+            assert title is not None
+            assert _one_meta(html, "property", "og:title") == title.group(1).strip()
+
+    def test_og_url_matches_canonical_link(self) -> None:
+        """Wiring check for `{{ self.canonical_url() }}`."""
+        for html in (
+            self._detail_html(base_url="https://recruit.aozora-cg.com"),
+            self._list_html(base_url="https://recruit.aozora-cg.com"),
+        ):
+            canonical = re.search(r'<link rel="canonical" href="([^"]*)">', html)
+            assert canonical is not None
+            assert _one_meta(html, "property", "og:url") == canonical.group(1)
+
+    def test_og_description_falls_back_to_site_description_when_lead_empty(self) -> None:
+        """A posting whose `body_html` starts straight at 「【仕事内容】」 has
+        no lead paragraph (`detail_sections.extract_lead_paragraph`) — the
+        share card must not degrade to `content=""`."""
+        from sync.models import JobOffer
+        from sync.renderer import SITE_DESCRIPTION
+
+        offer = JobOffer(
+            job_id="999",
+            title="テスト求人",
+            body_html="<p>【仕事内容】介護業務全般</p>",
+            address="テスト支店",
+            label="介護職正社員",
+            location="テスト駅から徒歩5分",
+            salary="応相談",
+            apply_url="https://recruit.jobcan.jp/aozora/entry/new/999",
+            source_url="https://recruit.jobcan.jp/aozora/job_offers/999",
+            page_title=None,
+            extra_lines=[],
+        )
+        html = render_job_detail(offer)
+        assert _one_meta(html, "property", "og:description") == SITE_DESCRIPTION
+
+    def test_theme_color_is_not_duplicated_on_detail_page(self) -> None:
+        """`job_detail.html` used to carry its own `theme-color`/`description`
+        metas; both moved into `base.html` and the originals were removed."""
+        assert _meta_contents(self._detail_html(), "name", "theme-color") == ["#0a52b8"]
+        assert len(_meta_contents(self._detail_html(), "name", "description")) == 1
+
+    def test_og_image_file_exists_in_repo(self) -> None:
+        """`OG_IMAGE_PATH` is served from this app's own `/assets` mount
+        (`app.py` StaticFiles → `mockup/assets`), so a typo here is a broken
+        share card that no template test would catch."""
+        from sync.renderer import OG_IMAGE_PATH
+
+        assert OG_IMAGE_PATH.startswith("/assets/")
+        assert (REPO_ROOT / "mockup" / OG_IMAGE_PATH.lstrip("/")).is_file()

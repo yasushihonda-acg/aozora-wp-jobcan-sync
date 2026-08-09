@@ -150,7 +150,7 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-- Secret Manager (Slack webhook) は未設定 — `notify_slack()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
+- Secret Manager (`ops-webhook-url` = Google Chat webhook) は未設定 — `notify_ops()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。組織の運用チャンネルはSlackではなくGoogle Chatのため、2026-08-09に通知実装をGoogle Chat webhook前提へ移行済み(`notify_slack`→`notify_ops`、secret名`slack-webhook-url`→`ops-webhook-url`、Slack絵文字記法→Unicode絵文字)。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
 - `mockup/index.html`の「訪問介護員(ヘルパー)」「ケアマネジャー」カードの`job_type`クエリ導線切れは、**Phase B(Cloud Run)側では2026-08-08 Stage 1で解消済み**(サーバ側リンク書き換えで`category_id=18986`/`18985`へ正しく遷移)。ただしPhase A(GitHub Pages、Stage 5のドメイン切替までは並行して本番公開中)の`map-search.js`は引き続き`job_type`を読まないため、GitHub Pages側では未解消のまま(Stage 5完了でGitHub Pagesがリクルート用途から外れれば自然消滅する想定、それまでは記録のみ)
 
 ## セッション履歴: 2026-08-08 mockup反映漏れ修正 + Phase B Stage1本番デプロイ(PR #141→#142、社長指摘「実際のJobcanより少ない件数を見せているのはまずい」を起点)
@@ -262,7 +262,8 @@ decision-makerから「Phase B本番インフラのプロビジョニング、�
     ビルド・再デプロイで解消
 - **動作確認**: `/jobs/104625`(詳細)・`/jobs/?category_id=43764`(一覧)とも200、
   `sync-job-detail`/`sync-job-list`のBEMクラス確認済み。存在しないjob_idで404確認済み
-- **未実施**: Secret Manager(Slack webhook、URL未提供のため次回以降)。Cloud Billing budget alert
+- **未実施**: Secret Manager(運用通知webhook、URL未提供のため次回以降。2026-08-09にGoogle Chat
+  webhook前提へ移行、secret名は`ops-webhook-url`)。Cloud Billing budget alert
   (§6、Console UI経由が必要)
 - **[却下→2026-08-07同日中に撤回・実装済み] Phase A 看護職カテゴリ不整合の静的モック修正**: 本判断は誤り
   だった。Firestore(Phase B裏側)は看護職85件を正しく保持していたが、これは静的モック`jobs.html`の
