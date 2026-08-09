@@ -646,6 +646,32 @@ def test_legacy_category_ids_are_all_known_categories() -> None:
     assert set(app_module._LEGACY_CATEGORY_IDS.values()) <= set(KNOWN_CATEGORY_IDS)
 
 
+def test_legacy_category_ids_match_github_pages_redirect_script() -> None:
+    """pr-test-analyzer finding (2026-08-09): `scripts/mockup-rebuild/
+    add_pages_redirects.py` deliberately *duplicates* (doesn't import)
+    `_LEGACY_CATEGORY_IDS` — that script stays a plain-stdlib tool
+    independent of `sync`'s FastAPI dependency chain. Duplication without a
+    pin is a silent-drift risk: if a category id ever changes on the
+    `app.py` side, the GitHub-Pages-only static redirects that script
+    already stamped into 44 files would keep pointing at the stale id with
+    no test, log, or runtime signal (GitHub Pages is static hosting — there
+    is nothing to alert)."""
+    import sys
+    from pathlib import Path
+
+    from sync.app import _LEGACY_CATEGORY_IDS
+
+    script_dir = Path(__file__).resolve().parents[2] / "scripts" / "mockup-rebuild"
+    sys.path.insert(0, str(script_dir))
+    try:
+        import add_pages_redirects  # pyright: ignore[reportMissingImports]
+    finally:
+        sys.path.remove(str(script_dir))
+
+    combined = {**add_pages_redirects._CATEGORY_IDS, **add_pages_redirects._JOB_TYPE_CATEGORY_IDS}
+    assert combined == _LEGACY_CATEGORY_IDS
+
+
 def test_unknown_legacy_category_page_404s() -> None:
     client = _client_with(_repo_with())
     response = client.get("/jobs-unknown.html", follow_redirects=False)
