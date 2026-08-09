@@ -44,10 +44,15 @@ class AppConfig:
     jobs_detail_url: str = DEFAULT_JOBS_DETAIL_URL
     knowledge_fetch_timeout_seconds: float = 3.0
     # A Cloud Run instance can stay warm far longer than one 6-hourly `sync`
-    # cycle — without a periodic re-fetch, a long-lived instance would keep
-    # answering with whatever it fetched at cold start forever (Stage:
-    # AIチャットPhase B連携, 2026-08-09). `0` (or negative) disables it, same
-    # convention as `jobs_detail_url=""` disabling the fetch entirely.
+    # cycle — without this, a long-lived instance would keep answering with
+    # whatever it fetched at cold start forever (Stage: AIチャットPhase B連携,
+    # 2026-08-09). Enforced by `app._maybe_refresh_knowledge`, checked at the
+    # top of every `/chat` request rather than an `asyncio` background timer
+    # — Cloud Run's default CPU allocation freezes background tasks whenever
+    # an instance has no in-flight request, so a timer-based design silently
+    # misses this interval while idle (see that function's docstring). `0`
+    # (or negative) disables it, same convention as `jobs_detail_url=""`
+    # disabling the fetch entirely.
     knowledge_refresh_interval_seconds: float = 3600.0
 
     @classmethod
@@ -89,9 +94,10 @@ class AppConfig:
             ),
             # `or "3600.0"`, not `.get(..., DEFAULT)`: unlike `jobs_detail_url`,
             # an explicit empty string has no distinct meaning here — `"0"` is
-            # the documented way to disable the periodic refresh, so an empty
-            # string falling back to the default (rather than crashing
-            # `float("")`) is the safer default for an operator env-var typo.
+            # the documented way to disable the request-triggered refresh, so
+            # an empty string falling back to the default (rather than
+            # crashing `float("")`) is the safer default for an operator
+            # env-var typo.
             knowledge_refresh_interval_seconds=float(
                 os.environ.get("KNOWLEDGE_REFRESH_INTERVAL_SECONDS") or "3600.0"
             ),

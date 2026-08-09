@@ -19,7 +19,7 @@ gcloud auth application-default login
 GCP_PROJECT=aozora-wp-jobcan-sync uv run python scripts/probe_model.py
 ```
 
-## 知識ベースの鮮度（2026-08-09 sync連携・定期リフレッシュへ移行）
+## 知識ベースの鮮度（2026-08-09 sync連携・リクエスト駆動リフレッシュへ移行）
 
 `src/chatbot/knowledge/faq.yaml` はコンテナイメージに同梱される（RAG なし、更新頻度が
 ほぼゼロなためフェッチ対象に含めない）。**求人データには同梱ファイルが一切存在しない**
@@ -30,15 +30,31 @@ GCP_PROJECT=aozora-wp-jobcan-sync uv run python scripts/probe_model.py
 （`knowledge.fetch_knowledge`）。取得は2段構え:
 
 1. **起動時**: `app.py` の lifespan startup で1回（`_refresh_knowledge`）
-2. **定期**: 起動後は `KNOWLEDGE_REFRESH_INTERVAL_SECONDS`（既定 3600 秒 = 1 時間）ごとに
-   asyncio バックグラウンドタスクで再取得し続ける（`_periodic_refresh`、常時起動中の
-   インスタンスが `sync` の 6 時間サイクルを取りこぼさないため）。lifespan shutdown で
-   タスクは cancel される
+2. **リクエスト駆動**: `/chat` リクエストの先頭で「前回取得からの経過時間が
+   `KNOWLEDGE_REFRESH_INTERVAL_SECONDS`（既定 3600 秒 = 1 時間）を超えたか」を確認し、
+   超えていればそのリクエスト内で同期的に再取得する（`_maybe_refresh_knowledge`）。
+
+   **バックグラウンドタイマーではなくリクエスト駆動にしている理由**（2026-08-09
+   codex review 指摘・本番設定で実測確認済み）: Cloud Run の既定 CPU 割り当ては
+   リクエスト処理中のみ（`gcloud run services describe aozora-chatbot` に
+   `run.googleapis.com/cpu-throttling: 'false'` が無いことを確認済み = 既定の
+   スロットリング有効)。`asyncio.sleep` ベースのバックグラウンドタイマーはインスタンスが
+   アイドル中は凍結され、「1時間ごと」という約束が守られない。`/chat` リクエスト自身が
+   トリガーになる設計なら、CPU が確実に割り当てられている瞬間にしか処理を要求しないため
+   この問題が原理的に発生しない。コストは「間隔経過後、最初に来た `/chat` リクエストが
+   フェッチのレイテンシ（`KNOWLEDGE_FETCH_TIMEOUT_SECONDS` が上限）を肩代わりする」こと。
+   `/health` はこのチェックを行わない（軽量な liveness probe のままにするため、鮮度が
+   必要なのは `/chat` だけ）
 
 取得に成功すればそれを採用し、ネットワークエラー・タイムアウト・404・不正 JSON・
 スキーマ不一致・空配列のいずれでも**直前まで保持していた知識ベースを維持してアプリは
 稼働を継続する**（起動直後の初回取得が失敗した場合のみ、後述の FAQ オンリー状態になる）。
 `/health` の `knowledge.source` が `"fetched"` / `"bundled"` のどちらだったかを返す。
+`knowledge.seconds_since_last_success`（一度も成功していなければ `null`）と
+`knowledge.stale`（リフレッシュ間隔の2倍を超えて成功していない場合に `true`）も返す
+— `source`/`job_count` だけでは「健全」と「何日も再取得に失敗し続けているが直前の
+有効データを配り続けている」を区別できないため（2026-08-09 silent-failure-hunter
+セカンドオピニオン指摘）。
 
 **`bundled_knowledge()` は FAQ のみ**: 求人データの同梱フォールバックは存在しないため、
 `sync` 側が一度も取得に成功していない cold start 直後は求人 0 件（`job_count: 0`）で
@@ -48,22 +64,29 @@ Gemini に求人推薦を行わせない（`knowledge._render_context` の空デ
 **反映フロー**: `sync` 側の6時間ごと自動同期がそのまま知識ベースの更新になる。人手の
 作業（スクリプト実行・`git push`・再デプロイ）は一切不要。
 
-**反映タイミング**: 最悪ケースで「`sync`側の同期完了」+「chatbot側の次回定期リフレッシュ
-（最大 `KNOWLEDGE_REFRESH_INTERVAL_SECONDS`）」の合計遅延。即時反映が必要な場合は
-`gcloud run services update aozora-chatbot --update-env-vars` 等でインスタンスを
-再起動させれば、次の起動時取得ですぐ反映される。
+**反映タイミング**: 最悪ケースで「`sync`側の同期完了」+「`KNOWLEDGE_REFRESH_INTERVAL_
+SECONDS` 経過後、最初に来る `/chat` リクエストまでの待ち時間」の合計遅延（トラフィックが
+途絶えている間は反映されない）。即時反映が必要な場合は `gcloud run services update
+aozora-chatbot --update-env-vars` 等でインスタンスを再起動させれば、次の起動時取得で
+すぐ反映される。
 
-**キルスイッチ**: `JOBS_DETAIL_URL=`（空文字）で起動時・定期リフレッシュの両方を無効化
-できる（`gcloud run services update aozora-chatbot --update-env-vars JOBS_DETAIL_URL=`）。
-`KNOWLEDGE_REFRESH_INTERVAL_SECONDS=0` は定期リフレッシュのみ無効化（起動時取得は残る）。
-ローカル開発でオフラインにしたい場合も前者を使う。
+**キルスイッチ**: `JOBS_DETAIL_URL=`（空文字）で起動時・リクエスト駆動リフレッシュの
+両方を無効化できる（`gcloud run services update aozora-chatbot --update-env-vars
+JOBS_DETAIL_URL=`）。`KNOWLEDGE_REFRESH_INTERVAL_SECONDS=0` はリクエスト駆動分のみ
+無効化（起動時取得は残る）。ローカル開発でオフラインにしたい場合も前者を使う。
 
 **信頼境界**: 取得した JSON は Gemini の system prompt に直接埋め込まれ、`resolve_jobs`
 のホワイトリストにもなるため、`knowledge.parse_jobs_detail` で構造検証する（pydantic、
-`chatbot/tests/test_knowledge.py` / `test_startup_refresh.py` / `test_periodic_refresh.py`
-参照）。特に `url` フィールドは取得値を採用せず `id` から `jobs/{id}`（`sync` の正規
-求人詳細ルート）を再計算する — `chat-widget.js` が `job.url` をそのまま `<a href>` に
-使うため、取得元 JSON を信頼境界の外として扱う。
+`chatbot/tests/test_knowledge.py` / `test_startup_refresh.py` /
+`test_knowledge_refresh_triggers.py` 参照）。特に `url` フィールドは取得値を採用せず
+`id` から `jobs/{id}`（`sync` の正規求人詳細ルート）を再計算する — `chat-widget.js` が
+`job.url` をそのまま `<a href>` に使うため、取得元 JSON を信頼境界の外として扱う。
+
+**リクエストごとのスナップショット一貫性**: `/chat` は refresh チェックの直後に
+`knowledge_base` への参照を1回だけスナップショットし、Gemini 生成と `resolve_jobs` の
+両方をそのスナップショットに対して行う。途中で別のリクエストの refresh が割り込んでも
+（`await` を挟むため理論上発生しうる）、Gemini が実際に見たグラウンディングデータと
+job_id 解決の対象がずれない（2026-08-09 codex review 指摘）。
 
 ## レスポンス形式（構造化出力、2026-07-24 拡張）
 

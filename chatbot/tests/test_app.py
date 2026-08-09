@@ -95,8 +95,11 @@ def test_health_returns_200() -> None:
     assert body["status"] == "healthy"
     # Non-`with` TestClient never runs lifespan startup (see
     # `tests/test_startup_refresh.py`), so the knowledge base is always the
-    # bundled fallback here.
-    assert body["knowledge"] == {"source": "bundled", "job_count": 0}
+    # bundled fallback here — no refresh has ever succeeded.
+    assert body["knowledge"]["source"] == "bundled"
+    assert body["knowledge"]["job_count"] == 0
+    assert body["knowledge"]["seconds_since_last_success"] is None
+    assert body["knowledge"]["stale"] is False
 
 
 def test_health_has_security_headers() -> None:
