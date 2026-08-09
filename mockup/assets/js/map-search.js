@@ -4,6 +4,16 @@
   var root = document.querySelector('.job-search');
   if (!root) return;
 
+  // Phase A (GitHub Pages) と Phase B (Cloud Run) はこの1ファイルを共有する
+  // (`/assets` マウント) が、検索用データセットの配信元が異なる: Phase A は
+  // ビルド時静的ファイル(`assets/data/jobs.json`、34〜37件サンプル)、
+  // Phase B は Firestore 382件全件を都度反映する動的エンドポイント
+  // (`/jobs/search-index.json`)。`chat-widget.js` の `data-endpoint` と同じ
+  // data属性パラメータ化パターンで、どちらのデータを読むかをHTML側から
+  // 指定する(Stage 3、2026-08-09)。未指定時は Phase A の相対パスへ
+  // フォールバックする。
+  var jobsEndpoint = root.getAttribute('data-jobs-endpoint') || 'assets/data/jobs.json';
+
   var panel = document.getElementById('job-search-panel');
   var mapWrap = document.getElementById('job-map-wrap');
   var mapPanelsEl = document.getElementById('job-map-panels');
@@ -42,7 +52,7 @@
     return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  fetch('assets/data/jobs.json')
+  fetch(jobsEndpoint)
     .then(function (res) {
       if (!res.ok) throw new Error('jobs.json fetch failed: ' + res.status);
       return res.json();

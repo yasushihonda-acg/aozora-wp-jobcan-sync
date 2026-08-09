@@ -226,8 +226,11 @@ class TestRenderJobList:
         # Detail URLs are present in the rendered HTML
         for item in page.items:
             assert item.job_id in html
-        # No upstream noise survives
-        assert "<script" not in html
+        # No upstream (Jobcan) noise survives — only this template's own
+        # chat-widget script (Stage 3, matching every other page) is
+        # expected, not anything scraped from the source HTML.
+        assert html.count("<script") == 1
+        assert "chat-widget.js" in html
         assert "<style" not in html
         assert "<form" not in html
 

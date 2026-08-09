@@ -51,6 +51,37 @@ def test_detail_and_list_namespaces_are_separate() -> None:
     assert cache.get_list("1777023") == "<html>list</html>"
 
 
+def test_json_cache_hit_returns_stored_value() -> None:
+    cache = _short_ttl_cache()
+    cache.set_json("__all__", {"facilities": {}, "jobs": [{"id": "1"}]})
+
+    assert cache.get_json("__all__") == {"facilities": {}, "jobs": [{"id": "1"}]}
+
+
+def test_json_cache_miss_returns_none() -> None:
+    cache = _short_ttl_cache()
+    assert cache.get_json("__all__") is None
+
+
+def test_json_and_list_namespaces_are_separate() -> None:
+    """A dict payload must not collide with an str-typed list cache entry
+    sharing the same key (Stage 3, `search_index.build_search_index`)."""
+    cache = _short_ttl_cache()
+    cache.set_list("__all__", "<html>list</html>")
+    cache.set_json("__all__", {"jobs": []})
+
+    assert cache.get_list("__all__") == "<html>list</html>"
+    assert cache.get_json("__all__") == {"jobs": []}
+
+
+def test_clear_empties_json_cache_too() -> None:
+    cache = _short_ttl_cache()
+    cache.set_json("__all__", {"jobs": []})
+    cache.clear()
+
+    assert cache.get_json("__all__") is None
+
+
 @freeze_time("2026-06-18 00:00:00")
 def test_detail_cache_expires_after_ttl() -> None:
     cache = _short_ttl_cache()

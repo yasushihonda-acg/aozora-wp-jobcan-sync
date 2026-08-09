@@ -39,7 +39,7 @@ def _offer(job_id: str, **overrides: Any) -> JobOffer:
     return JobOffer(**fields)
 
 
-def _list_item(job_id: str) -> JobListItem:
+def _list_item(job_id: str, *, labels: list[str] | None = None) -> JobListItem:
     return JobListItem(
         job_id=job_id,
         title="介護職員",
@@ -48,6 +48,7 @@ def _list_item(job_id: str) -> JobListItem:
         thumbnail_url=None,
         source_thumbnail_url=None,
         detail_url=f"https://recruit.jobcan.jp/aozora/job_offers/{job_id}",
+        labels=labels if labels is not None else [],
     )
 
 
@@ -593,6 +594,146 @@ def test_get_job_list_malformed_doc_does_not_take_down_other_jobs() -> None:
 
     assert response.status_code == 200
     assert response.text.count("job-list-card__link") == 1
+
+
+# ───────────────────── /jobs/ all-jobs search mode (Stage 3) ─────────────────
+
+
+def test_get_job_list_no_category_id_returns_all_active_jobs() -> None:
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18988"]),
+        _snapshot("3", sync_status="closed", category_ids=["18773"]),
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/")
+
+    assert response.status_code == 200
+    assert response.text.count("job-list-card__link") == 2
+
+
+def test_get_job_list_no_category_id_renders_search_panel_and_map() -> None:
+    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+
+    response = client.get("/jobs/")
+
+    assert 'id="job-search-panel"' in response.text
+    assert 'id="job-map-wrap"' in response.text
+    assert 'data-jobs-endpoint="/jobs/search-index.json"' in response.text
+
+
+def test_get_job_list_with_category_id_has_no_search_panel() -> None:
+    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert 'id="job-search-panel"' not in response.text
+
+
+def test_get_job_list_card_has_category_colour_modifier() -> None:
+    item = _list_item("1", labels=["介護職", "正社員"])
+    repo = _repo_with(_snapshot("1", category_ids=["18773"], list_item=item))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/")
+
+    assert "job-list-card--care" in response.text
+    assert 'class="job-card__meta-grid"' in response.text
+
+
+def test_get_job_list_all_jobs_cache_key_distinct_from_category_cache() -> None:
+    """`/jobs/` (all jobs) and `/jobs/?category_id=18773` must not share a
+    cache entry — different content behind the same `ProxyCache.get_list`
+    store (`_ALL_JOBS_CACHE_KEY` vs the real category_id)."""
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18988"]),
+    )
+    client = _client_with(repo)
+
+    all_jobs = client.get("/jobs/")
+    one_category = client.get("/jobs/?category_id=18773")
+
+    assert all_jobs.text.count("job-list-card__link") == 2
+    assert one_category.text.count("job-list-card__link") == 1
+
+
+# ───────────────────── /jobs/search-index.json (Stage 3) ─────────────────────
+
+
+def test_get_job_search_index_returns_json_for_active_jobs() -> None:
+    repo = _repo_with(
+        _snapshot(
+            "1",
+            category_ids=["18773"],
+            list_item=_list_item("1", labels=["介護職", "正社員"]),
+        )
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/search-index.json")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["jobs"] == [
+        {
+            "id": "1",
+            "facilityKey": "facility-福岡事業所",
+            "category": "care",
+            "employment": ["正社員"],
+            "area": None,
+        }
+    ]
+
+
+def test_get_job_search_index_excludes_closed_jobs() -> None:
+    repo = _repo_with(_snapshot("1", sync_status="closed", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/search-index.json")
+
+    assert response.json()["jobs"] == []
+
+
+def test_get_job_search_index_cache_hit_does_not_re_read_firestore() -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    client = _client_with(repo)
+    client.get("/jobs/search-index.json")
+
+    fake_client: FakeFirestoreClient = repo._client  # type: ignore[assignment]
+    fake_client.store.clear()
+
+    response = client.get("/jobs/search-index.json")
+    assert len(response.json()["jobs"]) == 1
+
+
+def test_get_job_search_index_firestore_read_failure_returns_503(monkeypatch: Any) -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+
+    def _boom(self: Any) -> Any:
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr(JobCacheRepository, "get_all_valid", _boom)
+    client = _client_with(repo)
+
+    response = client.get("/jobs/search-index.json")
+
+    assert response.status_code == 503
+    assert response.json() == {"facilities": {}, "jobs": []}
+
+
+def test_get_job_search_index_not_shadowed_by_numeric_job_id_route() -> None:
+    """`/jobs/{job_id}` is an unconstrained wildcard registered after this
+    route specifically so `/jobs/search-index.json` doesn't 404 through the
+    numeric-id validator first (see the route's registration-order comment
+    in app.py)."""
+    client = _client_with(_repo_with())
+
+    response = client.get("/jobs/search-index.json")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
 
 
 # ─────────────────────── lazy repo resolution (import safety) ───────────────

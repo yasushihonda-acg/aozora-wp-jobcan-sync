@@ -71,6 +71,24 @@ gcloud services api-keys list --project="$PROJECT_ID" --filter="displayName=jobs
 gcloud services api-keys delete <KEY_ID> --project="$PROJECT_ID"
 ```
 
+## リファラー制限の追従(Phase B Stage 3、2026-08-09)
+
+Phase B(Cloud Run、`sync/src/sync/templates/job_list.html` 全件検索ページ)
+にも `mockup/jobs.html` と同一のGoogle Maps埋め込みを追加したため、既存
+APIキー(`jobs-map-embed`)のリファラー許可リストへCloud Run origin 2件
+(ハッシュ形式・project number形式の両方)を追加した:
+
+```bash
+gcloud services api-keys update c8e6d4da-c37b-43bd-9d08-a13e346bad4b \
+  --project=aozora-wp-jobcan-sync \
+  --allowed-referrers="https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/*,http://localhost:8989/*,https://aozora-sync-flry56mxwa-an.a.run.app/*,https://aozora-sync-1084369586348.asia-northeast1.run.app/*"
+```
+
+**Stage 5でドメインを `recruit.aozora-cg.com` に切り替えたら、この許可
+リストにも最終ドメインを追加すること**(`infra/README.md` の
+`PUBLIC_BASE_URL`/`ALLOWED_ORIGINS` 更新と同時に対応、忘れると地図だけ
+`RefererNotAllowedMapError` で表示されない)。
+
 ## 参考
 
 - `aozora-sns-auto/docs/runbooks/wif-setup.md`(同一パターンの元ネタ)

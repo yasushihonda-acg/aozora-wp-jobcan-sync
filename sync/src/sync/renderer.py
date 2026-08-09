@@ -9,6 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .detail_sections import RelatedJob, build_detail_view, build_job_posting_json_ld
+from .list_sections import JobListCardView
 from .models import JobListPage, JobOffer
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -124,15 +125,43 @@ def render_job_detail(
 
 
 def render_job_list(
-    page: JobListPage, *, base_url: str = "", env: Environment | None = None
+    page: JobListPage,
+    *,
+    base_url: str = "",
+    cards: list[JobListCardView] | None = None,
+    search_mode: bool = False,
+    search_index_url: str | None = None,
+    env: Environment | None = None,
 ) -> str:
     """Render a parsed Jobcan listing page into HTML using `job_list.html`.
 
     See `render_job_detail` for `base_url`.
+
+    Stage 3 (求人一覧デザインパリティ) additions:
+    - `cards`: per-item colour/chip/facility decorations (`list_sections.
+      build_card_view`), matched to `page.items` by `job_id`. The template
+      renders from `page.items` first and looks up a card's decoration by
+      id — an item with no match (or `cards=None`, the CLI `list`
+      subcommand's path, which has no `JobSnapshot`/`JobOffer` to derive
+      chips from) falls back to the plain pre-Stage-3 card markup instead
+      of a missing/empty card, so every existing `render_job_list(page)`
+      call site keeps working unchanged.
+    - `search_mode`: `True` for the all-jobs page (`category_id=None`) —
+      the template renders the chip/freeword/map search panel only then.
+    - `search_index_url`: where `map-search.js` fetches the filter/map
+      dataset from (`/jobs/search-index.json`, never the `/assets/`-mounted
+      Phase A static file — see `search_index.py`'s module docstring).
     """
     env = env or make_environment()
     template = env.get_template("job_list.html")
-    return template.render(page=page, base_url=base_url)
+    cards_by_job_id = {c.item.job_id: c for c in (cards or [])}
+    return template.render(
+        page=page,
+        base_url=base_url,
+        cards_by_job_id=cards_by_job_id,
+        search_mode=search_mode,
+        search_index_url=search_index_url,
+    )
 
 
 def render_error(

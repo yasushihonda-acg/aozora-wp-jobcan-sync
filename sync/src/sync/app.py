@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -59,9 +59,17 @@ from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
 from .detail_sections import RelatedJob, extract_region_tag
 from .firestore_repo import JobCacheRepository, get_firestore_client
+from .list_sections import JobListCardView, build_card_view
 from .models import JobListItem, JobListPage
 from .renderer import render_error, render_job_detail, render_job_list
+from .search_index import build_search_index
 from .snapshot import JobSnapshot
+
+# Stage 3 (求人一覧デザインパリティ): the all-jobs search page's cache key —
+# distinct from any real numeric `category_id`, so `ProxyCache.get_list`/
+# `set_list` (keyed only by that one string) can serve both without a
+# collision. Also used as the search-index.json cache key.
+_ALL_JOBS_CACHE_KEY = "__all__"
 
 # Stage 2 (job-detail design parity, 2026-08-08): cap on the "関連する求人"
 # sidebar — matches Phase A's `mockup/jobs/*.html` (always exactly 3).
@@ -100,17 +108,19 @@ INDEX_HTML_PATH = os.environ.get(
 # rewrites the known href values at serve time, leaving the shared source
 # file untouched. Category ids from `crawler.KNOWN_CATEGORY_IDS`.
 #
-# The three plain `jobs.html` link targets ("募集職種"/"求人を見る"/"すべての
-# 求人を見る"/footer/mobile CTA — 7 occurrences) point at the largest single
-# category (介護職) as an interim stand-in: v1 deliberately ships without an
-# all-category listing (decision-maker call, 2026-08-08 — a full
-# search/map/GPS experience is Stage 3+ scope, not Stage 1).
+# The plain `jobs.html` link targets ("募集職種"/"求人を見る"/"すべての求人を
+# 見る"/footer/mobile CTA — 7 occurrences) used to point at the largest
+# single category (介護職) as an interim stand-in for the full all-jobs
+# search/map/GPS experience, which Stage 1 deliberately shipped without
+# (decision-maker call, 2026-08-08). Stage 3 (求人一覧デザインパリティ,
+# 2026-08-09) implements that page at `/jobs/` with no `category_id` — these
+# now point there instead of the 介護職 stand-in.
 _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
     # Logo / "採用トップ" nav / footer (3 occurrences) — self-links back to
     # the top page, which this service serves at site root, not
     # `index.html` (2026-08-08 codex review finding).
     ('href="index.html"', 'href="/"'),
-    ('href="jobs.html"', 'href="/jobs/?category_id=18773"'),
+    ('href="jobs.html"', 'href="/jobs/"'),
     ('href="jobs-care.html"', 'href="/jobs/?category_id=18773"'),
     ('href="jobs-nurse.html"', 'href="/jobs/?category_id=18983"'),
     ('href="jobs.html?job_type=visit"', 'href="/jobs/?category_id=18986"'),  # ホームヘルパー
@@ -317,6 +327,41 @@ def create_app(
     async def redirect_legacy_html_detail_url(job_id: str) -> Response:
         return RedirectResponse(url=f"/jobs/{job_id}", status_code=308)
 
+    # Stage 3 — `map-search.js`'s filter/map/GPS dataset. Registered before
+    # `/jobs/{job_id}` for the same reason as the `.html` redirect above:
+    # that route is an unconstrained single-segment wildcard and would
+    # otherwise swallow this path first (404-ing on `is_ascii_digit_id`)
+    # since Starlette matches routes in registration order.
+    #
+    # Deliberately NOT under `/assets/` — that path is the `StaticFiles`
+    # mount over `mockup/assets`, which still physically contains Phase A's
+    # stale 37-job `assets/data/jobs.json` (verified serving 200 in
+    # production, 2026-08-09); a route nested under `/assets/` would either
+    # collide with or be shadowed by that mount. See `search_index.py`.
+    @app.get("/jobs/search-index.json")
+    async def get_job_search_index() -> Response:
+        cached = proxy_cache.get_json(_ALL_JOBS_CACHE_KEY)
+        if cached is not None:
+            _logger.info("cache hit", extra={"kind": "search-index"})
+            return JSONResponse(content=cached)
+
+        try:
+            snapshots, skipped = await run_in_threadpool(lambda: _resolve_repo().get_all_valid())
+        except Exception:
+            _logger.exception("firestore read error", extra={"kind": "search-index"})
+            return JSONResponse(content={"facilities": {}, "jobs": []}, status_code=503)
+
+        if skipped:
+            _logger.error(
+                "search-index route: skipped malformed job_cache docs",
+                extra={"skipped_job_ids": skipped},
+            )
+
+        index = build_search_index(snapshots)
+        proxy_cache.set_json(_ALL_JOBS_CACHE_KEY, index)
+        _logger.info("cache miss → built", extra={"kind": "search-index"})
+        return JSONResponse(content=index)
+
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def get_job_detail(job_id: str) -> Response:
         if not is_ascii_digit_id(job_id):
@@ -383,33 +428,43 @@ def create_app(
 
     @app.get("/jobs/", response_class=HTMLResponse)
     async def get_job_list(
-        category_id: Annotated[str, Query(..., min_length=1, max_length=16)],
+        category_id: Annotated[str | None, Query(min_length=1, max_length=16)] = None,
     ) -> Response:
-        if not is_ascii_digit_id(category_id):
+        # Stage 3: `category_id` omitted → the all-jobs search page (Phase
+        # A's `jobs.html` equivalent — every active posting, chip/freeword/
+        # map/GPS search client-side). Present → the plain per-category card
+        # grid unchanged since Stage 1 (Phase A's `jobs-{care,...}.html`
+        # equivalent — no search panel).
+        if category_id is not None and not is_ascii_digit_id(category_id):
             raise HTTPException(status_code=404, detail="not found")
 
-        cached = proxy_cache.get_list(category_id)
+        cache_key = category_id if category_id is not None else _ALL_JOBS_CACHE_KEY
+        fallback_category_id = category_id or "18773"
+
+        cached = proxy_cache.get_list(cache_key)
         if cached is not None:
-            _logger.info("cache hit", extra={"kind": "list", "category_id": category_id})
+            _logger.info("cache hit", extra={"kind": "list", "category_id": cache_key})
             return HTMLResponse(content=cached)
 
         try:
             snapshots, skipped = await run_in_threadpool(lambda: _resolve_repo().get_all_valid())
         except Exception:
             _logger.exception(
-                "firestore read error", extra={"kind": "list", "category_id": category_id}
+                "firestore read error", extra={"kind": "list", "category_id": cache_key}
             )
-            return _firestore_error_response(JOBCAN_LIST_FALLBACK.format(category_id=category_id))
+            return _firestore_error_response(
+                JOBCAN_LIST_FALLBACK.format(category_id=fallback_category_id)
+            )
 
         if skipped:
             _logger.error(
                 "list route: skipped malformed job_cache docs",
-                extra={"category_id": category_id, "skipped_job_ids": skipped},
+                extra={"category_id": cache_key, "skipped_job_ids": skipped},
             )
 
         rendered = _render_list(snapshots, category_id=category_id)
         if rendered is None:
-            fallback_url = JOBCAN_LIST_FALLBACK.format(category_id=category_id)
+            fallback_url = JOBCAN_LIST_FALLBACK.format(category_id=fallback_category_id)
             return HTMLResponse(
                 content=_error_html(
                     title="ページを表示できません",
@@ -419,8 +474,8 @@ def create_app(
                 status_code=500,
             )
 
-        proxy_cache.set_list(category_id, rendered)
-        _logger.info("cache miss → rendered", extra={"kind": "list", "category_id": category_id})
+        proxy_cache.set_list(cache_key, rendered)
+        _logger.info("cache miss → rendered", extra={"kind": "list", "category_id": cache_key})
         return HTMLResponse(content=rendered)
 
     return app
@@ -511,9 +566,10 @@ def _render_detail(
         return None
 
 
-def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str | None:
-    """Build and render the listing page for one category from already-read
-    snapshots, or `None` on a render failure.
+def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str | None) -> str | None:
+    """Build and render the listing page from already-read snapshots, or
+    `None` on a render failure. `category_id=None` (Stage 3) builds the
+    all-jobs search page instead of one category's card grid.
 
     Deliberately pure (no Firestore access) — the caller reads the
     collection separately (`get_all_valid()`, off the event loop) so a
@@ -533,28 +589,41 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str) -> str 
     `infra/README.md` §8.1b's dry-run is where that gets measured for real).
     """
     try:
-        cards = [
-            _rewrite_detail_url(snapshot.list_item, snapshot.job_id)
-            for snapshot in snapshots.values()
-            if category_id in snapshot.category_ids
-            and snapshot.sync_status == "active"
-            and snapshot.list_item is not None
-        ]
+        card_views: list[JobListCardView] = []
+        for snapshot in snapshots.values():
+            if snapshot.sync_status != "active":
+                continue
+            if category_id is not None and category_id not in snapshot.category_ids:
+                continue
+            view = build_card_view(snapshot)
+            if view is None:
+                continue
+            rewritten_item = _rewrite_detail_url(view.item, view.item.job_id)
+            card_views.append(view.model_copy(update={"item": rewritten_item}))
+
         # Numeric, not lexicographic (str sort would put "10000000" before
         # "9999999") — job_id has no fixed digit width. Descending as a
         # deterministic newest-first proxy: Firestore has no listing-order
         # info to replicate Jobcan's own display order, and job_ids increase
         # monotonically (review-code-b8 second-opinion finding).
-        cards.sort(key=lambda item: int(item.job_id), reverse=True)
+        card_views.sort(key=lambda v: int(v.item.job_id), reverse=True)
+        fallback_category_id = category_id or "18773"
         page = JobListPage(
-            source_url=JOBCAN_LIST_FALLBACK.format(category_id=category_id),
+            source_url=JOBCAN_LIST_FALLBACK.format(category_id=fallback_category_id),
             category_id=category_id,
-            items=cards,
-            total_count=len(cards),
+            items=[v.item for v in card_views],
+            total_count=len(card_views),
             last_page=1,
             next_url=None,
         )
-        return render_job_list(page, base_url=PUBLIC_BASE_URL)
+        search_mode = category_id is None
+        return render_job_list(
+            page,
+            base_url=PUBLIC_BASE_URL,
+            cards=card_views,
+            search_mode=search_mode,
+            search_index_url="/jobs/search-index.json" if search_mode else None,
+        )
     except Exception:
         _logger.exception("render error", extra={"kind": "list", "category_id": category_id})
         return None
