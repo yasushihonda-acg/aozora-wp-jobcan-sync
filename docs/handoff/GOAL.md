@@ -38,7 +38,21 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 - Playwright実機確認(`https://aozora-sync-flry56mxwa-an.a.run.app`): トップページ・静的アセット・求人一覧(`?category_id=18773`)・求人詳細(`/jobs/2264205`)いずれも200、console error 0件(favicon.ico 404はブラウザ自動リクエストによる既知の想定内挙動)。求人詳細の全セクション(サマリー/仕事内容/応募資格/待遇/選考フロー/entry-cta/関連求人サイドバー)を目視確認
 - チャットボット疎通確認: 起動→サジェスト質問クリック→回答受信(関連求人リンク3件、`.html`互換リダイレクト308含む)まで正常動作、`aozora-chatbot`側CORS(`ALLOWED_ORIGINS`)も既存設定のまま機能
 
-🎯 **Stage 2 完了(実装・本番デプロイとも完了)**。次のStage 3(求人一覧デザインパリティ)着手は decision-maker 判断待ち。
+🎯 **Stage 2 完了(実装・本番デプロイとも完了)**。
+
+## 完了の定義 (Stage 3: 求人一覧ページのデザインパリティ) — 2026-08-09 実装完了・本番デプロイ完了・PR #148
+decision-maker指示「Stage 3を進めて」を受け、スコープを「検索/地図/GPSも含めてフルパリティ」(Phase Aの`mockup/jobs.html`が持つ条件検索+Google Maps地図+GPS距離順並べ替え+フリーワード検索も含む)に確定して着手。
+
+- [x] 拠点ジオコーディングを13→27拠点へ拡張(Firestore全382件監査で判明した15拠点のうち14拠点を新規ジオコーディング。住所は社内「事業所マスタ」スプレッドシートから取得し国土地理院APIでジオコーディング。残り1件「共同生活援助」は12事業所を横断する求人のため単一住所なし、地図ピンなしとして意図的に除外、`sync/src/sync/facility_geo.py`)
+- [x] `list_sections.py`: 職種ラベル→カテゴリ4系統(介護/看護/事務/IT)の色分けマッピングをPhase Aの5種から17種(`crawler.KNOWN_CATEGORY_IDS`全域)へ拡張
+- [x] `search_index.py`: Firestore全件から検索/地図用JSON(`GET /jobs/search-index.json`、`/assets/`配下のPhase A静的ファイルとの衝突を回避した新規動的エンドポイント)を構築
+- [x] `app.py`: `/jobs/`の`category_id`を任意化(無指定時=全件検索ページ、指定時=既存のカテゴリ別グリッドに色分け+meta-grid追加)
+- [x] `map-search.js`: `data-jobs-endpoint`属性でPhase A(静的JSON)/Phase B(動的JSON)のデータソースを切替(`chat-widget.js`の`data-endpoint`と同一パターン)
+- [x] Google Maps APIキーのリファラー制限にCloud Run originを追加(`docs/runbooks/wif-setup.md`に手順記録)
+- [x] 品質ゲート: `codex review --base main -c model_reasoning_effort=high`(2回実施、指摘計2件=雇用形態ラベルの順序依存/Phase A側の通知要素欠如、いずれも修正済み)+ `pr-review-toolkit` 3エージェント並列(code-reviewer/silent-failure-hunter/type-design-analyzer)。実害バグ2件(施設キー衝突による地図ピン・件数の誤マージ、地図ピン表示名への生住所リーク)+サイレント失敗3件(検索機能ロード失敗の完全無音化、未知施設/職種のログ欠如)を検出・修正。type-design-analyzerの型設計改善提案(戻り値のpydanticモデル化等)は実害なしのため見送り(判断の記録のみ)
+- [x] pytest 382件全PASS(新規55件)、ruff/pyright 0エラー。Playwright実機確認(ローカル: 職種/エリアチップフィルタでカード件数がFirestore実カウントと一致、フリーワード検索、地図に27拠点全ピン表示、カテゴリ別ページの色分け+meta-grid。本番: `https://aozora-sync-flry56mxwa-an.a.run.app/jobs/`でconsole error 0件、382件全求人+検索パネル+地図の表示を確認)
+
+🎯 **Stage 3 完了(実装・本番デプロイとも完了)**。次のStage 4(本番公開前の健全性対応)着手は decision-maker 判断待ち。
 
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
