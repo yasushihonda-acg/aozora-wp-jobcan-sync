@@ -95,7 +95,7 @@
     });
 
     var state = {
-      category: new Set(),
+      jobType: new Set(),
       employment: new Set(),
       area: new Set(),
       facility: null,
@@ -127,7 +127,7 @@
 
     if (clearBtn) {
       clearBtn.addEventListener('click', function () {
-        state.category.clear();
+        state.jobType.clear();
         state.employment.clear();
         state.area.clear();
         state.facility = null;
@@ -195,7 +195,11 @@
     }
 
     function matchesFilters(job) {
-      if (state.category.size && !state.category.has(job.category)) return false;
+      if (state.jobType.size) {
+        var jobTypes = job.jobTypes || [];
+        var hitType = jobTypes.some(function (t) { return state.jobType.has(t); });
+        if (!hitType) return false;
+      }
       if (state.area.size && !state.area.has(job.area)) return false;
       if (state.facility && job.facilityKey !== state.facility) return false;
       if (state.employment.size) {

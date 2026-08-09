@@ -93,6 +93,13 @@ def build_search_index(snapshots: dict[str, JobSnapshot]) -> tuple[dict, list[st
                 "id": snapshot.job_id,
                 "facilityKey": key,
                 "category": category,
+                # The 17-category (Jobcan-original-granularity) filter, as
+                # opposed to `category` above (the 4-bucket colour/legacy
+                # filter, kept for the map pins and `facilities[].categories`
+                # — Stage 3 follow-up, 2026-08-09). `category_ids` can
+                # legitimately hold more than one id (`crawler.crawl_all`'s
+                # docstring: a posting can be listed under >1 category).
+                "jobTypes": list(snapshot.category_ids),
                 "employment": employment,
                 "area": area,
             }

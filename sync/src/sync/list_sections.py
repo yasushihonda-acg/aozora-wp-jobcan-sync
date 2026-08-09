@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from .detail_sections import extract_holiday_chip, extract_salary_chip
 from .facility_geo import facility_key
+from .job_types import JOB_TYPE_NAMES
 from .models import JobListItem
 from .snapshot import JobSnapshot
 
@@ -99,3 +100,45 @@ def build_card_view(snapshot: JobSnapshot) -> JobListCardView | None:
         holiday_chip=extract_holiday_chip(snapshot.offer.extra_lines),
         facility_key=facility_key(snapshot.offer.address),
     )
+
+
+class JobTypeChip(BaseModel):
+    """One `/jobs/` search-panel 職種 chip — the Jobcan-original 17-category
+    granularity (as opposed to `category_key_from_labels`'s 4-bucket colour
+    system above, which the chip panel used to reuse before decision-maker
+    feedback 2026-08-09 that it didn't match `recruit.jobcan.jp/aozora`'s own
+    17-category top-page nav). `category_id` is what the client sends back
+    on selection and what `search_index.py`'s `jobTypes` field holds."""
+
+    category_id: str
+    name: str
+    count: int
+
+    model_config = {"frozen": True}
+
+
+def build_job_type_chips(snapshots: dict[str, JobSnapshot]) -> list[JobTypeChip]:
+    """Chips for every job type with at least one live posting, sorted by
+    count descending (busiest job type first — e.g. 看護職 before 新卒・
+    既卒総合職). A category with 0 active postings is omitted entirely: a
+    chip a visitor can press only to see "0 件を表示中" is noise, not a
+    filter.
+
+    Eligibility mirrors `build_search_index`'s (`active` + `list_item`
+    present) so the chip count never disagrees with what's actually
+    filterable — a job legitimately listed under more than one category
+    (`crawler.crawl_all`'s docstring) counts toward each of its chips."""
+    counts: dict[str, int] = {}
+    for snapshot in snapshots.values():
+        if snapshot.sync_status != "active" or snapshot.list_item is None:
+            continue
+        for category_id in snapshot.category_ids:
+            counts[category_id] = counts.get(category_id, 0) + 1
+
+    chips = [
+        JobTypeChip(category_id=category_id, name=name, count=counts[category_id])
+        for category_id, name in JOB_TYPE_NAMES.items()
+        if counts.get(category_id, 0) > 0
+    ]
+    chips.sort(key=lambda chip: chip.count, reverse=True)
+    return chips

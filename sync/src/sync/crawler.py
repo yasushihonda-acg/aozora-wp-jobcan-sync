@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from .job_types import JOB_TYPE_NAMES
 from .jobcan_client import JobcanClient
 from .models import (
     JobcanClientError,
@@ -24,11 +25,12 @@ from .parser import parse_job_detail, parse_job_list
 _logger = logging.getLogger(__name__)
 
 # Every category_id confirmed to exist on https://recruit.jobcan.jp/aozora as
-# of 2026-08-06. The 11 marked (docs) were already confirmed in
-# `docs/specs/jobcan-html-structure.md` §4; the remaining 6 were confirmed via
-# the top-page category link list in this session (18984 corrects that
-# document's own recorded mistake — it was fetched as "看護師" but the page
-# title says 相談員; 18983 is the real 看護職).
+# of 2026-08-06 (confirmation history: `docs/specs/jobcan-html-structure.md`
+# §4 for 11 of them, the remaining 6 plus the 18984/18983 相談員/看護職
+# mis-fetch correction via the top-page category link list). Derived from
+# `job_types.JOB_TYPE_NAMES` — that module is the single source of truth for
+# the id→name table (Stage 3 follow-up, 2026-08-09), this tuple exists
+# because callers here only need the ids, in table order.
 #
 # This is a manually-curated constant, not an auto-discovered list. Jobcan
 # can add a category without notice; `crawl_all()` has no way to detect that
@@ -39,25 +41,7 @@ _logger = logging.getLogger(__name__)
 # pattern that was walked back once already). Revisit if the 30%-closed
 # circuit breaker (crawler.py callers, Firestore layer) starts firing for a
 # category that legitimately just moved to a new category_id.
-KNOWN_CATEGORY_IDS: tuple[str, ...] = (
-    "18773",  # 介護職 (docs)
-    "18983",  # 看護職
-    "18984",  # 相談員 (docs recorded this as a "看護師" mis-fetch; corrected here)
-    "18985",  # ケアマネジャー・計画作成担当者 (docs)
-    "18986",  # ホームヘルパー (docs)
-    "18987",  # 訪問看護
-    "18988",  # 夜勤専従（介護・看護） (docs)
-    "18989",  # 施設長・管理者候補
-    "18990",  # サービス提供責任者 (docs)
-    "22014",  # サービス管理責任者 (docs)
-    "39695",  # 世話人 (docs)
-    "41046",  # 訪問リハビリ
-    "43764",  # サポート職（清掃・洗濯・調理・送迎） (docs)
-    "58859",  # 事務職 (docs)
-    "69384",  # IT エンジニア職 (docs)
-    "71511",  # 総合職（営業・管理職）
-    "73697",  # 新卒・既卒総合職 (docs)
-)
+KNOWN_CATEGORY_IDS: tuple[str, ...] = tuple(JOB_TYPE_NAMES)
 
 
 @dataclass
