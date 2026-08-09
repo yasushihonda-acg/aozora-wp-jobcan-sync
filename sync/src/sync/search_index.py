@@ -21,7 +21,7 @@ that exact path (verified in production, 2026-08-09) — this module's caller
 from __future__ import annotations
 
 from .facility_geo import area_from_address, facility_coords, facility_key
-from .list_sections import category_key_from_labels
+from .list_sections import LABEL_TO_CATEGORY, category_key_from_labels
 from .snapshot import JobSnapshot
 
 
@@ -59,12 +59,20 @@ def build_search_index(snapshots: dict[str, JobSnapshot]) -> dict:
             if category is not None and category not in facilities[key]["categories"]:
                 facilities[key]["categories"].append(category)
 
+        # `labels[1:]` would assume the category label is always first —
+        # Jobcan's label order is observation, not contract (same lesson
+        # `parser.py::_resolve_display_thumbnail` already encodes, and
+        # `category_key_from_labels` itself doesn't rely on position
+        # either). Excluding whatever *is* a recognised category label
+        # keeps this correct regardless of order (codex review finding).
+        employment = [label for label in labels if label not in LABEL_TO_CATEGORY]
+
         jobs.append(
             {
                 "id": snapshot.job_id,
                 "facilityKey": key,
                 "category": category,
-                "employment": list(labels[1:]),
+                "employment": employment,
                 "area": area,
             }
         )

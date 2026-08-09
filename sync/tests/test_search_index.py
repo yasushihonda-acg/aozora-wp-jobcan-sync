@@ -75,6 +75,19 @@ def test_build_search_index_includes_active_jobs_with_list_item() -> None:
     assert job["facilityKey"] == "facility-四箇"
 
 
+def test_build_search_index_employment_independent_of_label_order() -> None:
+    """`labels[1:]` would silently drop `正社員` here — category label
+    order is observation, not contract (codex review finding, 2026-08-09)."""
+    address = "【福岡】あおぞらケアグループ四箇（デイ・有料）"
+    snapshots = {"1": _snapshot("1", address=address, labels=["正社員", "介護職"])}
+
+    index = build_search_index(snapshots)
+
+    job = index["jobs"][0]
+    assert job["category"] == "care"
+    assert job["employment"] == ["正社員"]
+
+
 _YONKA = "【福岡】あおぞらケアグループ四箇（デイ・有料）"
 
 
