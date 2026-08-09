@@ -244,6 +244,54 @@ def test_render_top_page_logs_when_rewrite_target_not_found(caplog: Any) -> None
     assert len(caplog.records) == len(_TOP_PAGE_LINK_REWRITES)
 
 
+def test_render_top_page_strips_phase_a_redirect_meta_tag() -> None:
+    """The shared `mockup/index.html` source carries a GitHub-Pages-only
+    self-redirect (`scripts/mockup-rebuild/add_pages_redirects.py`) so
+    決裁者 bookmarks/visits of the legacy Phase A mock jump to Cloud Run.
+    Serving that same tag back from Cloud Run's own `/` would loop the page
+    into redirecting to itself — this must never reach the response body."""
+    from sync.app import _render_top_page
+
+    raw = (
+        "<html><head><meta charset=\"utf-8\">"
+        '<!-- phase-a-redirect -->'
+        '<meta http-equiv="refresh" content="0;url=https://aozora-sync-flry56mxwa-an.a.run.app/">'
+        "<!-- /phase-a-redirect -->"
+        "<title>t</title></head><body>no job links here</body></html>"
+    )
+
+    html = _render_top_page(raw)
+
+    assert "http-equiv=\"refresh\"" not in html
+    assert "no job links here" in html  # unrelated content passes through unchanged
+
+
+def test_render_top_page_meta_refresh_strip_is_silent_when_absent(caplog: Any) -> None:
+    """No tag present (pre-script-run state, or already stripped) → no
+    change, and no spurious log noise — only `_TOP_PAGE_LINK_REWRITES`'s own
+    per-target ERROR logging should fire for this raw input."""
+    import logging
+
+    from sync.app import _TOP_PAGE_LINK_REWRITES, _render_top_page
+
+    with caplog.at_level(logging.INFO, logger="sync.app"):
+        html = _render_top_page("<html><body>no job links here</body></html>")
+
+    assert "no job links here" in html
+    assert len(caplog.records) == len(_TOP_PAGE_LINK_REWRITES)
+
+
+def test_top_page_route_never_serves_phase_a_redirect_tag() -> None:
+    """End-to-end guard against the actual production self-loop: `GET /`
+    against the real, script-processed `mockup/index.html` must never carry
+    the Phase-A-only redirect tag in its response body."""
+    client = _client_with(_repo_with())
+
+    html = client.get("/").text
+
+    assert 'http-equiv="refresh"' not in html
+
+
 def test_top_page_missing_file_returns_404(monkeypatch: Any) -> None:
     from sync import app as app_module
 
@@ -596,6 +644,32 @@ def test_legacy_category_ids_are_all_known_categories() -> None:
     from sync.crawler import KNOWN_CATEGORY_IDS
 
     assert set(app_module._LEGACY_CATEGORY_IDS.values()) <= set(KNOWN_CATEGORY_IDS)
+
+
+def test_legacy_category_ids_match_github_pages_redirect_script() -> None:
+    """pr-test-analyzer finding (2026-08-09): `scripts/mockup-rebuild/
+    add_pages_redirects.py` deliberately *duplicates* (doesn't import)
+    `_LEGACY_CATEGORY_IDS` — that script stays a plain-stdlib tool
+    independent of `sync`'s FastAPI dependency chain. Duplication without a
+    pin is a silent-drift risk: if a category id ever changes on the
+    `app.py` side, the GitHub-Pages-only static redirects that script
+    already stamped into 44 files would keep pointing at the stale id with
+    no test, log, or runtime signal (GitHub Pages is static hosting — there
+    is nothing to alert)."""
+    import sys
+    from pathlib import Path
+
+    from sync.app import _LEGACY_CATEGORY_IDS
+
+    script_dir = Path(__file__).resolve().parents[2] / "scripts" / "mockup-rebuild"
+    sys.path.insert(0, str(script_dir))
+    try:
+        import add_pages_redirects  # pyright: ignore[reportMissingImports]
+    finally:
+        sys.path.remove(str(script_dir))
+
+    combined = {**add_pages_redirects._CATEGORY_IDS, **add_pages_redirects._JOB_TYPE_CATEGORY_IDS}
+    assert combined == _LEGACY_CATEGORY_IDS
 
 
 def test_unknown_legacy_category_page_404s() -> None:

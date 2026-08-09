@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -179,6 +180,26 @@ _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
 )
 
 
+# `scripts/mockup-rebuild/add_pages_redirects.py` stamps `mockup/index.html`
+# with a GitHub-Pages-only self-redirect (meta refresh to this service's own
+# `/`) so a 決裁者 who bookmarked/still visits the legacy Phase A mock lands
+# here instead. Because that script edits the same shared source file this
+# service also reads, the tag must be stripped before Cloud Run serves its
+# own `/` — otherwise the page would redirect to itself.
+#
+# Matched by the script's `<!-- phase-a-redirect -->...<!-- /phase-a-redirect
+# -->` sentinel comments and everything between them (DOTALL), not the inner
+# `<meta http-equiv="refresh">` tag's exact shape — the script uses a plain
+# meta tag for `index.html` specifically (no query-string-dependent
+# redirect target here, unlike `jobs.html`'s job_type-aware JS block), but
+# matching on the sentinels keeps this robust against that inner shape ever
+# changing, and against the target URL changing at Stage 5 (domain switch).
+_TOP_PAGE_PHASE_A_REDIRECT_RE = re.compile(
+    r"<!--\s*phase-a-redirect\s*-->.*?<!--\s*/phase-a-redirect\s*-->\n?",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 def _render_top_page(raw_html: str, *, base_url: str = "") -> str:
     """Apply `_TOP_PAGE_LINK_REWRITES`, logging (not raising — a missing
     target degrades to a dead link, not a broken page) any target that
@@ -199,6 +220,15 @@ def _render_top_page(raw_html: str, *, base_url: str = "") -> str:
     there is no better value to substitute, and the eventual-domain
     placeholder is harmless there.
     """
+    stripped, removed_count = _TOP_PAGE_PHASE_A_REDIRECT_RE.subn("", raw_html)
+    if removed_count:
+        _logger.info(
+            "stripped Phase A GitHub-Pages-only redirect tag from top page "
+            "before serving Cloud Run's own `/`",
+            extra={"count": removed_count},
+        )
+        raw_html = stripped
+
     for old, new in _TOP_PAGE_LINK_REWRITES:
         if old not in raw_html:
             _logger.error(
