@@ -70,6 +70,29 @@ decision-maker指示「Stage 3を進めて」を受け、スコープを「検�
 
 🎯 **Stage 4 完了(実装・本番デプロイ・実機確認とも完了)**。次のStage 5(ドメイン切替 `recruit.aozora-cg.com`)着手は decision-maker 判断待ち — DNS操作はIT担当者/外部ベンダー(権威DNS `ns1/ns2.canonet.ne.jp`)経由の依頼が必要なためリードタイムを考慮すること。
 
+## 完了の定義 (Stage 4 追加対応: GitHub Pages恒久リダイレクト) — 2026-08-09 実装完了・マージ・GitHub Pages実機確認完了・PR #152
+
+決裁者から「GitHub Pages(37件サンプル版)はあくまで決裁者自身が進捗確認のために直接見る試験ページであり、実データ382件版(Cloud Run)が完成した今、今後も決裁者がブックマーク等でこの古いページを見続けてしまい『件数が合っていない』指摘が再発するリスクがある」との指摘。対策として44ファイルへ恒久リダイレクトを実装。
+
+- [x] 新規スクリプト `scripts/mockup-rebuild/add_pages_redirects.py`: 求人詳細37件・`jobs.html`・カテゴリ別4件・`job-preview.html`・`index.html`の計44ファイルへ、Cloud Run(検証用URL)への meta refresh リダイレクトを冪等に挿入。`--base-url`引数を持つため Stage 5 のドメイン切替後は1コマンドで再適用可能
+- [x] SEO一次情報確認済み(Google Search Central "Redirects and Google Search"): 即時(0秒)meta refreshは永続リダイレクト扱い
+- [x] `mockup/index.html`はCloud Run自身の`/`が同じファイルを読んで配信する共有ソースのため、`sync/src/sync/app.py`の`_render_top_page()`に自己ループ防止のタグ除去処理(`_TOP_PAGE_PHASE_A_REDIRECT_RE`)を追加
+- [x] `jobs.html`はcodex reviewの指摘(P2)を受け修正: `mockup/index.html`から`?job_type=visit`/`?job_type=care-manager`というクエリ付きでリンクされており、Cloud Run側は`job_type→category_id`変換を行うが静的meta refreshはクエリを読めないため、インラインJS(`location.search`読み取り)+ noscriptフォールバックへ変更
+- [x] 品質ゲート: codex review 2回(コミット前・strict-config)ともfindings 0件〜1件(P2、修正済み)。`pr-review-toolkit`2エージェント(code-reviewer/pr-test-analyzer)によるセカンドオピニオンで重大な問題なし、テストカバレッジ指摘1件(カテゴリID二重管理のdrift検出テスト)を追加対応
+- [x] pytest 439件全PASS、ruff/pyright 0エラー。GitHub Pages実機(Playwright)で反映確認: トップページ・求人詳細・`job_type`クエリ付きURL(3パターン)いずれもCloud Run側の正しいURLへ自動遷移
+
+🎯 **完了**。GitHub Pagesは以後Cloud Runへの導線としてのみ機能し、37件版が決裁者の目に触れることは無くなった。
+
+## Stage 5 調査結果(2026-08-09、実行はしていない・decision-maker判断待ち)
+
+decision-makerから「今日Cloud Runページを決裁者に見せ、カスタムドメインを当てて移行を進める想定(システム部にDNS依頼)、GA4設定も検討」との方針共有を受け、実際に`gcloud`コマンドで検証した結果:
+
+- **`gcloud beta run domain-mappings create`を実行し実測**: `aozora-cg.com`のSearch Console所有権検証が未完了のため`ERROR: The provided domain does not appear to be verified`で即座に失敗(副作用なし、マッピングは作成されず)。**検証完了が絶対的な前提条件**と確定
+- **`gcloud domains verify`は仕様上「in-browser workflow」**(`gcloud domains verify --help`で確認)。TXTレコード値の取得にはGoogle Workspaceアカウント(`yasushi.honda@aozora-cg.com`)に紐づくブラウザ操作が必須で、CLI/AIだけで完結する方法は存在しない
+- **手順は本質的に2段階**: ①本田様がSearch Console検証(TXTレコード、システム部へ依頼) → 検証完了後に②`gcloud beta run domain-mappings create`実行(私が可能)→ 払い出されたCNAME値をシステム部へ改めて依頼、という順序。1回のシステム部依頼にまとめることは技術的に不可能(CNAME値は①完了後にしか判明しない)
+- **システム部への依頼文テンプレートを作成済み**(本セッションの会話ログ参照、TXT値は本田様がSearch Consoleで取得後に空欄へ埋めるだけで送信可能な形)
+- GA4導入・Google Chat webhook Secret登録は、いずれも本田様の手元作業(測定ID取得/webhook発行)が先に必要なため今回は保留(decision-maker選択)
+
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
 
@@ -167,7 +190,7 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 
 ## 🔄 中断点（in-flight）
 - Secret Manager (`ops-webhook-url` = Google Chat webhook) は未設定 — `notify_ops()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。組織の運用チャンネルはSlackではなくGoogle Chatのため、2026-08-09に通知実装をGoogle Chat webhook前提へ移行済み(`notify_slack`→`notify_ops`、secret名`slack-webhook-url`→`ops-webhook-url`、Slack絵文字記法→Unicode絵文字)。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
-- `mockup/index.html`の「訪問介護員(ヘルパー)」「ケアマネジャー」カードの`job_type`クエリ導線切れは、**Phase B(Cloud Run)側では2026-08-08 Stage 1で解消済み**(サーバ側リンク書き換えで`category_id=18986`/`18985`へ正しく遷移)。ただしPhase A(GitHub Pages、Stage 5のドメイン切替までは並行して本番公開中)の`map-search.js`は引き続き`job_type`を読まないため、GitHub Pages側では未解消のまま(Stage 5完了でGitHub Pagesがリクルート用途から外れれば自然消滅する想定、それまでは記録のみ)
+- ~~`mockup/index.html`の「訪問介護員(ヘルパー)」「ケアマネジャー」カードの`job_type`クエリ導線切れ~~ → **2026-08-09 PR #152で解消済み**。GitHub Pages(Phase A)側の`jobs.html`にjob_type-aware JSリダイレクトを追加したため、`map-search.js`が実行される前にCloud Run側の正しいフィルタ済みURL(`category_id=18986`/`18985`)へ自動遷移するようになった(実機Playwright確認済み)
 
 ## セッション履歴: 2026-08-08 mockup反映漏れ修正 + Phase B Stage1本番デプロイ(PR #141→#142、社長指摘「実際のJobcanより少ない件数を見せているのはまずい」を起点)
 
