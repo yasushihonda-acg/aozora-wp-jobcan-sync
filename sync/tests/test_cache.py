@@ -82,6 +82,40 @@ def test_clear_empties_json_cache_too() -> None:
     assert cache.get_json("__all__") is None
 
 
+def test_json_list_cache_hit_returns_stored_value() -> None:
+    cache = _short_ttl_cache()
+    cache.set_json_list("__all__", [{"id": "1"}])
+
+    assert cache.get_json_list("__all__") == [{"id": "1"}]
+
+
+def test_json_list_cache_miss_returns_none() -> None:
+    cache = _short_ttl_cache()
+    assert cache.get_json_list("__all__") is None
+
+
+def test_json_list_namespace_is_separate_from_json_and_list() -> None:
+    """`chatbot-knowledge.json` (list payload) must not collide with
+    `search-index.json` (dict payload) even though both may use the same
+    `__all__` key."""
+    cache = _short_ttl_cache()
+    cache.set_list("__all__", "<html>list</html>")
+    cache.set_json("__all__", {"jobs": []})
+    cache.set_json_list("__all__", [{"id": "1"}])
+
+    assert cache.get_list("__all__") == "<html>list</html>"
+    assert cache.get_json("__all__") == {"jobs": []}
+    assert cache.get_json_list("__all__") == [{"id": "1"}]
+
+
+def test_clear_empties_json_list_cache_too() -> None:
+    cache = _short_ttl_cache()
+    cache.set_json_list("__all__", [{"id": "1"}])
+    cache.clear()
+
+    assert cache.get_json_list("__all__") is None
+
+
 @freeze_time("2026-06-18 00:00:00")
 def test_detail_cache_expires_after_ttl() -> None:
     cache = _short_ttl_cache()

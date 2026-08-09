@@ -19,39 +19,51 @@ gcloud auth application-default login
 GCP_PROJECT=aozora-wp-jobcan-sync uv run python scripts/probe_model.py
 ```
 
-## 知識ベースの鮮度（2026-07-26 起動時リフレッシュを実装）
+## 知識ベースの鮮度（2026-08-09 sync連携・定期リフレッシュへ移行）
 
-`src/chatbot/knowledge/faq.yaml` / `jobs_detail.json` はコンテナイメージに同梱される
-（RAG なし）。**`jobs_detail.json` はこれに加えて、起動時に 1 回だけ GitHub Pages
-（`DEFAULT_JOBS_DETAIL_URL`、実体はこのファイル自身の公開 URL）から再取得を試みる**
-（`knowledge.fetch_knowledge`、`app.py` の lifespan startup で実行）。取得に成功すれば
-それを採用し、ネットワークエラー・タイムアウト・404・不正 JSON・スキーマ不一致・空配列
-のいずれでも**同梱データにフォールバックしてアプリは起動を継続する**（`/health` の
-`knowledge.source` が `"fetched"` / `"bundled"` のどちらだったかを返す）。`faq.yaml` は
-対象外（更新頻度がほぼゼロで、フェッチ対象を増やすと失敗モードが増えるだけのため）。
+`src/chatbot/knowledge/faq.yaml` はコンテナイメージに同梱される（RAG なし、更新頻度が
+ほぼゼロなためフェッチ対象に含めない）。**求人データには同梱ファイルが一切存在しない**
+（旧 `jobs_detail.json` + `scripts/build_jobs_detail.py` の手動更新パイプラインは
+2026-08-09 に完全削除 — Phase A の静的37件から更新が止まっていた本番不具合の根治）。
+求人データは唯一 `sync`（ジョブカンプロキシ、Cloud Run + Firestore、6時間ごと自動同期）
+の `GET /jobs/chatbot-knowledge.json`（`DEFAULT_JOBS_DETAIL_URL`）から取得する
+（`knowledge.fetch_knowledge`）。取得は2段構え:
 
-**反映フロー（再デプロイ不要）**: `mockup/assets/data/jobs.json` / `mockup/jobs.html` を
-更新したら `uv run python scripts/build_jobs_detail.py` で `jobs_detail.json` を再生成し、
-`git push` するだけでよい。次に起動する Cloud Run インスタンスが新しいデータを取得する。
+1. **起動時**: `app.py` の lifespan startup で1回（`_refresh_knowledge`）
+2. **定期**: 起動後は `KNOWLEDGE_REFRESH_INTERVAL_SECONDS`（既定 3600 秒 = 1 時間）ごとに
+   asyncio バックグラウンドタスクで再取得し続ける（`_periodic_refresh`、常時起動中の
+   インスタンスが `sync` の 6 時間サイクルを取りこぼさないため）。lifespan shutdown で
+   タスクは cancel される
 
-**反映タイミングの注意（即時ではない）**:
-- GitHub Pages のビルド（~20-60 秒）+ CDN キャッシュ（`cache-control: max-age=600`、
-  実測で最大約 10 分）の後でないと、新しい内容が配信されない
-- 起動時 1 回だけの取得なので、**新しいインスタンスが起動するまで反映されない**
-  （min-instances=0 かつ低トラフィックなら次のコールドスタート、常時起動中のインスタンスは
-  再起動するまで古いデータを保持し続ける）
-- **確実に即時反映したい場合は、これまで通り再デプロイする**
-  （`gcloud run deploy` で新しいリビジョンが起動時に再取得する）
+取得に成功すればそれを採用し、ネットワークエラー・タイムアウト・404・不正 JSON・
+スキーマ不一致・空配列のいずれでも**直前まで保持していた知識ベースを維持してアプリは
+稼働を継続する**（起動直後の初回取得が失敗した場合のみ、後述の FAQ オンリー状態になる）。
+`/health` の `knowledge.source` が `"fetched"` / `"bundled"` のどちらだったかを返す。
 
-**キルスイッチ**: `JOBS_DETAIL_URL=`（空文字）でこのリフレッシュ自体を無効化できる
-（`gcloud run services update aozora-chatbot --update-env-vars JOBS_DETAIL_URL=`）。ローカル
-開発でオフラインにしたい場合も同様。
+**`bundled_knowledge()` は FAQ のみ**: 求人データの同梱フォールバックは存在しないため、
+`sync` 側が一度も取得に成功していない cold start 直後は求人 0 件（`job_count: 0`）で
+起動する。この状態のシステムプロンプトは「求人情報を取得できていません」と明記し、
+Gemini に求人推薦を行わせない（`knowledge._render_context` の空データ分岐）。
+
+**反映フロー**: `sync` 側の6時間ごと自動同期がそのまま知識ベースの更新になる。人手の
+作業（スクリプト実行・`git push`・再デプロイ）は一切不要。
+
+**反映タイミング**: 最悪ケースで「`sync`側の同期完了」+「chatbot側の次回定期リフレッシュ
+（最大 `KNOWLEDGE_REFRESH_INTERVAL_SECONDS`）」の合計遅延。即時反映が必要な場合は
+`gcloud run services update aozora-chatbot --update-env-vars` 等でインスタンスを
+再起動させれば、次の起動時取得ですぐ反映される。
+
+**キルスイッチ**: `JOBS_DETAIL_URL=`（空文字）で起動時・定期リフレッシュの両方を無効化
+できる（`gcloud run services update aozora-chatbot --update-env-vars JOBS_DETAIL_URL=`）。
+`KNOWLEDGE_REFRESH_INTERVAL_SECONDS=0` は定期リフレッシュのみ無効化（起動時取得は残る）。
+ローカル開発でオフラインにしたい場合も前者を使う。
 
 **信頼境界**: 取得した JSON は Gemini の system prompt に直接埋め込まれ、`resolve_jobs`
 のホワイトリストにもなるため、`knowledge.parse_jobs_detail` で構造検証する（pydantic、
-`chatbot/tests/test_knowledge.py` / `test_startup_refresh.py` 参照）。特に `url` フィールド
-は取得値を採用せず `id` から `jobs/{id}.html` を再計算する — `chat-widget.js` が
-`job.url` をそのまま `<a href>` に使うため、取得元 JSON を信頼境界の外として扱う。
+`chatbot/tests/test_knowledge.py` / `test_startup_refresh.py` / `test_periodic_refresh.py`
+参照）。特に `url` フィールドは取得値を採用せず `id` から `jobs/{id}`（`sync` の正規
+求人詳細ルート）を再計算する — `chat-widget.js` が `job.url` をそのまま `<a href>` に
+使うため、取得元 JSON を信頼境界の外として扱う。
 
 ## レスポンス形式（構造化出力、2026-07-24 拡張）
 

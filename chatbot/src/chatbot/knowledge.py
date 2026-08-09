@@ -1,26 +1,31 @@
 """Builds the grounding context injected into the system prompt, and the
 job-id whitelist `resolve_jobs` checks against.
 
-Phase A design: FAQ is bundled into the container image (`knowledge/faq.yaml`)
-and never changes at runtime — see faq.yaml's own header comment for why.
-Job data (`knowledge/jobs_detail.json`) is *also* bundled (the always-available
-fallback), but is additionally re-fetched once at process startup from GitHub
-Pages (`fetch_knowledge`, wired up in `app.py`'s lifespan) so that updating
-`mockup/assets/data/jobs.json` + `mockup/jobs.html` and running
-`scripts/build_jobs_detail.py` no longer requires redeploying this service —
-only a `git push` and the next cold start.
+FAQ is bundled into the container image (`knowledge/faq.yaml`) and never
+changes at runtime — see faq.yaml's own header comment for why. Job data has
+NO bundled counterpart (Stage: AIチャットPhase B連携, 2026-08-09) — it comes
+exclusively from `sync`'s `GET /jobs/chatbot-knowledge.json`, fetched at
+process startup and re-fetched on a periodic timer (`app.py`'s
+`_refresh_knowledge`/`_periodic_refresh`), so the chatbot tracks the
+6-hourly Firestore sync without a human ever re-running a build script.
+
+The bundled `jobs_detail.json` + `scripts/build_jobs_detail.py` this module
+used to fall back to were deleted, not just deprioritized: keeping them
+around would have preserved a path where a `sync` outage makes this service
+silently answer with stale Phase A sample data instead of admitting it can't
+recommend jobs right now — precisely the staleness bug this migration exists
+to close. `bundled_knowledge()` is now FAQ-only; see its docstring.
 
 `KnowledgeBase` bundles the prompt context and the job whitelist into one
 immutable snapshot so the two can never describe different job sets (see its
-docstring). `bundled_knowledge()` builds the fallback snapshot once per
-process; `fetch_knowledge()` builds a fresh one from a remote payload, or
+docstring). `bundled_knowledge()` builds the FAQ-only fallback snapshot once
+per process; `fetch_knowledge()` builds a fresh one from a remote payload, or
 raises — callers own the fallback policy (see `app.py`).
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -37,30 +42,25 @@ _KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
 
 _MAX_RESOLVED_JOBS = 3
 
-# GitHub Pages serves this repo verbatim (Source `main` / path `/`, see
-# CLAUDE.md), so the very file bundled into the container image is also
-# reachable over HTTP — one file serves as both the offline fallback and the
-# runtime fetch source (2026-07-26 measured: 200 / application/json /
-# 14177 bytes, byte-identical to the bundled copy).
-#
-# This means the URL below ENCODES this module's on-disk layout. Moving
-# `knowledge/jobs_detail.json` would 404 this URL, and a fetch failure is
-# deliberately silent (falls back to bundled data) — so a path rename could
-# go unnoticed in production forever.
-# `tests/test_knowledge.py::test_default_jobs_detail_url_matches_bundled_file_path`
-# pins the two together mechanically.
+# `sync`'s Cloud Run service — the *only* source of job data (Stage: AIチャット
+# Phase B連携, 2026-08-09). `/jobs/chatbot-knowledge.json` is built at request
+# time from live Firestore snapshots (`sync/src/sync/chatbot_knowledge.py`),
+# so this always reflects the 6-hourly sync, not a one-time build artefact.
+# A fetch failure is deliberately silent (falls back to the current
+# in-memory knowledge base, FAQ-only on a cold start — see
+# `app._refresh_knowledge`), so a URL/path drift here could go unnoticed in
+# production; `tests/test_knowledge.py::
+# test_default_jobs_detail_url_matches_sync_route_path` pins this string
+# against `sync`'s own route path mechanically.
 DEFAULT_JOBS_DETAIL_URL = (
-    "https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync"
-    "/chatbot/src/chatbot/knowledge/jobs_detail.json"
+    "https://aozora-sync-flry56mxwa-an.a.run.app/jobs/chatbot-knowledge.json"
 )
 
 # Disallows control/formatting characters and both pipe variants. `context`
 # formats each job as a `|`-delimited row and each FAQ/job field is embedded
 # directly into the system prompt (the model's highest-trust input) — a
 # fetched title containing e.g. a newline could forge a new prompt line, and
-# a literal `|` could forge an extra column. Verified against all current
-# titles/facilities (see test_jobs_detail_has_37_entries_matching_jobs_json):
-# none contain these characters, so this rejects nothing in practice today.
+# a literal `|` could forge an extra column.
 _FORBIDDEN_CHARS_RE = re.compile(
     r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069|\uff5c]"
 )
@@ -82,7 +82,7 @@ class _StrictJobDetail(JobDetail):
 
     # `id` is interpolated into the same pipe-delimited context row as
     # `title` (unescaped) and is used verbatim to rebuild `url`
-    # (`jobs/{id}.html`) — the whole reason `url` itself is discarded and
+    # (`jobs/{id}`) — the whole reason `url` itself is discarded and
     # recomputed. A forbidden character in `id` would forge a fake context
     # row exactly like an unvalidated `title` would, and would also corrupt
     # the very `url` recomputation meant to be the safe alternative. All
@@ -147,14 +147,32 @@ def _summarize_jobs(jobs_detail: list[dict]) -> dict:
 
 
 def _render_context(faq: list[dict[str, str]], jobs_detail: list[dict]) -> str:
-    """Assemble FAQ + job summary into one grounding document."""
-    jobs = _summarize_jobs(jobs_detail)
+    """Assemble FAQ + job summary into one grounding document.
 
+    `jobs_detail == []` (a FAQ-only `bundled_knowledge()` cold start, or a
+    fetch that hasn't succeeded yet) skips the job sections entirely and
+    tells the model outright not to recommend jobs — the alternative
+    (silently omitting the section) leaves the model free to hallucinate
+    job details from FAQ text alone, and an explicit instruction here is
+    the only lever this module has over that (`resolve_jobs` server-side
+    filtering only catches a fabricated *id*, not a fabricated job
+    description with no id at all).
+    """
     lines = ["## よくある質問"]
     for item in faq:
         lines.append(f"Q: {item['question']}\nA: {item['answer']}")
 
-    lines.append("\n## 求人情報サマリー（Phase Aのダミーデータ）")
+    if not jobs_detail:
+        lines.append(
+            "\n## 求人情報\n"
+            "現在、求人情報を取得できていません。求人の詳細案内やおすすめの提示は行わず、"
+            "「現在求人情報を確認できないため、後ほど改めてお尋ねいただくか採用ページを"
+            "直接ご確認ください」という趣旨をユーザーに伝えてください。"
+        )
+        return "\n".join(lines)
+
+    jobs = _summarize_jobs(jobs_detail)
+    lines.append("\n## 求人情報サマリー")
     lines.append(f"対応エリア: {', '.join(jobs['areas'])}")
     lines.append(f"職種カテゴリ: {', '.join(jobs['categories'])}")
     lines.append(f"雇用形態: {', '.join(jobs['employment_types'])}")
@@ -236,11 +254,12 @@ def parse_jobs_detail(raw: object) -> list[dict]:
     `app._refresh_knowledge`).
 
     `url` is deliberately NOT taken from the payload: it's fully derived
-    from `id` (`jobs/{id}.html`, see `scripts/build_jobs_detail.py`), so
-    trusting a remote-supplied `url` would let a compromised/misconfigured
-    Pages deployment put an arbitrary URL into `<a href>` on the recruitment
-    site (`chat-widget.js`'s job cards). Recomputing it here removes that
-    field from the trust boundary entirely rather than trying to validate it.
+    from `id` (`jobs/{id}` — `sync`'s canonical detail route, see
+    `sync/src/sync/chatbot_knowledge.py`), so trusting a remote-supplied
+    `url` would let a compromised/misconfigured upstream put an arbitrary
+    URL into `<a href>` on the recruitment site (`chat-widget.js`'s job
+    cards). Recomputing it here removes that field from the trust boundary
+    entirely rather than trying to validate it.
     """
     jobs = _JOBS_DETAIL_ADAPTER.validate_python(raw)
     if not jobs:
@@ -259,7 +278,7 @@ def parse_jobs_detail(raw: object) -> list[dict]:
         # dict-key collision — exactly the context/whitelist skew
         # `KnowledgeBase` exists to make impossible.
         raise ValueError("jobs_detail payload contains duplicate ids")
-    return [{**job.model_dump(), "url": f"jobs/{job.id}.html"} for job in jobs]
+    return [{**job.model_dump(), "url": f"jobs/{job.id}"} for job in jobs]
 
 
 def build_knowledge(
@@ -275,14 +294,24 @@ def build_knowledge(
 
 @lru_cache(maxsize=1)
 def bundled_knowledge() -> KnowledgeBase:
-    """The image-bundled knowledge base — the always-available fallback.
+    """The FAQ-only fallback used before the first successful
+    `fetch_knowledge()` call (or after every retry has failed).
 
-    `lru_cache` keeps "parse once per process": `create_app()` runs at every
+    There is deliberately no bundled job data (Stage: AIチャットPhase B連携,
+    2026-08-09 removed the old `knowledge/jobs_detail.json` — see module
+    docstring): this process boundary legitimately has zero jobs until
+    `sync`'s `/jobs/chatbot-knowledge.json` has been fetched at least once.
+    `build_knowledge([], source="bundled")` renders a context that tells the
+    model to decline job recommendations rather than resorting to stale
+    Phase A sample data (`_render_context`'s empty-jobs branch). `/health`
+    reporting `{"source": "bundled", "job_count": 0}` is the observable
+    signal that an instance hasn't fetched real data yet.
+
+    `lru_cache` keeps "build once per process": `create_app()` runs at every
     test module's import time (module-level ASGI entrypoint in `app.py`) and
-    would otherwise re-read and re-parse the file on every import.
+    would otherwise re-parse `faq.yaml` on every import.
     """
-    raw = json.loads((_KNOWLEDGE_DIR / "jobs_detail.json").read_text(encoding="utf-8"))
-    return build_knowledge(parse_jobs_detail(raw), source="bundled")
+    return build_knowledge([], source="bundled")
 
 
 async def fetch_knowledge(

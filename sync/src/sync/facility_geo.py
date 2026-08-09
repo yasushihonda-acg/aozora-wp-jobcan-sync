@@ -187,6 +187,7 @@ _ASCII_KEY_MAP = {
 
 _REGION_PREFIX_RE = re.compile(r"^【[^】]*】")
 _CORP_NAME_RE = re.compile(r"^あおぞらケアグループ")
+_FACILITY_PAREN_RE = re.compile(r"（(?P<inner>[^）]+)）")
 
 
 def facility_core_name(address: str) -> str:
@@ -219,6 +220,53 @@ def facility_key(address: str) -> str:
         return _ASCII_KEY_MAP[core]
     normalized = unicodedata.normalize("NFKC", core)
     return "facility-" + normalized
+
+
+_SERVICE_TYPE_TOKEN_RE = re.compile(r"[・/]")
+
+# Normalizes the abbreviated service-type tags packed into a facility's
+# parenthetical (e.g. `（デイ・有料）`, `（訪問介護/訪問看護・居宅）`) to a
+# display-friendly name. Ported and extended from Phase A's
+# `chatbot/scripts/build_jobs_detail.py::_SERVICE_TYPE_MAP` (which only had
+# 7 entries — `介護付有料`/`サ高住`/`居宅`/`訪問看護` were silently
+# pass-through there, undetected because that script's own facility set
+# never exercised them). `test_service_types_from_address_covers_every_
+# facility_coords_tag` pins every abbreviation actually present across all
+# 27 `FACILITY_COORDS` entries, so a future unmapped tag fails loudly
+# instead of leaking a raw abbreviation into chatbot-facing text.
+_SERVICE_TYPE_MAP = {
+    "デイ": "デイサービス",
+    "有料": "有料老人ホーム",
+    "介護付有料": "介護付有料老人ホーム",
+    "特養": "特別養護老人ホーム",
+    "GH": "グループホーム",
+    "サ高住": "サービス付き高齢者向け住宅",
+    "訪問介護": "訪問介護",
+    "訪問看護": "訪問看護",
+    "居宅": "居宅介護支援",
+    "相談支援": "相談支援",
+    "就労": "就労支援",
+}
+
+
+def service_types_from_address(address: str) -> list[str]:
+    """Normalized service-type tags packed into `address`'s parenthetical
+    (e.g. `【福岡】あおぞらケアグループ四箇（デイ・有料）` →
+    `["デイサービス", "有料老人ホーム"]`), for chatbot-facing service-type
+    disambiguation (see `chatbot_knowledge.py`).
+
+    An unmapped token passes through unchanged rather than raising — the
+    same permissive behaviour as Phase A's script, so a brand-new Jobcan
+    facility naming convention degrades to "the tag is just shown as-is"
+    instead of taking the sync job down. `本社`/`福岡支店` and the roaming
+    GH posting (`共同生活援助`) carry no parenthetical at all and resolve
+    to `[]`.
+    """
+    match = _FACILITY_PAREN_RE.search(facility_core_name(address))
+    if not match:
+        return []
+    tokens = _SERVICE_TYPE_TOKEN_RE.split(match.group("inner"))
+    return [_SERVICE_TYPE_MAP.get(token, token) for token in tokens]
 
 
 def facility_coords(address: str) -> dict | None:

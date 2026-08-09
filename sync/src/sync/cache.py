@@ -73,6 +73,8 @@ class Cache(Protocol):
     def set_list(self, category_id: str, html: str) -> None: ...
     def get_json(self, key: str) -> dict | None: ...
     def set_json(self, key: str, value: dict) -> None: ...
+    def get_json_list(self, key: str) -> list | None: ...
+    def set_json_list(self, key: str, value: list) -> None: ...
     def get_negative(self, kind: str, key: str) -> int | None: ...
     def set_negative(self, kind: str, key: str, status_code: int) -> None: ...
     def clear(self) -> None: ...
@@ -111,6 +113,17 @@ class InMemoryCache:
         # sits next to, but its own TTLCache so a dict payload never lands
         # in the str-typed `_list` store.
         self._json: TTLCache[str, dict] = TTLCache(
+            maxsize=self.config.maxsize,
+            ttl=self.config.list_ttl,
+            timer=self.config.timer,
+        )
+        # `chatbot-knowledge.json` (`GET /jobs/chatbot-knowledge.json`,
+        # `chatbot_knowledge.build_chatbot_knowledge`) is a top-level JSON
+        # *array*, not the `{"facilities": ..., "jobs": ...}` dict shape
+        # `_json` above holds — a separate store so a list payload can't
+        # land in the dict-typed cache (and so the two endpoints' payloads
+        # never collide even if they reuse the same `__all__` key).
+        self._json_list: TTLCache[str, list] = TTLCache(
             maxsize=self.config.maxsize,
             ttl=self.config.list_ttl,
             timer=self.config.timer,
@@ -169,6 +182,12 @@ class InMemoryCache:
     def set_json(self, key: str, value: dict) -> None:
         self._set(self._json, key, value)
 
+    def get_json_list(self, key: str) -> list | None:
+        return self._get(self._json_list, key)
+
+    def set_json_list(self, key: str, value: list) -> None:
+        self._set(self._json_list, key, value)
+
     def get_negative(self, kind: str, key: str) -> int | None:
         return self._get(self._negative, f"{kind}:{key}")
 
@@ -180,4 +199,5 @@ class InMemoryCache:
             self._detail.clear()
             self._list.clear()
             self._json.clear()
+            self._json_list.clear()
             self._negative.clear()

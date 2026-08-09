@@ -96,7 +96,7 @@ def test_health_returns_200() -> None:
     # Non-`with` TestClient never runs lifespan startup (see
     # `tests/test_startup_refresh.py`), so the knowledge base is always the
     # bundled fallback here.
-    assert body["knowledge"] == {"source": "bundled", "job_count": 37}
+    assert body["knowledge"] == {"source": "bundled", "job_count": 0}
 
 
 def test_health_has_security_headers() -> None:
@@ -142,8 +142,34 @@ def test_chat_response_includes_suggestions() -> None:
     assert response.json()["suggestions"] == ["未経験でも応募できますか？", "選考期間は？"]
 
 
-def test_chat_response_resolves_known_job_id() -> None:
-    """`1777023` is a real id from `knowledge/jobs_detail.json` (博多 care job)."""
+def test_chat_response_resolves_known_job_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The counterpart of `test_chat_response_drops_hallucinated_job_id`
+    below, exercising the "known id" branch of `resolve_jobs`. There is no
+    bundled job fixture anymore (see `knowledge.py` module docstring), so
+    this monkeypatches `bundled_knowledge` — `create_app()` calls it
+    synchronously at construction time regardless of whether lifespan ever
+    runs (`_client_with` never enters `TestClient` as a context manager, so
+    a real fetch never happens here)."""
+    kb = knowledge.build_knowledge(
+        knowledge.parse_jobs_detail(
+            [
+                {
+                    "id": "1777023",
+                    "title": "介護職（博多）",
+                    "url": "ignored",
+                    "category": "care",
+                    "employment": ["正社員"],
+                    "facility": "博多事業所",
+                    "city": "福岡市博多区",
+                    "area": "fukuoka",
+                    "service_types": ["デイサービス"],
+                }
+            ]
+        ),
+        source="fetched",
+    )
+    monkeypatch.setattr(knowledge, "bundled_knowledge", lambda: kb)
+
     fake = _FakeGenerate(job_ids=["1777023"])
     client = _client_with(fake)
 
@@ -152,7 +178,7 @@ def test_chat_response_resolves_known_job_id() -> None:
     jobs = response.json()["jobs"]
     assert len(jobs) == 1
     assert jobs[0]["id"] == "1777023"
-    assert jobs[0]["url"] == "jobs/1777023.html"
+    assert jobs[0]["url"] == "jobs/1777023"
 
 
 def test_chat_response_drops_hallucinated_job_id() -> None:
@@ -397,3 +423,36 @@ def test_app_config_from_env_parses_allowed_origins(monkeypatch: pytest.MonkeyPa
     config = AppConfig.from_env()
 
     assert config.allowed_origins == ("https://a.example.com", "https://b.example.com")
+
+
+def test_app_config_from_env_knowledge_refresh_interval_defaults_to_one_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KNOWLEDGE_REFRESH_INTERVAL_SECONDS", raising=False)
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_refresh_interval_seconds == 3600.0
+
+
+def test_app_config_from_env_empty_refresh_interval_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same rationale as `KNOWLEDGE_FETCH_TIMEOUT_SECONDS`: an empty string
+    has no distinct meaning here (`"0"` is the documented disable value),
+    so it must fall back rather than crash `float("")` at import time."""
+    monkeypatch.setenv("KNOWLEDGE_REFRESH_INTERVAL_SECONDS", "")
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_refresh_interval_seconds == 3600.0
+
+
+def test_app_config_from_env_parses_knowledge_refresh_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KNOWLEDGE_REFRESH_INTERVAL_SECONDS", "900")
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_refresh_interval_seconds == 900.0

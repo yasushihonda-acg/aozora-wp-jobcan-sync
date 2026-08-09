@@ -31,6 +31,8 @@ necessary.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
@@ -181,6 +183,26 @@ def create_app(
             len(refreshed.jobs_by_id),
         )
 
+    async def _periodic_refresh() -> None:
+        """Background task: re-runs `_refresh_knowledge()` on a timer for
+        the lifetime of a warm instance (Stage: AIチャットPhase B連携,
+        2026-08-09).
+
+        `interval <= 0` disables this — the loop returns immediately without
+        ever sleeping, same kill-switch convention as `jobs_detail_url=""`.
+        `asyncio.CancelledError` from `asyncio.sleep` is deliberately left
+        to propagate (not caught here): `_lifespan`'s shutdown path cancels
+        this task and awaits it, and swallowing the cancellation here would
+        make that await hang instead of returning.
+        """
+        interval = app_config.knowledge_refresh_interval_seconds
+        if interval <= 0:
+            _logger.info("periodic knowledge refresh disabled (interval <= 0)")
+            return
+        while True:
+            await asyncio.sleep(interval)
+            await _refresh_knowledge()
+
     # Holds the lazily-built real client (empty when `generate_fn` was
     # injected, i.e. every test) so `_lifespan` below can close it on
     # shutdown without caring which branch was taken — mirrors
@@ -213,9 +235,13 @@ def create_app(
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _refresh_knowledge()
+        refresh_task = asyncio.create_task(_periodic_refresh())
         try:
             yield
         finally:
+            refresh_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await refresh_task
             if _client_holder:
                 _client_holder[0].close()
 
