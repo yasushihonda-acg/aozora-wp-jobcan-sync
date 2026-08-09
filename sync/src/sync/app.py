@@ -357,7 +357,9 @@ def create_app(
                 extra={"skipped_job_ids": skipped},
             )
 
-        index = build_search_index(snapshots)
+        index, warnings = build_search_index(snapshots)
+        for warning in warnings:
+            _logger.warning("search-index build warning", extra={"detail": warning})
         proxy_cache.set_json(_ALL_JOBS_CACHE_KEY, index)
         _logger.info("cache miss → built", extra={"kind": "search-index"})
         return JSONResponse(content=index)

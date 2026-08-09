@@ -77,6 +77,12 @@
 
 {% if search_mode %}
 <div class="job-search" id="job-search" data-jobs-endpoint="{{ search_index_url }}">
+  {# Stage 3 silent-failure-hunter finding (2026-08-09): a search-index.json
+     fetch failure (Firestore outage, Cloud Run cold-start timeout, etc.)
+     used to fail into total silence — the panel/map simply never appeared,
+     with no signal to the visitor that a feature was supposed to be here.
+     `map-search.js`'s catch block now also unhides this. #}
+  <p class="job-search-empty" id="job-search-load-error" hidden>検索・地図機能を読み込めませんでした。すべての求人を表示しています。</p>
   <div class="job-search-panel" id="job-search-panel" hidden>
     <div class="job-search-panel__row">
       <span class="job-search-panel__label">職種</span>

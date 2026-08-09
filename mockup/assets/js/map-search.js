@@ -60,8 +60,16 @@
     .then(function (data) {
       init(data);
     })
-    .catch(function () {
-      // データ取得失敗時は検索UI一式を出さず、既存の34カード全表示のままにする。
+    .catch(function (err) {
+      // データ取得失敗時は検索UI一式を出さず、既存カード全表示のままにする
+      // (Phase Bの`/jobs/search-index.json`はFirestore障害等で本当に失敗
+      // しうる、Phase Aの静的JSONと違い実際に落ちるエンドポイント。
+      // console.errorと画面上の通知は必須 — サイレント縮退は求人検索/地図
+      // 機能が丸ごと消えたことに来訪者が気づく手段が無くなる、Stage 3
+      // silent-failure-hunterレビュー指摘、2026-08-09)。
+      console.error('[job-search] failed to load search index:', err);
+      var loadError = document.getElementById('job-search-load-error');
+      if (loadError) loadError.hidden = false;
     });
 
   function init(data) {

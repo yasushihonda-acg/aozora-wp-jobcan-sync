@@ -42,7 +42,25 @@ def test_facility_key_stable_for_ascii_map_entries() -> None:
 
 
 def test_facility_key_strips_region_and_corp_prefix() -> None:
-    assert facility_key("【福岡】あおぞらケアグループ四箇（デイ・有料）") == "facility-四箇"
+    key = facility_key("【福岡】あおぞらケアグループ四箇（デイ・有料）")
+    assert key == "facility-四箇(デイ・有料)"
+
+
+def test_facility_key_keeps_parenthetical_to_disambiguate_same_place_name() -> None:
+    """`博多（デイ・有料）` and `博多（訪問介護/訪問看護・居宅）` are two
+    different physical addresses — a key derived from the pre-`（` place
+    name alone would collapse them (code-reviewer finding, 2026-08-09;
+    Phase A's original `build_geo_data.py::facility_key` dropped the
+    parenthetical, safe only under its fixed, hand-verified 13-entry
+    table)."""
+    key_a = facility_key("【福岡】あおぞらケアグループ博多（デイ・有料）")
+    key_b = facility_key("【福岡】あおぞらケアグループ博多（訪問介護/訪問看護・居宅）")
+    assert key_a != key_b
+
+
+def test_facility_key_unique_across_every_facility_coords_entry() -> None:
+    keys = [facility_key(name) for name in FACILITY_COORDS]
+    assert len(keys) == len(set(keys))
 
 
 def test_area_from_address_reads_region_marker_even_without_coords() -> None:

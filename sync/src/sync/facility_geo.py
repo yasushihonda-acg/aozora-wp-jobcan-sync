@@ -202,14 +202,22 @@ def facility_core_name(address: str) -> str:
 
 
 def facility_key(address: str) -> str:
-    """Stable slug for JSON keys / `data-*` attribute values. Ported from
-    `scripts/mockup-rebuild/build_geo_data.py::facility_key`, extended to
-    strip the region-marker prefix Firestore postings carry."""
+    """Stable slug for JSON keys / `data-*` attribute values.
+
+    Ported from `scripts/mockup-rebuild/build_geo_data.py::facility_key`
+    (extended to strip the region-marker prefix Firestore postings carry),
+    with one deliberate deviation: that script dropped everything from the
+    first `（` onward on the assumption that the pre-`（` place name alone
+    was unique across its fixed, hand-managed 13-entry table (its own
+    comment says so). Stage 3's 14 additions broke that assumption —
+    `博多（デイ・有料）` and `博多（訪問介護/訪問看護・居宅）` are two
+    different addresses that both reduce to `博多` — so this keeps the full
+    parenthetical in the key instead (codex/second-opinion review finding,
+    2026-08-09; `test_facility_geo.py`'s uniqueness test guards regression)."""
     core = facility_core_name(address)
     if core in _ASCII_KEY_MAP:
         return _ASCII_KEY_MAP[core]
-    name_only = re.sub(r"（.*", "", core).strip()
-    normalized = unicodedata.normalize("NFKC", name_only)
+    normalized = unicodedata.normalize("NFKC", core)
     return "facility-" + normalized
 
 

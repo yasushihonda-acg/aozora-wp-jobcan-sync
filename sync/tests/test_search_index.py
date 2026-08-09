@@ -60,11 +60,13 @@ def _snapshot(
     )
 
 
-def test_build_search_index_includes_active_jobs_with_list_item() -> None:
-    address = "【福岡】あおぞらケアグループ四箇（デイ・有料）"
-    snapshots = {"1": _snapshot("1", address=address, labels=["介護職", "正社員"])}
+_YONKA = "【福岡】あおぞらケアグループ四箇（デイ・有料）"
 
-    index = build_search_index(snapshots)
+
+def test_build_search_index_includes_active_jobs_with_list_item() -> None:
+    snapshots = {"1": _snapshot("1", address=_YONKA, labels=["介護職", "正社員"])}
+
+    index, warnings = build_search_index(snapshots)
 
     assert len(index["jobs"]) == 1
     job = index["jobs"][0]
@@ -72,23 +74,20 @@ def test_build_search_index_includes_active_jobs_with_list_item() -> None:
     assert job["category"] == "care"
     assert job["employment"] == ["正社員"]
     assert job["area"] == "fukuoka"
-    assert job["facilityKey"] == "facility-四箇"
+    assert job["facilityKey"] == "facility-四箇(デイ・有料)"
+    assert warnings == []
 
 
 def test_build_search_index_employment_independent_of_label_order() -> None:
     """`labels[1:]` would silently drop `正社員` here — category label
     order is observation, not contract (codex review finding, 2026-08-09)."""
-    address = "【福岡】あおぞらケアグループ四箇（デイ・有料）"
-    snapshots = {"1": _snapshot("1", address=address, labels=["正社員", "介護職"])}
+    snapshots = {"1": _snapshot("1", address=_YONKA, labels=["正社員", "介護職"])}
 
-    index = build_search_index(snapshots)
+    index, _warnings = build_search_index(snapshots)
 
     job = index["jobs"][0]
     assert job["category"] == "care"
     assert job["employment"] == ["正社員"]
-
-
-_YONKA = "【福岡】あおぞらケアグループ四箇（デイ・有料）"
 
 
 def test_build_search_index_excludes_closed_and_missing_list_item() -> None:
@@ -97,9 +96,10 @@ def test_build_search_index_excludes_closed_and_missing_list_item() -> None:
         "2": _snapshot("2", address=_YONKA, labels=["介護職"], list_item=None),
     }
 
-    index = build_search_index(snapshots)
+    index, warnings = build_search_index(snapshots)
 
     assert index["jobs"] == []
+    assert warnings == []
 
 
 def test_build_search_index_facility_aggregates_job_count_and_categories() -> None:
@@ -108,13 +108,51 @@ def test_build_search_index_facility_aggregates_job_count_and_categories() -> No
         "2": _snapshot("2", address=_YONKA, labels=["看護職"]),
     }
 
-    index = build_search_index(snapshots)
+    index, _warnings = build_search_index(snapshots)
 
-    facility = index["facilities"]["facility-四箇"]
+    facility = index["facilities"]["facility-四箇(デイ・有料)"]
     assert facility["jobCount"] == 2
     assert set(facility["categories"]) == {"care", "nurse"}
     assert facility["area"] == "fukuoka"
     assert "lat" in facility and "lng" in facility
+
+
+def test_build_search_index_facility_name_is_display_name_not_raw_address() -> None:
+    """`facility["name"]` renders directly into `map-search.js`'s pin popup
+    and "この拠点のみ表示中" filter label — it must stay a human-readable
+    facility name, not the geocoding `source_address` (code-reviewer
+    finding, 2026-08-09: this used to leak a raw postal address)."""
+    snapshots = {"1": _snapshot("1", address=_YONKA, labels=["介護職"])}
+
+    index, _warnings = build_search_index(snapshots)
+
+    facility = index["facilities"]["facility-四箇(デイ・有料)"]
+    assert facility["name"] == "四箇（デイ・有料）"
+    assert "福岡県" not in facility["name"]
+
+
+def test_build_search_index_distinguishes_same_place_name_different_address() -> None:
+    """`博多（デイ・有料）` and `博多（訪問介護/訪問看護・居宅）` are two
+    different physical addresses that both reduce to "博多" before the
+    parenthetical — collapsing them into one `facility-博多` key would
+    silently merge their pins/job counts (code-reviewer finding,
+    2026-08-09)."""
+    snapshots = {
+        "1": _snapshot(
+            "1", address="【福岡】あおぞらケアグループ博多（デイ・有料）", labels=["介護職"]
+        ),
+        "2": _snapshot(
+            "2",
+            address="【福岡】あおぞらケアグループ博多（訪問介護/訪問看護・居宅）",
+            labels=["訪問看護"],
+        ),
+    }
+
+    index, _warnings = build_search_index(snapshots)
+
+    assert len(index["facilities"]) == 2
+    assert index["facilities"]["facility-博多(デイ・有料)"]["jobCount"] == 1
+    assert index["facilities"]["facility-博多(訪問介護/訪問看護・居宅)"]["jobCount"] == 1
 
 
 def test_build_search_index_job_without_geocoded_facility_has_no_facility_entry() -> None:
@@ -128,8 +166,26 @@ def test_build_search_index_job_without_geocoded_facility_has_no_facility_entry(
         ),
     }
 
-    index = build_search_index(snapshots)
+    index, warnings = build_search_index(snapshots)
 
     job = index["jobs"][0]
     assert job["area"] == "kagoshima"
     assert job["facilityKey"] not in index["facilities"]
+    assert warnings == [
+        "no facility_coords match (no map pin) for job_ids: ['1']"
+    ]
+
+
+def test_build_search_index_warns_on_unrecognised_category_label() -> None:
+    """A future Jobcan label this table has never seen must be surfaced,
+    not silently dropped into `category=None` with no trace (silent-
+    failure-hunter finding, 2026-08-09) — indistinguishable otherwise from
+    a genuine future data-drift case."""
+    snapshots = {"1": _snapshot("1", address=_YONKA, labels=["架空職種", "正社員"])}
+
+    index, warnings = build_search_index(snapshots)
+
+    assert index["jobs"][0]["category"] is None
+    assert warnings == [
+        "no category_key match (no colour accent) for job_ids: ['1']"
+    ]

@@ -20,18 +20,34 @@ that exact path (verified in production, 2026-08-09) — this module's caller
 
 from __future__ import annotations
 
-from .facility_geo import area_from_address, facility_coords, facility_key
+from .facility_geo import area_from_address, facility_coords, facility_core_name, facility_key
 from .list_sections import LABEL_TO_CATEGORY, category_key_from_labels
 from .snapshot import JobSnapshot
 
 
-def build_search_index(snapshots: dict[str, JobSnapshot]) -> dict:
-    """Pure function: no Firestore access, no I/O. Only `active` postings
-    with a `list_item` are included — same eligibility rule `_render_list`
-    (`app.py`) uses for the plain card grid, so the search index never
-    references a job_id the card list itself would exclude."""
+def build_search_index(snapshots: dict[str, JobSnapshot]) -> tuple[dict, list[str]]:
+    """Pure function: no Firestore access, no I/O (logging included — the
+    caller decides where warnings go, same split `_render_list`/`app.py`
+    already use for `skipped` malformed docs).
+
+    Only `active` postings with a `list_item` are included — same
+    eligibility rule `_render_list` (`app.py`) uses for the plain card grid,
+    so the search index never references a job_id the card list itself
+    would exclude.
+
+    Returns `(index, warnings)`. A `facility_coords()` miss and a
+    `category_key_from_labels()` miss both degrade silently in the returned
+    index (no pin / no colour accent, not an error) — but a miss for either
+    is also *indistinguishable at the call site* from data drift (a newly
+    added Jobcan facility/job-type this table has never seen) unless it's
+    surfaced somewhere. `warnings` is that surface (silent-failure-hunter
+    review finding, 2026-08-09) — one job_id list per miss kind, not a
+    per-job log line, so a whole-catalogue drift doesn't flood the log.
+    """
     facilities: dict[str, dict] = {}
     jobs: list[dict] = []
+    unmatched_facility_job_ids: list[str] = []
+    uncategorized_job_ids: list[str] = []
 
     for snapshot in snapshots.values():
         if snapshot.sync_status != "active" or snapshot.list_item is None:
@@ -44,9 +60,14 @@ def build_search_index(snapshots: dict[str, JobSnapshot]) -> dict:
         key = facility_key(address)
         coords = facility_coords(address)
 
+        if coords is None:
+            unmatched_facility_job_ids.append(snapshot.job_id)
+        if category is None:
+            uncategorized_job_ids.append(snapshot.job_id)
+
         if coords is not None and key not in facilities:
             facilities[key] = {
-                "name": coords.get("source_address", address),
+                "name": facility_core_name(address),
                 "city": coords["city"],
                 "area": coords["area"],
                 "lat": coords["lat"],
@@ -77,4 +98,15 @@ def build_search_index(snapshots: dict[str, JobSnapshot]) -> dict:
             }
         )
 
-    return {"facilities": facilities, "jobs": jobs}
+    warnings: list[str] = []
+    if unmatched_facility_job_ids:
+        warnings.append(
+            "no facility_coords match (no map pin) for job_ids: "
+            f"{unmatched_facility_job_ids}"
+        )
+    if uncategorized_job_ids:
+        warnings.append(
+            "no category_key match (no colour accent) for job_ids: "
+            f"{uncategorized_job_ids}"
+        )
+    return {"facilities": facilities, "jobs": jobs}, warnings

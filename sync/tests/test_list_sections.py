@@ -89,7 +89,7 @@ def test_build_card_view_derives_all_fields() -> None:
     assert view.category_key == "care"
     assert view.salary_chip == "20.0 万円〜"
     assert view.holiday_chip == "110 日"
-    assert view.facility_key == "facility-四箇"
+    assert view.facility_key == "facility-四箇(デイ・有料)"
     assert view.item.job_id == "1"
 
 
