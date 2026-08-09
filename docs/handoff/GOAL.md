@@ -1,5 +1,5 @@
 ---
-updated: 2026-08-08
+updated: 2026-08-09
 ---
 
 ## 現在のミッション
@@ -52,7 +52,23 @@ decision-maker指示「Stage 3を進めて」を受け、スコープを「検�
 - [x] 品質ゲート: `codex review --base main -c model_reasoning_effort=high`(2回実施、指摘計2件=雇用形態ラベルの順序依存/Phase A側の通知要素欠如、いずれも修正済み)+ `pr-review-toolkit` 3エージェント並列(code-reviewer/silent-failure-hunter/type-design-analyzer)。実害バグ2件(施設キー衝突による地図ピン・件数の誤マージ、地図ピン表示名への生住所リーク)+サイレント失敗3件(検索機能ロード失敗の完全無音化、未知施設/職種のログ欠如)を検出・修正。type-design-analyzerの型設計改善提案(戻り値のpydanticモデル化等)は実害なしのため見送り(判断の記録のみ)
 - [x] pytest 382件全PASS(新規55件)、ruff/pyright 0エラー。Playwright実機確認(ローカル: 職種/エリアチップフィルタでカード件数がFirestore実カウントと一致、フリーワード検索、地図に27拠点全ピン表示、カテゴリ別ページの色分け+meta-grid。本番: `https://aozora-sync-flry56mxwa-an.a.run.app/jobs/`でconsole error 0件、382件全求人+検索パネル+地図の表示を確認)
 
-🎯 **Stage 3 完了(実装・本番デプロイとも完了)**。次のStage 4(本番公開前の健全性対応)着手は decision-maker 判断待ち。
+🎯 **Stage 3 完了(実装・本番デプロイとも完了)**。
+
+## 完了の定義 (Stage 4: 本番公開前の健全性対応) — 2026-08-09 実装完了・本番デプロイ完了・PR #150
+社長に見せて採用が決まったら即座にドメイン切替(Stage 5)できる状態を作るための健全性対応。着手前のセッションで「WordPress統合という工程自体が既に無く、実体はCloud Runドメイン切替である」ことを本田様と確認したうえでplan mode実施。
+
+- [x] `X-Robots-Tag: noindex, nofollow` の条件付き化 — 全レスポンス無条件付与だった状態から、公開3ページ種(`/`・`/jobs/`・`/jobs/{id}`、200のときのみ)だけindexable化。**このままドメインを当てても検索エンジンに一切載らない最大のブロッカーだった**(証明: 本番実測 `curl -sI $URL/ $URL/jobs/` にヘッダー無し、`$URL/healthz`・404には有り)
+- [x] カスタム404ページ(`not_found.html`、FastAPI既定のJSON応答から人向けHTMLへ。`.json`/`/assets/`配下はJSONのまま維持)
+- [x] 旧URL→新URLの301リダイレクト。Phase A求人37件が既にcanonical宣言している`/jobs/{id}/`(末尾スラッシュ)が本番実測で**307**だった問題を解消(証明: 本番実測 `curl -sI $URL/jobs/104625/` → `301` + `location: /jobs/104625`)。`/index.html`・`/jobs.html`・`/jobs-{care,nurse,office,it}.html`も301でカバー(証明: 本番実測、6種全て301+期待locationと一致)
+- [x] `sitemap.xml`/`robots.txt`動的生成(証明: 本番実測 `/sitemap.xml` が390件=静的8+active求人382件を絶対URLで列挙、closed求人は除外)
+- [x] OGP/Twitter Cardメタタグ追加、Phase Aからの退行(og:*が0個)を解消(証明: 本番実測 `/jobs/104625` のog:urlがcanonicalと一致)
+- [x] Slack→Google Chat webhook移行(`notify_slack`→`notify_ops`、secret名`slack-webhook-url`→`ops-webhook-url`、Slack絵文字記法→Unicode絵文字)。組織の実運用チャンネルがGoogle Chatだったため
+- [x] 品質ゲート: `codex review`を2回実施(コミット前 high effort・PR作成後 strict-config high effort)。1回目でP1(未staged template)+P2(静的アセットのnoindex解除は誤りだった)を検出・修正、2回目はfindings 0件。`pr-review-toolkit`3エージェント並列(code-reviewer/silent-failure-hunter/pr-test-analyzer)によるセカンドオピニオンで、404ページ・sitemap.xmlの`render_*()`呼び出しがtry/exceptで保護されておらずJinja2例外発生時に無ブランド・無ログの生500へ落ちるCRITICAL 1件・HIGH 1件を検出(実機再現確認済み)、同PR内で修正。テストカバレッジ不足4件(5〜7)も全て追加
+- [x] pytest 435件全PASS、ruff/pyright 0エラー。本番デプロイ(`aozora-sync-00008-99r`)後、Playwright実機確認(トップ・一覧・詳細・チャットボット送受信・関連求人カード表示、console error 0件— favicon.ico 404のみ、既知の想定内挙動)
+
+**未検証(Secret未設定のため)**: Google Chat通知の実送信確認(AC8)。`notify_ops()`のペイロード/クエリパラメータ保持は`test_notifications.py`のrespx実POSTモックで検証済みだが、実際のGoogle Chat webhook URL発行はdecision-maker領分のため、Secret Manager登録後に別途確認が必要(手順: `infra/README.md` §1.5)。
+
+🎯 **Stage 4 完了(実装・本番デプロイ・実機確認とも完了)**。次のStage 5(ドメイン切替 `recruit.aozora-cg.com`)着手は decision-maker 判断待ち — DNS操作はIT担当者/外部ベンダー(権威DNS `ns1/ns2.canonet.ne.jp`)経由の依頼が必要なためリードタイムを考慮すること。
 
 ## トンマナ刷新(第2フェーズ) — Phase B前倒しのため一時保留(2026-08-08、以下は保留時点の状態)
 リクルートページの基礎トンマナ全面刷新 (第2フェーズ)。コーポレートカラー(#00c4cc)をあえて外し、確立済みの江口寿史風イラスト世界観から抽出した配色に統一する。加えてスクロール演出(視差効果)の強化、AI臭さの払拭による洗練度向上を段階的に進める。
