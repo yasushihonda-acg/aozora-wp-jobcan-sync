@@ -9,7 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .detail_sections import RelatedJob, build_detail_view, build_job_posting_json_ld
-from .list_sections import JobListCardView
+from .list_sections import JobListCardView, JobTypeChip
 from .models import JobListPage, JobOffer
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -148,6 +148,7 @@ def render_job_list(
     cards: list[JobListCardView] | None = None,
     search_mode: bool = False,
     search_index_url: str | None = None,
+    job_type_chips: list[JobTypeChip] | None = None,
     env: Environment | None = None,
 ) -> str:
     """Render a parsed Jobcan listing page into HTML using `job_list.html`.
@@ -168,6 +169,11 @@ def render_job_list(
     - `search_index_url`: where `map-search.js` fetches the filter/map
       dataset from (`/jobs/search-index.json`, never the `/assets/`-mounted
       Phase A static file — see `search_index.py`'s module docstring).
+    - `job_type_chips`: the 17-category 職種 chip list
+      (`list_sections.build_job_type_chips`), rendered only in
+      `search_mode` (job-type-filter-granularity follow-up, 2026-08-09).
+      `None`/empty falls back to an empty chip row rather than erroring —
+      same "no data → nothing renders, not a crash" shape as `cards`.
     """
     env = env or make_environment()
     template = env.get_template("job_list.html")
@@ -178,6 +184,7 @@ def render_job_list(
         cards_by_job_id=cards_by_job_id,
         search_mode=search_mode,
         search_index_url=search_index_url,
+        job_type_chips=job_type_chips or [],
         site_name=SITE_NAME,
         site_description=SITE_DESCRIPTION,
         og_image_path=OG_IMAGE_PATH,

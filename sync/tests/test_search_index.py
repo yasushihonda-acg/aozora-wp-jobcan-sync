@@ -49,6 +49,7 @@ def _snapshot(
     labels: list[str],
     sync_status: str = "active",
     list_item: Any = _UNSET,
+    category_ids: list[str] | None = None,
 ) -> Any:
     resolved_item = _list_item(job_id, labels=labels) if list_item is _UNSET else list_item
     return snapshot_from_offer(
@@ -56,7 +57,7 @@ def _snapshot(
         now=datetime(2026, 8, 9, tzinfo=UTC),
         sync_status=sync_status,  # type: ignore[arg-type]
         list_item=resolved_item,
-        category_ids=["18773"],
+        category_ids=category_ids if category_ids is not None else ["18773"],
     )
 
 
@@ -72,10 +73,28 @@ def test_build_search_index_includes_active_jobs_with_list_item() -> None:
     job = index["jobs"][0]
     assert job["id"] == "1"
     assert job["category"] == "care"
+    assert job["jobTypes"] == ["18773"]
     assert job["employment"] == ["正社員"]
     assert job["area"] == "fukuoka"
     assert job["facilityKey"] == "facility-四箇(デイ・有料)"
     assert warnings == []
+
+
+def test_build_search_index_job_types_reflects_multiple_category_ids() -> None:
+    """A posting legitimately listed under more than one category
+    (`crawler.crawl_all`'s docstring: e.g. 夜勤専従 also under 介護職) must
+    keep every id in `jobTypes`, not just the first — the 17-category filter
+    (Stage 3 follow-up, 2026-08-09) needs the full set to match either
+    chip."""
+    snapshots = {
+        "1": _snapshot(
+            "1", address=_YONKA, labels=["介護職"], category_ids=["18773", "18988"]
+        )
+    }
+
+    index, _warnings = build_search_index(snapshots)
+
+    assert index["jobs"][0]["jobTypes"] == ["18773", "18988"]
 
 
 def test_build_search_index_employment_independent_of_label_order() -> None:

@@ -73,6 +73,16 @@
   color: #fff;
 }
 
+.job-search-panel__chip-count {
+  margin-left: var(--space-2);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+}
+.job-search-panel__chip[aria-pressed="true"] .job-search-panel__chip-count {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .job-search-panel__freeword {
   display: flex;
   min-height: 44px;

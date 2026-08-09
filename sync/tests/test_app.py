@@ -990,6 +990,40 @@ def test_get_job_list_with_category_id_has_no_search_panel() -> None:
     assert 'id="job-search-panel"' not in response.text
 
 
+def test_get_job_list_search_panel_renders_job_type_chips_with_counts() -> None:
+    """Job-type-filter-granularity follow-up (2026-08-09): the 職種 chip row
+    must reflect the Jobcan-original 17-category granularity, each labelled
+    with its live posting count, not the old 4-bucket colour system."""
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18773"]),
+        _snapshot("3", category_ids=["18983"]),
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/")
+
+    assert response.text.count('data-filter-group="jobType"') == 1
+    assert (
+        '<button type="button" class="job-search-panel__chip" '
+        'data-value="18773" aria-pressed="false">介護職'
+        '<span class="job-search-panel__chip-count">2</span></button>'
+    ) in response.text
+    assert (
+        '<button type="button" class="job-search-panel__chip" '
+        'data-value="18983" aria-pressed="false">看護職'
+        '<span class="job-search-panel__chip-count">1</span></button>'
+    ) in response.text
+
+
+def test_get_job_list_search_panel_omits_zero_count_job_type_chips() -> None:
+    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+
+    response = client.get("/jobs/")
+
+    assert 'data-value="73697"' not in response.text  # 新卒・既卒総合職, 0 postings
+
+
 def test_get_job_list_card_has_category_colour_modifier() -> None:
     item = _list_item("1", labels=["介護職", "正社員"])
     repo = _repo_with(_snapshot("1", category_ids=["18773"], list_item=item))
@@ -1040,6 +1074,7 @@ def test_get_job_search_index_returns_json_for_active_jobs() -> None:
             "id": "1",
             "facilityKey": "facility-福岡事業所",
             "category": "care",
+            "jobTypes": ["18773"],
             "employment": ["正社員"],
             "area": None,
         }
@@ -1374,8 +1409,8 @@ def test_sitemap_lists_top_list_categories_and_active_jobs_only(monkeypatch: Any
     assert "https://recruit.aozora-cg.com/jobs/" in locs
     assert "https://recruit.aozora-cg.com/jobs/1" in locs
     assert "https://recruit.aozora-cg.com/jobs/2" not in locs  # closed — excluded
-    # top(1) + list(1) + 6 legacy categories + 1 active job
-    assert len(locs) == 9
+    # top(1) + list(1) + 17 categories + 1 active job
+    assert len(locs) == 20
 
 
 def test_sitemap_urls_all_absolute(monkeypatch: Any) -> None:
@@ -1391,7 +1426,8 @@ def test_sitemap_urls_all_absolute(monkeypatch: Any) -> None:
 
 def test_sitemap_empty_repo_still_lists_top_list_and_categories(monkeypatch: Any) -> None:
     """Boundary: zero jobs must still produce a well-formed sitemap with the
-    8 static entries (top + list + 6 categories), not an empty/invalid doc."""
+    19 static entries (top + list + 17 categories), not an empty/invalid
+    doc."""
     from sync import app as app_module
 
     monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
@@ -1399,7 +1435,7 @@ def test_sitemap_empty_repo_still_lists_top_list_and_categories(monkeypatch: Any
     response = client.get("/sitemap.xml")
 
     assert response.status_code == 200
-    assert len(_sitemap_locs(response.text)) == 8  # top(1) + list(1) + 6 categories
+    assert len(_sitemap_locs(response.text)) == 19  # top(1) + list(1) + 17 categories
 
 
 def test_sitemap_returns_503_without_public_base_url(monkeypatch: Any) -> None:

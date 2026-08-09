@@ -67,7 +67,8 @@ from .cache import Cache, CacheConfig, InMemoryCache
 from .chatbot_knowledge import build_chatbot_knowledge
 from .detail_sections import RelatedJob, extract_region_tag
 from .firestore_repo import JobCacheRepository, get_firestore_client
-from .list_sections import JobListCardView, build_card_view
+from .job_types import JOB_TYPE_NAMES
+from .list_sections import JobListCardView, build_card_view, build_job_type_chips
 from .models import JobListItem, JobListPage
 from .renderer import (
     render_error,
@@ -852,15 +853,23 @@ def _build_sitemap_urls(snapshots: dict[str, JobSnapshot], *, base_url: str) -> 
     the live site once removed from listings — putting them in the sitemap
     would be the *only* place advertising them, which contradicts the
     internal link structure instead of just tolerating an orphaned page.
-    Category URLs come from `_LEGACY_CATEGORY_IDS`'s 6 distinct ids (the
-    ones actually linked from the top page), not the full 17-category
-    `crawler.KNOWN_CATEGORY_IDS` — a sitemap enumerates the information
-    architecture, not every query string that happens to work.
+
+    Category URLs cover all 17 of `job_types.JOB_TYPE_NAMES` (same set as
+    `crawler.KNOWN_CATEGORY_IDS`, which derives from the same table), not
+    just `_LEGACY_CATEGORY_IDS`'s 6 top-page-linked ids. Originally scoped to
+    the
+    6 on the theory that "a sitemap enumerates the information architecture,
+    not every query string that happens to work" — but every one of the 17
+    category pages *is* part of the information architecture: every active
+    job's detail page links back to its own `_primary_category_id`'s
+    `/jobs/?category_id=` listing (breadcrumb + "求人一覧へ戻る",
+    `renderer.py`'s `category_url`), so all 17 are already reachable via
+    internal links regardless of what the sitemap lists (job-type-filter-
+    granularity follow-up, 2026-08-09).
     """
     urls = [f"{base_url}/", f"{base_url}/jobs/"]
     urls += [
-        f"{base_url}/jobs/?category_id={category_id}"
-        for category_id in dict.fromkeys(_LEGACY_CATEGORY_IDS.values())
+        f"{base_url}/jobs/?category_id={category_id}" for category_id in JOB_TYPE_NAMES
     ]
     urls += [
         f"{base_url}/jobs/{job_id}"
@@ -993,6 +1002,7 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str | None) 
             cards=card_views,
             search_mode=search_mode,
             search_index_url="/jobs/search-index.json" if search_mode else None,
+            job_type_chips=build_job_type_chips(snapshots) if search_mode else None,
         )
     except Exception:
         _logger.exception("render error", extra={"kind": "list", "category_id": category_id})

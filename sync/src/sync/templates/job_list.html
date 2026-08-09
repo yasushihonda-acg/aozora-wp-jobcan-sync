@@ -86,11 +86,10 @@
   <div class="job-search-panel" id="job-search-panel" hidden>
     <div class="job-search-panel__row">
       <span class="job-search-panel__label">職種</span>
-      <div class="job-search-panel__chips" data-filter-group="category">
-        <button type="button" class="job-search-panel__chip" data-value="care" aria-pressed="false">介護・相談</button>
-        <button type="button" class="job-search-panel__chip" data-value="office" aria-pressed="false">事務</button>
-        <button type="button" class="job-search-panel__chip" data-value="it" aria-pressed="false">IT</button>
-        <button type="button" class="job-search-panel__chip" data-value="nurse" aria-pressed="false">看護</button>
+      <div class="job-search-panel__chips" data-filter-group="jobType">
+        {% for chip in job_type_chips %}
+        <button type="button" class="job-search-panel__chip" data-value="{{ chip.category_id }}" aria-pressed="false">{{ chip.name }}<span class="job-search-panel__chip-count">{{ chip.count }}</span></button>
+        {% endfor %}
       </div>
     </div>
     <div class="job-search-panel__row">
@@ -184,7 +183,7 @@
     v: "weekly",
   });
 </script>
-<script src="/assets/js/map-search.js"></script>
+<script src="/assets/js/map-search.js?v=2"></script>
 {% endif %}
 <script defer src="/assets/js/chat-widget.js" data-endpoint="https://aozora-chatbot-1084369586348.asia-northeast1.run.app/chat"></script>
 {% endblock %}

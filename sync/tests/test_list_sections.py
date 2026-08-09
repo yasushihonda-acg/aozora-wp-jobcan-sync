@@ -9,6 +9,7 @@ from typing import Any
 from sync.list_sections import (
     LABEL_TO_CATEGORY,
     build_card_view,
+    build_job_type_chips,
     category_key_from_labels,
 )
 from sync.models import JobListItem, JobOffer
@@ -103,3 +104,66 @@ def test_build_card_view_none_when_list_item_absent() -> None:
     )
 
     assert build_card_view(snapshot) is None
+
+
+def _snapshot_for_chips(
+    job_id: str,
+    *,
+    category_ids: list[str],
+    sync_status: str = "active",
+    list_item: Any = "unset",
+) -> Any:
+    resolved_item = (
+        _list_item(job_id=job_id) if list_item == "unset" else list_item
+    )
+    return snapshot_from_offer(
+        _offer(job_id=job_id),
+        now=datetime(2026, 8, 9, tzinfo=UTC),
+        sync_status=sync_status,  # type: ignore[arg-type]
+        list_item=resolved_item,
+        category_ids=category_ids,
+    )
+
+
+def test_build_job_type_chips_counts_and_sorts_descending() -> None:
+    snapshots = {
+        "1": _snapshot_for_chips("1", category_ids=["18773"]),
+        "2": _snapshot_for_chips("2", category_ids=["18773"]),
+        "3": _snapshot_for_chips("3", category_ids=["18983"]),
+    }
+
+    chips = build_job_type_chips(snapshots)
+
+    assert [(c.category_id, c.name, c.count) for c in chips] == [
+        ("18773", "介護職", 2),
+        ("18983", "看護職", 1),
+    ]
+
+
+def test_build_job_type_chips_omits_zero_count_categories() -> None:
+    """Every job type not present in `snapshots` (e.g. 新卒・既卒総合職 with
+    0 active postings) must not produce a chip a visitor could press only to
+    see 0 results."""
+    chips = build_job_type_chips({"1": _snapshot_for_chips("1", category_ids=["18773"])})
+
+    assert [c.category_id for c in chips] == ["18773"]
+
+
+def test_build_job_type_chips_counts_multi_category_posting_for_each() -> None:
+    """A posting legitimately listed under more than one category
+    (`crawler.crawl_all`'s docstring, e.g. 夜勤専従 also under 介護職) counts
+    toward every one of its chips."""
+    snapshots = {"1": _snapshot_for_chips("1", category_ids=["18773", "18988"])}
+
+    chips = build_job_type_chips(snapshots)
+
+    assert {(c.category_id, c.count) for c in chips} == {("18773", 1), ("18988", 1)}
+
+
+def test_build_job_type_chips_excludes_closed_and_missing_list_item() -> None:
+    snapshots = {
+        "1": _snapshot_for_chips("1", category_ids=["18773"], sync_status="closed"),
+        "2": _snapshot_for_chips("2", category_ids=["18773"], list_item=None),
+    }
+
+    assert build_job_type_chips(snapshots) == []
