@@ -1,0 +1,15 @@
+{#
+  Stage 4 P1-1 (2026-08-09): sitemap.xml. Deliberately no `<lastmod>` — every
+  candidate field on `JobSnapshot` (`last_seen_at`, `first_absent_at`,
+  `closed_at`) updates on an unrelated cadence (every ~6h sync run, not
+  "content actually changed"), and an inaccurate lastmod is worse than none:
+  Google documents that it may start ignoring a sitemap's lastmod entirely
+  once it detects the values don't correlate with real content changes.
+  `<changefreq>`/`<priority>` omitted for the same reason (Google: both are
+  ignored). autoescape is on for `.xml` (`renderer.make_environment`), so a
+  `category_id` query string containing `&` renders as `&amp;` correctly —
+  verified in `renderer.py`'s docstring history for this template.
+#}<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{% for url in urls %}  <url><loc>{{ url }}</loc></url>
+{% endfor %}</urlset>

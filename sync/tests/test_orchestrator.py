@@ -1,9 +1,10 @@
 """`run_sync` tests — Jobcan HTTP calls mocked via respx, Firestore via the
-shared `FakeFirestoreClient` (conftest.py), Slack via monkeypatch. No real
-network or GCP call happens in this file."""
+shared `FakeFirestoreClient` (conftest.py), ops notifications via monkeypatch.
+No real network or GCP call happens in this file."""
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -91,7 +92,7 @@ def _mock_all_categories_return(job_ids: list[str], *, total_count: int | None =
 
 @respx.mock
 def test_run_sync_writes_new_jobs_as_pending_review(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
     _mock_all_categories_return(["1"])
     repo = JobCacheRepository(FakeFirestoreClient())
 
@@ -107,7 +108,7 @@ def test_run_sync_writes_new_jobs_as_pending_review(monkeypatch: pytest.MonkeyPa
 
 @respx.mock
 def test_run_sync_review_bypass_true_writes_jobs_active(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
     _mock_all_categories_return(["1"])
     repo = JobCacheRepository(FakeFirestoreClient())
 
@@ -128,7 +129,7 @@ def test_run_sync_stores_list_item_and_category_ids_on_snapshot(
     them and drop them."""
     from sync.crawler import KNOWN_CATEGORY_IDS
 
-    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
     _mock_all_categories_return(["1"])
     repo = JobCacheRepository(FakeFirestoreClient())
 
@@ -150,7 +151,7 @@ def test_run_sync_second_run_promotes_unchanged_job_bookkeeping(
 ) -> None:
     """A job approved after run 1 must stay `active` (not regress to
     pending_review) when it reappears unchanged in run 2."""
-    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
     repo = JobCacheRepository(FakeFirestoreClient())
 
     _mock_all_categories_return(["1"])
@@ -169,7 +170,7 @@ def test_run_sync_second_run_promotes_unchanged_job_bookkeeping(
 @respx.mock
 def test_run_sync_circuit_breaker_trip_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     alerts: list[str] = []
-    monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
 
     repo = JobCacheRepository(FakeFirestoreClient())
     # Seed 10 jobs each already 1 absence away from closing (bypassing a real
@@ -204,11 +205,58 @@ def test_run_sync_circuit_breaker_trip_writes_nothing(monkeypatch: pytest.Monkey
 
 
 @respx.mock
-def test_run_sync_notifies_slack_on_crawl_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_sync_circuit_breaker_message_uses_unicode_emoji_not_slack_shortcodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Google Chat renders no `:shortcode:` syntax — Slack's `:rotating_light:`
+    would reach the ops channel as literal text. Guards against Slack notation
+    creeping back into the alert path (2026-08-09 Slack -> Google Chat move)."""
+    alerts: list[str] = []
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
+
+    repo = JobCacheRepository(FakeFirestoreClient())
+    for i in range(1, 11):
+        snap = snapshot_from_offer(_offer_stub(str(i)), now=_NOW, absence_count=1).model_copy(
+            update={"first_absent_at": _NOW - timedelta(hours=48)}
+        )
+        repo.set(snap)
+    _mock_all_categories_return(["999"])
+
+    with _client() as client:
+        result = orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
+
+    assert result.circuit_breaker_tripped is True
+    assert len(alerts) == 1
+    assert "🚨" in alerts[0]
+    assert re.search(r":[a-z_]+:", alerts[0]) is None
+
+
+@respx.mock
+def test_run_sync_warning_message_uses_unicode_emoji_not_slack_shortcodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same guard for the non-fatal warning path — `⚠️` must carry the VS16
+    (U+FE0F) so it renders in colour rather than as a monochrome glyph."""
+    alerts: list[str] = []
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
+    _mock_all_categories_return(["1"], total_count=5)
+    repo = JobCacheRepository(FakeFirestoreClient())
+
+    with _client() as client:
+        result = orchestrator.run_sync(client, repo, now=_NOW, review_bypass=True)
+
+    assert result.reconciliation_mismatch is True
+    assert len(alerts) == 1
+    assert "⚠️" in alerts[0]
+    assert re.search(r":[a-z_]+:", alerts[0]) is None
+
+
+@respx.mock
+def test_run_sync_notifies_ops_on_crawl_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     from sync.crawler import KNOWN_CATEGORY_IDS
 
     alerts: list[str] = []
-    monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
 
     # First category 500s (recorded as the sole crawl error); every other
     # category returns one valid job each (an empty `.job-offer-box` listing
@@ -245,7 +293,7 @@ def test_run_sync_reconciliation_matches_when_counts_agree(
     categories and collapses to 1 via dedup (that dedup must not itself read
     as a mismatch; see `crawler.CrawlResult`'s docstring)."""
     alerts: list[str] = []
-    monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
     _mock_all_categories_return(["1"], total_count=1)
     repo = JobCacheRepository(FakeFirestoreClient())
 
@@ -262,7 +310,7 @@ def test_run_sync_warns_on_reconciliation_mismatch(monkeypatch: pytest.MonkeyPat
     partial crawl (e.g. a half-rendered listing page) that per-request error
     handling alone wouldn't catch."""
     alerts: list[str] = []
-    monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
     _mock_all_categories_return(["1"], total_count=5)
     repo = JobCacheRepository(FakeFirestoreClient())
 
@@ -280,7 +328,7 @@ def test_run_sync_circuit_breaker_message_includes_crawl_error_warning(
 ) -> None:
     """A circuit-breaker trip must not silently swallow a separate
     crawl-errors warning just because it returns early — both must reach the
-    same Slack message, or an on-call responder reading only the closed-rate
+    same ops message, or an on-call responder reading only the closed-rate
     alert could mistake a broken crawl for genuine mass closure.
 
     Uses a per-job detail-fetch failure (not a category-listing failure) to
@@ -291,7 +339,7 @@ def test_run_sync_circuit_breaker_message_includes_crawl_error_warning(
     from sync.crawler import KNOWN_CATEGORY_IDS
 
     alerts: list[str] = []
-    monkeypatch.setattr(orchestrator, "notify_slack", alerts.append)
+    monkeypatch.setattr(orchestrator, "notify_ops", alerts.append)
     repo = JobCacheRepository(FakeFirestoreClient())
 
     # Seed 10 jobs one absence away from closing (both the count floor and
@@ -336,7 +384,7 @@ def test_run_sync_repeated_detail_fetch_failures_never_close_a_listed_job(
     listing itself stopped mentioning it, which never happens here."""
     from sync.crawler import KNOWN_CATEGORY_IDS
 
-    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
     repo = JobCacheRepository(FakeFirestoreClient())
 
     # Run 1: job "1" is listed and fetched successfully, becomes active.
@@ -371,7 +419,7 @@ def test_run_sync_deletes_gc_eligible_closed_jobs(monkeypatch: pytest.MonkeyPatc
     """A `closed` job past the 30-day retention window must actually be
     deleted from Firestore by the end of a successful run — the P2 codex
     finding was that `find_gc_candidates` was never wired to a deletion."""
-    monkeypatch.setattr(orchestrator, "notify_slack", lambda text: None)
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
     repo = JobCacheRepository(FakeFirestoreClient())
 
     long_closed = snapshot_from_offer(_offer_stub("old"), now=_NOW - timedelta(days=40))

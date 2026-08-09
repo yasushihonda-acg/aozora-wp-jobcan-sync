@@ -32,15 +32,19 @@ longer happens here. A short positive-only HTML cache remains, because a
 | Firestore read failure      | 503, HTML page with a Jobcan fallback link   |
 | render failure (Jinja2 etc.)| 500, HTML page with a Jobcan fallback link   |
 
-All responses add `X-Robots-Tag: noindex, nofollow` via middleware, plus
-`Cache-Control: no-store` — except successful `/assets/*` responses, which
-get `public, max-age=3600` instead (2026-08-08, so the top page's CSS/JS/
-images don't re-download on every navigation like the rest of this
-service's genuinely-dynamic pages must). Every synchronous I/O call
-(Firestore reads, and — 2026-08-08 — the top page's local file read) happens
-inside `run_in_threadpool`; running either directly on the event loop would
-serialize every concurrent request behind it (2026-08-07 codex second-
-opinion review finding, reconfirmed for the top page 2026-08-08).
+Every response gets `Cache-Control: no-store` — except successful
+`/assets/*` responses, which get `public, max-age=3600` instead (2026-08-08,
+so the top page's CSS/JS/images don't re-download on every navigation like
+the rest of this service's genuinely-dynamic pages must). `X-Robots-Tag:
+noindex, nofollow` is added to everything EXCEPT the three public page kinds
+(`/`, `/jobs/`, `/jobs/{ascii-digit id}`) on a 200 response (Stage 4 P0-1,
+2026-08-09 — the earlier unconditional noindex meant the site could never be
+found via search no matter what domain it was reachable at). Every
+synchronous I/O call (Firestore reads, and — 2026-08-08 — the top page's
+local file read) happens inside `run_in_threadpool`; running either directly
+on the event loop would serialize every concurrent request behind it
+(2026-08-07 codex second-opinion review finding, reconfirmed for the top
+page 2026-08-08).
 """
 
 from __future__ import annotations
@@ -51,9 +55,11 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi.exception_handlers import http_exception_handler as _default_http_exception_handler
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
@@ -61,7 +67,13 @@ from .detail_sections import RelatedJob, extract_region_tag
 from .firestore_repo import JobCacheRepository, get_firestore_client
 from .list_sections import JobListCardView, build_card_view
 from .models import JobListItem, JobListPage
-from .renderer import render_error, render_job_detail, render_job_list
+from .renderer import (
+    render_error,
+    render_job_detail,
+    render_job_list,
+    render_not_found,
+    render_sitemap,
+)
 from .search_index import build_search_index
 from .snapshot import JobSnapshot
 
@@ -70,6 +82,11 @@ from .snapshot import JobSnapshot
 # `set_list` (keyed only by that one string) can serve both without a
 # collision. Also used as the search-index.json cache key.
 _ALL_JOBS_CACHE_KEY = "__all__"
+
+# Stage 4 P1-1 (2026-08-09): `sitemap.xml`'s cache key, same `ProxyCache.
+# get_list`/`set_list` namespace as `_ALL_JOBS_CACHE_KEY` above — distinct
+# string, no collision risk.
+_SITEMAP_CACHE_KEY = "__sitemap__"
 
 # Stage 2 (job-detail design parity, 2026-08-08): cap on the "関連する求人"
 # sidebar — matches Phase A's `mockup/jobs/*.html` (always exactly 3).
@@ -99,6 +116,20 @@ INDEX_HTML_PATH = os.environ.get(
     "INDEX_HTML_PATH", str(_REPO_ROOT_LOCAL_DEV / "mockup" / "index.html")
 )
 
+# Single source of truth for Phase A's filename/query-value → category_id
+# mapping (Stage 4 P0-3, 2026-08-09) — both `_TOP_PAGE_LINK_REWRITES` (in-
+# page href rewriting) and the standalone legacy-URL redirect routes below
+# derive from this one dict instead of each hardcoding the six ids
+# separately. Values from `crawler.KNOWN_CATEGORY_IDS`.
+_LEGACY_CATEGORY_IDS: dict[str, str] = {
+    "care": "18773",
+    "nurse": "18983",
+    "visit": "18986",  # ホームヘルパー — only reachable via `jobs.html?job_type=visit`
+    "care-manager": "18985",  # ケアマネジャー — via `jobs.html?job_type=care-manager` only
+    "office": "58859",
+    "it": "69384",
+}
+
 # `mockup/index.html` is shared with the still-live Phase A GitHub Pages
 # mockup, whose job links are relative paths to sibling static files
 # (`jobs-care.html`, `jobs.html?job_type=...`) that don't exist as routes on
@@ -106,7 +137,7 @@ INDEX_HTML_PATH = os.environ.get(
 # the GitHub Pages site *before* this service is what `recruit.aozora-cg.com`
 # actually points at (Stage 5, not yet done) — so instead this service
 # rewrites the known href values at serve time, leaving the shared source
-# file untouched. Category ids from `crawler.KNOWN_CATEGORY_IDS`.
+# file untouched.
 #
 # The plain `jobs.html` link targets ("募集職種"/"求人を見る"/"すべての求人を
 # 見る"/footer/mobile CTA — 7 occurrences) used to point at the largest
@@ -121,12 +152,30 @@ _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
     # `index.html` (2026-08-08 codex review finding).
     ('href="index.html"', 'href="/"'),
     ('href="jobs.html"', 'href="/jobs/"'),
-    ('href="jobs-care.html"', 'href="/jobs/?category_id=18773"'),
-    ('href="jobs-nurse.html"', 'href="/jobs/?category_id=18983"'),
-    ('href="jobs.html?job_type=visit"', 'href="/jobs/?category_id=18986"'),  # ホームヘルパー
-    ('href="jobs.html?job_type=care-manager"', 'href="/jobs/?category_id=18985"'),  # ケアマネジャー
-    ('href="jobs-office.html"', 'href="/jobs/?category_id=58859"'),
-    ('href="jobs-it.html"', 'href="/jobs/?category_id=69384"'),
+    (
+        'href="jobs-care.html"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["care"]}"',
+    ),
+    (
+        'href="jobs-nurse.html"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["nurse"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=visit"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["visit"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=care-manager"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["care-manager"]}"',
+    ),
+    (
+        'href="jobs-office.html"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["office"]}"',
+    ),
+    (
+        'href="jobs-it.html"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["it"]}"',
+    ),
 )
 
 
@@ -197,29 +246,88 @@ def _error_html(title: str, message: str, fallback_url: str) -> str:
     return render_error(title=title, message=message, fallback_url=fallback_url)
 
 
-def _apply_security_headers(response: Response, *, is_static_asset: bool = False) -> Response:
+# Stage 4 P0-1 (2026-08-09): the exact set of paths a search engine should be
+# allowed to index. Kept as an explicit allowlist rather than a "block these"
+# denylist — every new non-public route (JSON data endpoints, health checks,
+# future admin surfaces) is noindex by default unless someone deliberately
+# adds it here, instead of silently becoming indexable by omission.
+_INDEXABLE_EXACT_PATHS = frozenset({"/", "/jobs/", "/robots.txt", "/sitemap.xml"})
+
+
+def _is_indexable(path: str, status_code: int) -> bool:
+    """True for the public page kinds search engines should be allowed to
+    show — only ever on a genuinely successful response.
+
+    Redirects, 404s, 5xx error pages, `/healthz`, and the JS-only
+    `/jobs/search-index.json` data endpoint all stay noindex — none of them
+    are a page a search result should land a candidate on. `/jobs/{id}` uses
+    `is_ascii_digit_id` (the same validator the route handler itself uses,
+    `app.py:369`) rather than a loose `/jobs/` prefix check, so this doesn't
+    accidentally also allow-list `/jobs/search-index.json` (also `/jobs/`-
+    prefixed) — that guard is exercised by
+    `test_search_index_json_stays_noindex`.
+
+    `/assets/*` deliberately stays noindex too (codex review finding,
+    2026-08-09): `noindex` only keeps a URL out of search *results* — it has
+    no effect on whether Googlebot fetches the resource, so marking CSS/JS/
+    images indexable bought nothing for page rendering or `og:image`
+    eligibility (og:image is read directly off the page's own meta tag, not
+    looked up via the image's own indexing status) while needlessly exposing
+    individual design assets (`sky-hero.jpg` etc.) as their own search
+    results.
+    """
+    if status_code != 200:
+        return False
+    if path in _INDEXABLE_EXACT_PATHS:
+        return True
+    if path.startswith("/jobs/"):
+        return is_ascii_digit_id(path.removeprefix("/jobs/"))
+    return False
+
+
+def _prefers_html_error(path: str) -> bool:
+    """True when a 404 on `path` should render the branded HTML error page
+    rather than staying JSON (Stage 4 P0-2, 2026-08-09).
+
+    `.json`-suffixed paths (`/jobs/search-index.json`'s own shape, and any
+    future JSON endpoint) are fetched by JS, never navigated to — a 404 HTML
+    document there just turns a clean `response.json()` failure into an
+    opaque `SyntaxError: Unexpected token '<'` for whoever's debugging it.
+    `/assets/*` 404s are `<link>`/`<img>` resolution failures; nobody reads a
+    2KB HTML document, so returning it isn't worth the render cost.
+    """
+    return not path.endswith(".json") and not path.startswith("/assets/")
+
+
+def _apply_security_headers(response: Response, *, path: str) -> Response:
     """Stamp the response with the headers every proxy reply must carry.
 
     Cache-Control prevents intermediaries from holding *dynamic* (Firestore-
     backed) pages past this service's own short cache TTL; X-Robots-Tag
-    keeps non-canonical/preview URLs out of search indexes.
+    keeps non-canonical/preview/error URLs out of search indexes (Stage 4
+    P0-1, 2026-08-09: previously unconditional on every response, which also
+    hid the pages this proxy exists to serve — see `_is_indexable`).
 
-    `is_static_asset=True` (the `/assets/*` mount, 2026-08-08 second-opinion
-    review finding) gets a real `max-age` instead — `no-store` on every CSS/
-    JS/image request forced a re-download on every single navigation, unlike
-    the Phase A GitHub Pages mockup this replaces (which caches normally).
-    Filenames aren't content-hashed, so this stays short rather than
-    `immutable`: a stale asset would resolve itself within an hour instead
-    of needing a hard refresh. Only applied when the response actually
-    succeeded (`< 400`) — a 404 (e.g. a genuinely missing file, or a
-    transient revision-rollout mismatch) must not itself get cached for an
-    hour, and 304 Not Modified is fine to leave cacheable (2026-08-08
-    second-opinion review finding: the first version of this cached 404s
-    too).
+    `/assets/*` (the static mount, 2026-08-08 second-opinion review finding)
+    gets a real `max-age` instead of `no-store` — forcing a re-download of
+    every CSS/JS/image on every navigation, unlike the Phase A GitHub Pages
+    mockup this replaces (which caches normally). Filenames aren't content-
+    hashed, so this stays short rather than `immutable`: a stale asset would
+    resolve itself within an hour instead of needing a hard refresh. Only
+    applied when the response actually succeeded (`< 400`) — a 404 (e.g. a
+    genuinely missing file, or a transient revision-rollout mismatch) must
+    not itself get cached for an hour, and 304 Not Modified is fine to leave
+    cacheable (2026-08-08 second-opinion review finding: the first version
+    of this cached 404s too). `/sitemap.xml`/`/robots.txt` (Stage 4 P1-1/2)
+    ride the same real-max-age branch — both only change on the ~6-hourly
+    sync cadence, same as the static assets.
     """
-    is_cacheable_asset = is_static_asset and response.status_code < 400
-    response.headers["Cache-Control"] = "public, max-age=3600" if is_cacheable_asset else "no-store"
-    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    is_static_asset = path.startswith("/assets/")
+    is_cacheable_kind = is_static_asset or path in {"/sitemap.xml", "/robots.txt"}
+    is_cacheable = is_cacheable_kind and response.status_code < 400
+    response.headers["Cache-Control"] = "public, max-age=3600" if is_cacheable else "no-store"
+    if not _is_indexable(path, response.status_code):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
     return response
 
 
@@ -286,8 +394,46 @@ def create_app(
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
         response = await call_next(request)
-        is_static_asset = request.url.path.startswith("/assets/")
-        return _apply_security_headers(response, is_static_asset=is_static_asset)
+        return _apply_security_headers(response, path=request.url.path)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> Response:
+        """Stage 4 P0-2 (2026-08-09): a public site must not answer a bad/
+        stale link with FastAPI's default `{"detail": "not found"}` JSON —
+        registered on the Starlette base class (not `fastapi.HTTPException`)
+        so this also catches `StaticFiles`'s own 404s and the router's
+        "no matching route" 404, both of which raise the Starlette base
+        directly rather than the FastAPI subclass.
+
+        Only 404 gets the HTML treatment, and only for a request that isn't
+        itself asking for JSON/an asset (`_prefers_html_error`) — a 405 on
+        `/healthz`, or a future non-404 HTTPException, falls through to
+        FastAPI's own default handler unchanged.
+
+        `render_not_found()` itself is wrapped in try/except (silent-failure-
+        hunter finding, 2026-08-09) — every other render call in this module
+        (`_render_detail`/`_render_list`) keeps "fetch" and "render" in
+        separate try/excepts so a Jinja2 failure degrades to a *branded*
+        500 with a logged, structured event instead of an unbranded, silent
+        one; this handler had skipped that same pattern for its own render
+        call.
+        """
+        if exc.status_code == 404 and _prefers_html_error(request.url.path):
+            try:
+                return HTMLResponse(content=render_not_found(), status_code=404)
+            except Exception:
+                _logger.exception(
+                    "render error", extra={"kind": "not_found", "path": request.url.path}
+                )
+                return HTMLResponse(
+                    content=_error_html(
+                        title="一時的に表示できません",
+                        message="一時的な問題が発生しました。",
+                        fallback_url="/",
+                    ),
+                    status_code=500,
+                )
+        return await _default_http_exception_handler(request, exc)
 
     # Stage 1 of the Cloud Run consolidation: the top page's own CSS/JS/images
     # (`mockup/assets`) are served in-house so `/jobs/{id}` (a different path
@@ -316,6 +462,109 @@ def create_app(
     async def healthz() -> dict[str, str]:
         return {"status": "healthy"}
 
+    # Stage 4 P1-1 (2026-08-09). `PUBLIC_BASE_URL` unset → 503: the sitemap
+    # protocol requires absolute URLs, and `request.base_url` can't safely
+    # substitute (Cloud Run's uvicorn CMD doesn't widen
+    # `forwarded_allow_ips`, so it would resolve to `http://` regardless of
+    # the real `https://` scheme — a second, distinct place the deploy-
+    # config-forgot-PUBLIC_BASE_URL failure mode already logged in
+    # `create_app` above would otherwise degrade silently). A 503 here is
+    # loud in Search Console instead ("couldn't fetch sitemap"). Firestore
+    # failures get the same 503 — an empty/degraded sitemap would tell
+    # Google every job just disappeared, which is a worse signal than "try
+    # again later."
+    @app.get("/sitemap.xml")
+    async def get_sitemap() -> Response:
+        if not PUBLIC_BASE_URL:
+            _logger.error("sitemap.xml requested but PUBLIC_BASE_URL is unset")
+            return Response(content="PUBLIC_BASE_URL is not configured", status_code=503)
+
+        cached = proxy_cache.get_list(_SITEMAP_CACHE_KEY)
+        if cached is not None:
+            _logger.info("cache hit", extra={"kind": "sitemap"})
+            return Response(content=cached, media_type="application/xml")
+
+        try:
+            snapshots, skipped = await run_in_threadpool(lambda: _resolve_repo().get_all_valid())
+        except Exception:
+            _logger.exception("firestore read error", extra={"kind": "sitemap"})
+            return Response(content="temporarily unavailable", status_code=503)
+
+        if skipped:
+            _logger.error(
+                "sitemap route: skipped malformed job_cache docs",
+                extra={"skipped_job_ids": skipped},
+            )
+
+        urls = _build_sitemap_urls(snapshots, base_url=PUBLIC_BASE_URL)
+        try:
+            rendered = render_sitemap(urls)
+        except Exception:
+            # silent-failure-hunter finding (2026-08-09): fetch was already
+            # protected above, but this Jinja2 render call was not — the
+            # same "fetch/render split protection" every other route in this
+            # module applies (`_render_detail`/`_render_list`'s callers).
+            _logger.exception("render error", extra={"kind": "sitemap", "url_count": len(urls)})
+            return Response(content="temporarily unavailable", status_code=503)
+        proxy_cache.set_list(_SITEMAP_CACHE_KEY, rendered)
+        _logger.info("cache miss → rendered", extra={"kind": "sitemap", "url_count": len(urls)})
+        return Response(content=rendered, media_type="application/xml")
+
+    # Stage 4 P1-2 (2026-08-09). Deliberately asymmetric with `/sitemap.xml`
+    # above: robots.txt itself answering 5xx can make a crawler pause
+    # crawling the *entire* site (it's the first thing fetched), so a
+    # missing `PUBLIC_BASE_URL` degrades to "no Sitemap: line" here instead
+    # of an error status — the rest of robots.txt is still valid and useful
+    # without it. `/assets/` is intentionally NOT disallowed: blocking CSS/
+    # JS fetches would make Google unable to render the page, which is a
+    # worse outcome than crawling a few style sheets.
+    @app.get("/robots.txt")
+    async def get_robots_txt() -> Response:
+        lines = [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /healthz",
+            "Disallow: /jobs/search-index.json",
+        ]
+        if not PUBLIC_BASE_URL:
+            _logger.error("robots.txt requested but PUBLIC_BASE_URL is unset — omitting Sitemap:")
+        else:
+            lines.append(f"Sitemap: {PUBLIC_BASE_URL}/sitemap.xml")
+        return Response(content="\n".join(lines) + "\n", media_type="text/plain; charset=utf-8")
+
+    # Stage 4 P0-3 (2026-08-09): Phase A's static filenames, permanently
+    # redirected to this service's equivalent route. The single required
+    # entry is `/index.html` through `/jobs-it.html` — the whole block below
+    # is a low-cost insurance policy for browser history / bookmarks / any
+    # external link still shaped like the GitHub Pages mockup, not just the
+    # trailing-slash job-detail case (below) that Phase A's own canonical
+    # tags actually declare.
+    @app.get("/index.html")
+    async def redirect_legacy_index() -> Response:
+        return RedirectResponse(url="/", status_code=301)
+
+    @app.get("/jobs.html")
+    async def redirect_legacy_jobs_list(job_type: str | None = None) -> Response:
+        category_id = _LEGACY_CATEGORY_IDS.get(job_type) if job_type else None
+        target = f"/jobs/?category_id={category_id}" if category_id else "/jobs/"
+        return RedirectResponse(url=target, status_code=301)
+
+    @app.get("/jobs-{legacy_key}.html")
+    async def redirect_legacy_category_page(legacy_key: str) -> Response:
+        category_id = _LEGACY_CATEGORY_IDS.get(legacy_key)
+        if category_id is None:
+            raise HTTPException(status_code=404, detail="not found")
+        return RedirectResponse(url=f"/jobs/?category_id={category_id}", status_code=301)
+
+    # `job-preview.html` was a Phase 0 rendering-harness sample with no
+    # user-facing equivalent — 301s to the nearest useful destination (the
+    # all-jobs page) rather than 404ing, since it was never reachable on
+    # `recruit.aozora-cg.com` (DNS unregistered as of this writing) and so
+    # has no external backlinks to preserve with a more specific target.
+    @app.get("/job-preview.html")
+    async def redirect_legacy_job_preview() -> Response:
+        return RedirectResponse(url="/jobs/", status_code=301)
+
     # The chatbot widget (embedded in the top page — `mockup/index.html`
     # already carries its `<script>` tag, PR #97) resolves related-job card
     # links from `job.url` ("jobs/{id}.html", the Phase A static filename
@@ -326,6 +575,20 @@ def create_app(
     @app.get("/jobs/{job_id}.html")
     async def redirect_legacy_html_detail_url(job_id: str) -> Response:
         return RedirectResponse(url=f"/jobs/{job_id}", status_code=308)
+
+    # Stage 4 P0-3 (2026-08-09), highest-priority entry in this whole block:
+    # Phase A's 37 sample job pages already declare
+    # `<link rel="canonical" href="https://recruit.aozora-cg.com/jobs/{id}/">`
+    # (trailing slash). Starlette's `redirect_slashes` default answers this
+    # shape with a 307 (temporary) — the wrong signal to hand a search engine
+    # for a URL it may already have indexed. This overrides that fallback
+    # with an explicit 301. No `is_ascii_digit_id` check here: an invalid id
+    # still redirects (301, one hop) and lets `/jobs/{job_id}` apply its own
+    # validation and 404 — duplicating the check here would just be a second
+    # place for that rule to drift out of sync with the real route.
+    @app.get("/jobs/{job_id}/")
+    async def redirect_trailing_slash_job_detail(job_id: str) -> Response:
+        return RedirectResponse(url=f"/jobs/{job_id}", status_code=301)
 
     # Stage 3 — `map-search.js`'s filter/map/GPS dataset. Registered before
     # `/jobs/{job_id}` for the same reason as the `.html` redirect above:
@@ -500,6 +763,35 @@ def _firestore_error_response(fallback_url: str) -> Response:
         ),
         status_code=503,
     )
+
+
+def _build_sitemap_urls(snapshots: dict[str, JobSnapshot], *, base_url: str) -> list[str]:
+    """Pure function (no Firestore/Jinja2) building the absolute URL list
+    for `sitemap.xml` (Stage 4 P1-1, 2026-08-09) — split out from the route
+    handler so this specific decision (which pages count as "worth
+    crawling") is unit-testable without a TestClient.
+
+    `active` jobs only: `closed` postings stay up (SEO / 被リンク維持,
+    `render_job_detail`'s own docstring) but aren't linked from anywhere in
+    the live site once removed from listings — putting them in the sitemap
+    would be the *only* place advertising them, which contradicts the
+    internal link structure instead of just tolerating an orphaned page.
+    Category URLs come from `_LEGACY_CATEGORY_IDS`'s 6 distinct ids (the
+    ones actually linked from the top page), not the full 17-category
+    `crawler.KNOWN_CATEGORY_IDS` — a sitemap enumerates the information
+    architecture, not every query string that happens to work.
+    """
+    urls = [f"{base_url}/", f"{base_url}/jobs/"]
+    urls += [
+        f"{base_url}/jobs/?category_id={category_id}"
+        for category_id in dict.fromkeys(_LEGACY_CATEGORY_IDS.values())
+    ]
+    urls += [
+        f"{base_url}/jobs/{job_id}"
+        for job_id, snapshot in snapshots.items()
+        if snapshot.sync_status == "active"
+    ]
+    return urls
 
 
 def _primary_category_id(snapshot: JobSnapshot) -> str | None:

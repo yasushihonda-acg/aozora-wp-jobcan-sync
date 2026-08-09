@@ -20,7 +20,7 @@ from .crawler import CrawlResult, crawl_all
 from .diff import compute_diff
 from .firestore_repo import JobCacheRepository
 from .jobcan_client import JobcanClient
-from .notifications import notify_slack
+from .notifications import notify_ops
 
 _logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def run_sync(
     with no removal path.
 
     Every warning this run collects (crawl errors, a reconciliation
-    mismatch) is sent in a *single* Slack notification alongside whatever
+    mismatch) is sent in a *single* ops notification alongside whatever
     else the run is reporting — a circuit-breaker trip no longer silently
     swallows a separate crawl-errors warning just because it returns early
     (2026-08-07 second-opinion review finding: the two were mutually
@@ -124,14 +124,14 @@ def run_sync(
 
     if closed_result.circuit_breaker_tripped:
         message = (
-            ":rotating_light: ジョブカン同期: closed率が閾値を超えたため同期を中止しました。 "
+            "🚨 ジョブカン同期: closed率が閾値を超えたため同期を中止しました。 "
             f"closed_rate={closed_result.closed_rate:.0%} "
             f"newly_closed={len(closed_result.newly_closed_job_ids)} "
             f"previous_open={closed_result.previous_open_count}"
         )
         if warnings:
             message += "\n追加の警告: " + " / ".join(warnings)
-        notify_slack(message)
+        notify_ops(message)
         return SyncRunResult(
             crawl=crawl_result,
             added=len(diff.added),
@@ -155,7 +155,7 @@ def run_sync(
         repo.delete_many(gc_candidates)
 
     if warnings:
-        notify_slack(":warning: ジョブカン同期で警告: " + " / ".join(warnings))
+        notify_ops("⚠️ ジョブカン同期で警告: " + " / ".join(warnings))
 
     return SyncRunResult(
         crawl=crawl_result,

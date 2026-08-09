@@ -63,25 +63,30 @@ gcloud firestore databases create \
   --type=firestore-native
 ```
 
-## 1.5 Secret Manager — Slack webhook URL (Phase B、初回のみ)
+## 1.5 Secret Manager — 運用通知 webhook URL (Google Chat) (Phase B、初回のみ)
 
-`sync/src/sync/notifications.py` の `notify_slack()` が読む唯一のシークレット。
-closed 率サーキットブレーカー発火時のアラート等に使う (B-3)。
+`sync/src/sync/notifications.py` の `notify_ops()` が読む唯一のシークレット。
+closed 率サーキットブレーカー発火時のアラート等に使う (B-3)。運用チャンネルは
+Google Chat (Slack ではない)。
 
 ```bash
-# 1.5a. Slack 側で Incoming Webhook を発行し、URL を控える
-#   (Slack App 管理画面 → Incoming Webhooks → Add New Webhook to Workspace)
+# 1.5a. Google Chat 側で Incoming Webhook を発行し、URL を控える
+#   Google Chat で対象スペースを開く → スペース名クリック → アプリと連携
+#   → Webhook → 名前を付けて追加 → 表示された URL をコピー
+#   (組織ポリシーにより Chat アプリ/Webhook の追加が管理者に制限されている場合が
+#    あるため、メニューが出ない場合は Workspace 管理者に有効化を依頼すること)
 
-# 1.5b. Secret Manager に登録 (値は echo -n で改行なし)
-echo -n "https://hooks.slack.com/services/XXXX/YYYY/ZZZZ" | \
-  gcloud secrets create slack-webhook-url \
+# 1.5b. Secret Manager に登録 (値は echo -n で改行なし。key/token クエリまで含めた
+#       URL 全体を登録する — Google Chat はこのクエリで認証する)
+echo -n "https://chat.googleapis.com/v1/spaces/AAAA/messages?key=XXXX&token=YYYY" | \
+  gcloud secrets create ops-webhook-url \
   --project=aozora-wp-jobcan-sync \
   --data-file=- \
   --replication-policy=automatic
 
 # 1.5c. ローテーション/URL 再発行時は新バージョンを追加 (シークレット自体は削除しない)
-echo -n "https://hooks.slack.com/services/新URL" | \
-  gcloud secrets versions add slack-webhook-url \
+echo -n "https://chat.googleapis.com/v1/spaces/AAAA/messages?key=新key&token=新token" | \
+  gcloud secrets versions add ops-webhook-url \
   --project=aozora-wp-jobcan-sync \
   --data-file=-
 ```
@@ -308,8 +313,8 @@ gcloud projects add-iam-policy-binding aozora-wp-jobcan-sync \
   --member="serviceAccount:aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
   --role="roles/datastore.user"
 
-# Secret Manager (slack-webhook-url) 読み取り — §1.5 で作成済みのシークレットに対して
-gcloud secrets add-iam-policy-binding slack-webhook-url \
+# Secret Manager (ops-webhook-url) 読み取り — §1.5 で作成済みのシークレットに対して
+gcloud secrets add-iam-policy-binding ops-webhook-url \
   --project=aozora-wp-jobcan-sync \
   --member="serviceAccount:aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"

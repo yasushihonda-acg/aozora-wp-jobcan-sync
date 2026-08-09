@@ -128,11 +128,54 @@ def test_top_page_returns_200_html() -> None:
     assert response.text.startswith("<!DOCTYPE html>")
 
 
-def test_top_page_has_security_headers() -> None:
+def test_top_page_is_indexable() -> None:
+    """Stage 4 P0-1: the top page is a page the public should be able to
+    find via search — it must NOT carry X-Robots-Tag: noindex. Still
+    no-store (dynamic content, same as before)."""
     client = _client_with(_repo_with())
     response = client.get("/")
 
     assert response.headers.get("Cache-Control") == "no-store"
+    assert "X-Robots-Tag" not in response.headers
+
+
+def test_job_list_is_indexable() -> None:
+    client = _client_with(_repo_with(_snapshot("1")))
+    response = client.get("/jobs/")
+
+    assert "X-Robots-Tag" not in response.headers
+
+
+def test_job_detail_is_indexable() -> None:
+    client = _client_with(_repo_with(_snapshot("1")))
+    response = client.get("/jobs/1")
+
+    assert "X-Robots-Tag" not in response.headers
+
+
+def test_search_index_json_stays_noindex() -> None:
+    """The `/jobs/` prefix match must not swallow this sibling path — it's
+    a JS-only data endpoint, never a page a search result should show."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/search-index.json")
+
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
+def test_404_stays_noindex() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/99999999")
+
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
+def test_non_ascii_digit_job_id_stays_noindex() -> None:
+    """Full-width digits are rejected by `is_ascii_digit_id` and 404 —
+    confirms the indexable allowlist is keyed off the real validator, not a
+    loose prefix match."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/１２３")
+
     assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
 
 
@@ -229,6 +272,18 @@ def test_static_asset_is_cacheable_unlike_dynamic_pages() -> None:
     assert response.headers.get("Cache-Control") == "public, max-age=3600"
 
 
+def test_static_asset_stays_noindex() -> None:
+    """2026-08-09 codex review finding: `noindex` only keeps a URL out of
+    search *results* — it doesn't block Googlebot from fetching the resource
+    to render a public page, so individual CSS/JS/image files gain nothing
+    from being indexable and would otherwise show up as their own search
+    results."""
+    client = _client_with(_repo_with())
+    response = client.get("/assets/css/tokens.css")
+
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
 def test_static_asset_unknown_path_returns_404() -> None:
     client = _client_with(_repo_with())
     response = client.get("/assets/does-not-exist.css")
@@ -246,6 +301,108 @@ def test_static_asset_404_is_not_cached() -> None:
     response = client.get("/assets/does-not-exist.css")
 
     assert response.headers.get("Cache-Control") == "no-store"
+
+
+# ───────────────────────────── custom 404 page (Stage 4 P0-2) ────────────
+
+
+def test_unknown_job_id_returns_branded_html_404() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/9999999")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+    assert "見つかりません" in response.text
+    assert 'href="/jobs/"' in response.text
+    assert 'href="/"' in response.text
+
+
+def test_unmatched_route_returns_branded_html_404() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/nothing-at-all")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_invalid_job_id_returns_branded_html_404() -> None:
+    """`is_ascii_digit_id` rejects non-numeric ids before Firestore is even
+    queried — still routes through the same branded 404, not a bare
+    validation-error JSON."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/abc")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_static_asset_404_stays_json_not_html() -> None:
+    """`_prefers_html_error`: a missing CSS/JS/image file is a `<link>`/
+    `<img>` resolution failure nobody reads a 2KB HTML document for."""
+    client = _client_with(_repo_with())
+    response = client.get("/assets/does-not-exist.css")
+
+    assert response.status_code == 404
+    assert not response.headers["content-type"].startswith("text/html")
+
+
+def test_json_endpoint_404_stays_json() -> None:
+    """A `.json`-suffixed 404 must stay parseable as JSON — the branded HTML
+    error page would turn a clean `response.json()` failure into an opaque
+    `SyntaxError` for whoever's debugging the fetch."""
+    client = _client_with(_repo_with())
+    response = client.get("/whatever.json")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_healthz_disallowed_method_stays_default_json_handler() -> None:
+    """Regression: registering the 404 handler on the StarletteHTTPException
+    base class must not swallow non-404 statuses (405 here) — those still
+    fall through to FastAPI's own default handler."""
+    client = _client_with(_repo_with())
+    response = client.post("/healthz")
+
+    assert response.status_code == 405
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_missing_top_page_returns_branded_html_404(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "INDEX_HTML_PATH", "/nonexistent/index.html")
+    client = _client_with(_repo_with())
+
+    response = client.get("/")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+    assert "見つかりません" in response.text
+
+
+def test_404_render_failure_degrades_to_branded_500(monkeypatch: Any) -> None:
+    """silent-failure-hunter finding (2026-08-09): `render_not_found()` was
+    called directly inside the exception handler with no try/except —
+    unlike every other render call in this module, a Jinja2 failure there
+    fell all the way through to an unbranded, unlogged 500 with no
+    Cache-Control/X-Robots-Tag at all (the security-headers middleware never
+    got a chance to run on the raw ASGI error response)."""
+    from sync import app as app_module
+
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
+
+    monkeypatch.setattr(app_module, "render_not_found", _raise)
+    client = _client_with(_repo_with())
+
+    response = client.get("/jobs/9999999")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert "一時的な問題が発生しました" in response.text
+    assert response.headers.get("Cache-Control") == "no-store"
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
 
 
 # ───────────────────────────── /jobs/{job_id} ────────────────────────────
@@ -321,13 +478,131 @@ def test_get_job_detail_rejects_non_ascii_digits() -> None:
 
 def test_get_job_detail_html_suffix_redirects_to_canonical_route() -> None:
     """The chatbot widget's related-job links resolve to `/jobs/{id}.html`
-    (page-relative `job.url` from `/`) — this must redirect, not 404
-    (2026-08-08 codex review finding)."""
+    (page-relative `job.url` from `/`) — this must redirect, not 308
+    (2026-08-08 codex review finding). Unchanged by Stage 4 P0-3 — this is
+    the widget's own in-app navigation, not a search-engine-facing URL, so
+    308 (method-preserving) stays correct where the new 301s below are
+    search-engine-facing permanent moves."""
     client = _client_with(_repo_with())
     response = client.get("/jobs/1777023.html", follow_redirects=False)
 
     assert response.status_code == 308
     assert response.headers["location"] == "/jobs/1777023"
+
+
+# ─────────────── Stage 4 P0-3: legacy Phase A URL → new URL redirects ─────
+
+
+def test_trailing_slash_job_detail_redirects_301_not_307() -> None:
+    """Phase A's 37 sample job pages already declare
+    `<link rel="canonical" href="https://recruit.aozora-cg.com/jobs/{id}/">`
+    (trailing slash) — Starlette's `redirect_slashes` default answers this
+    shape with a 307 (temporary), which is the wrong signal for a URL a
+    search engine already has indexed under the old domain. This route
+    overrides that fallback with an explicit 301."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/104625/", follow_redirects=False)
+
+    assert response.status_code == 301
+    assert response.headers["location"] == "/jobs/104625"
+
+
+def test_trailing_slash_invalid_job_id_redirects_then_404s() -> None:
+    """Boundary: the trailing-slash redirect itself doesn't validate the id
+    — it hands off to `/jobs/{job_id}` unchanged, which then applies its own
+    `is_ascii_digit_id` check. Confirms there's no double-404 or bypass."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/abc/", follow_redirects=False)
+
+    assert response.status_code == 301
+    assert response.headers["location"] == "/jobs/abc"
+
+    followed = client.get(response.headers["location"])
+    assert followed.status_code == 404
+
+
+def test_legacy_static_filenames_redirect_301(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "")
+    client = _client_with(_repo_with())
+
+    cases = {
+        "/index.html": "/",
+        "/jobs.html": "/jobs/",
+        "/jobs-care.html": "/jobs/?category_id=18773",
+        "/jobs-nurse.html": "/jobs/?category_id=18983",
+        "/jobs-office.html": "/jobs/?category_id=58859",
+        "/jobs-it.html": "/jobs/?category_id=69384",
+    }
+    for old_path, expected_location in cases.items():
+        response = client.get(old_path, follow_redirects=False)
+        assert response.status_code == 301, old_path
+        assert response.headers["location"] == expected_location, old_path
+
+
+def test_legacy_jobs_html_job_type_query_maps_to_category_id() -> None:
+    client = _client_with(_repo_with())
+
+    visit = client.get("/jobs.html?job_type=visit", follow_redirects=False)
+    assert visit.headers["location"] == "/jobs/?category_id=18986"
+
+    care_manager = client.get("/jobs.html?job_type=care-manager", follow_redirects=False)
+    assert care_manager.headers["location"] == "/jobs/?category_id=18985"
+
+
+def test_legacy_jobs_html_unknown_job_type_drops_query() -> None:
+    """Anything other than the two known `job_type` values must not leak a
+    literal `category_id=None` (or the raw unknown value) into the redirect
+    target — falls back to the unfiltered all-jobs page."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs.html?job_type=unknown", follow_redirects=False)
+
+    assert response.headers["location"] == "/jobs/"
+
+
+def test_legacy_redirects_carry_noindex() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/104625/", follow_redirects=False)
+
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
+def test_html_suffix_redirect_still_308_after_legacy_redirects_added() -> None:
+    """Regression: adding the new `/jobs/{id}/` route must not shadow the
+    existing `/jobs/{id}.html` → 308 route registered right before it."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/1777023.html", follow_redirects=False)
+
+    assert response.status_code == 308
+
+
+def test_search_index_json_route_unshadowed_by_legacy_redirects() -> None:
+    """Regression: `/jobs/search-index.json` must still resolve to its own
+    route, not get swallowed by the new `/jobs/{job_id}/` wildcard."""
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/search-index.json")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_legacy_category_ids_are_all_known_categories() -> None:
+    """A typo'd id here wouldn't 404 today — it would silently render an
+    empty listing page, since `/jobs/?category_id=` filters rather than
+    validates. Pin every `_LEGACY_CATEGORY_IDS` value against the crawler's
+    own known-category list instead."""
+    from sync import app as app_module
+    from sync.crawler import KNOWN_CATEGORY_IDS
+
+    assert set(app_module._LEGACY_CATEGORY_IDS.values()) <= set(KNOWN_CATEGORY_IDS)
+
+
+def test_unknown_legacy_category_page_404s() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs-unknown.html", follow_redirects=False)
+
+    assert response.status_code == 404
 
 
 def test_get_job_detail_render_failure_returns_500(monkeypatch: Any) -> None:
@@ -343,6 +618,7 @@ def test_get_job_detail_render_failure_returns_500(monkeypatch: Any) -> None:
     response = client.get("/jobs/1")
 
     assert response.status_code == 500
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
     assert "一時的な問題が発生しました" in response.text
 
 
@@ -362,6 +638,7 @@ def test_get_job_detail_firestore_read_failure_returns_503(monkeypatch: Any) -> 
     response = client.get("/jobs/1")
 
     assert response.status_code == 503
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
     assert "データの取得に問題が発生している可能性があります" in response.text
 
 
@@ -564,6 +841,7 @@ def test_get_job_list_firestore_read_failure_returns_503(monkeypatch: Any) -> No
     response = client.get("/jobs/?category_id=18773")
 
     assert response.status_code == 503
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
     assert "データの取得に問題が発生している可能性があります" in response.text
 
 
@@ -825,3 +1103,278 @@ def test_resolve_repo_builds_the_client_at_most_once(monkeypatch: Any) -> None:
 
     client.get("/jobs/1")
     assert build_count == 1
+
+
+# ───────────────── OGP / Twitter Card (Stage 4-E, 2026-08-09) ─────────────────
+
+
+def test_job_detail_route_serves_ogp_tags() -> None:
+    """End-to-end wiring check: `base.html`'s `social_meta` block must reach
+    the real `/jobs/{id}` response, not just `render_job_detail` in
+    isolation (Phase B had no `og:*` at all before Stage 4-E)."""
+    client = _client_with(_repo_with(_snapshot("1")))
+    html = client.get("/jobs/1").text
+
+    assert html.count('property="og:title"') == 1
+    assert html.count('<meta property="og:type" content="article">') == 1
+    assert html.count('property="og:url"') == 1
+    assert html.count('property="og:image"') == 1
+    assert html.count('<meta name="twitter:card" content="summary_large_image">') == 1
+
+
+def test_job_list_route_serves_ogp_tags() -> None:
+    client = _client_with(_repo_with(_snapshot("1")))
+    html = client.get("/jobs/?category_id=18773").text
+
+    assert html.count('<meta property="og:type" content="website">') == 1
+    assert html.count('name="description"') == 1
+    assert html.count('property="og:image"') == 1
+
+
+def test_job_detail_route_ogp_urls_are_absolute_when_public_base_url_set(
+    monkeypatch: Any,
+) -> None:
+    """pr-test-analyzer finding (2026-08-09): `render_job_detail(base_url=...)`
+    is unit-tested for absolute og:url/og:image in `test_renderer.py`, but
+    nothing previously confirmed `app.py` actually threads `PUBLIC_BASE_URL`
+    through to that call on the real route — a wiring regression there
+    (e.g. a future refactor dropping the `base_url=` kwarg at the call site)
+    would go undetected by route-level tests that never set the env var."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with(_snapshot("1")))
+
+    html = client.get("/jobs/1").text
+
+    assert 'property="og:url" content="https://recruit.aozora-cg.com/jobs/1"' in html
+    assert (
+        'property="og:image" content="https://recruit.aozora-cg.com/assets/img/sky-hero.jpg"'
+        in html
+    )
+
+
+def test_job_list_route_ogp_urls_are_absolute_when_public_base_url_set(
+    monkeypatch: Any,
+) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with(_snapshot("1")))
+
+    html = client.get("/jobs/?category_id=18773").text
+
+    assert (
+        'property="og:image" content="https://recruit.aozora-cg.com/assets/img/sky-hero.jpg"'
+        in html
+    )
+
+
+# ─────────────── sitemap.xml / robots.txt (Stage 4 P1-1/P1-2) ────────────
+
+import xml.etree.ElementTree as ET  # noqa: E402
+
+_SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+
+
+def _sitemap_locs(xml_text: str) -> list[str]:
+    root = ET.fromstring(xml_text)
+    return [el.text for el in root.iter(f"{_SITEMAP_NS}loc") if el.text is not None]
+
+
+def test_sitemap_lists_top_list_categories_and_active_jobs_only(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    repo = _repo_with(_snapshot("1"), _snapshot("2", sync_status="closed"))
+    client = _client_with(repo)
+
+    response = client.get("/sitemap.xml")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+
+    locs = _sitemap_locs(response.text)
+    assert "https://recruit.aozora-cg.com/" in locs
+    assert "https://recruit.aozora-cg.com/jobs/" in locs
+    assert "https://recruit.aozora-cg.com/jobs/1" in locs
+    assert "https://recruit.aozora-cg.com/jobs/2" not in locs  # closed — excluded
+    # top(1) + list(1) + 6 legacy categories + 1 active job
+    assert len(locs) == 9
+
+
+def test_sitemap_urls_all_absolute(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with(_snapshot("1")))
+    response = client.get("/sitemap.xml")
+
+    for loc in _sitemap_locs(response.text):
+        assert loc.startswith("https://")
+
+
+def test_sitemap_empty_repo_still_lists_top_list_and_categories(monkeypatch: Any) -> None:
+    """Boundary: zero jobs must still produce a well-formed sitemap with the
+    8 static entries (top + list + 6 categories), not an empty/invalid doc."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with())
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    assert len(_sitemap_locs(response.text)) == 8  # top(1) + list(1) + 6 categories
+
+
+def test_sitemap_returns_503_without_public_base_url(monkeypatch: Any) -> None:
+    """A relative-URL sitemap is spec-invalid — refuse rather than emit one
+    (mirrors the K_SERVICE-without-PUBLIC_BASE_URL warning `create_app`
+    already logs for canonical URLs)."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "")
+    client = _client_with(_repo_with())
+
+    response = client.get("/sitemap.xml")
+    assert response.status_code == 503
+
+
+def test_sitemap_returns_503_on_firestore_error(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+
+    def _raise() -> Any:
+        raise RuntimeError("simulated Firestore outage")
+
+    client = _client_with(_repo_with())
+    monkeypatch.setattr(
+        app_module.JobCacheRepository, "get_all_valid", lambda self: _raise()
+    )
+
+    response = client.get("/sitemap.xml")
+    assert response.status_code == 503
+    assert "<urlset" not in response.text
+    assert response.headers.get("Cache-Control") == "no-store"
+
+
+def test_sitemap_render_failure_returns_503(monkeypatch: Any) -> None:
+    """silent-failure-hunter finding (2026-08-09): the Firestore read was
+    already protected by try/except, but the subsequent `render_sitemap()`
+    Jinja2 call was not — same "fetch protected, render not" gap as the
+    404 handler's own finding."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("simulated Jinja2 TemplateError")
+
+    monkeypatch.setattr(app_module, "render_sitemap", _raise)
+    client = _client_with(_repo_with(_snapshot("1")))
+
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 503
+    assert "<urlset" not in response.text
+
+
+def test_sitemap_503_is_not_cached(monkeypatch: Any) -> None:
+    """Regression: a transient 503 must not poison the cache — the next
+    request (once the underlying problem clears) has to try again rather
+    than replay the failure for the rest of the TTL."""
+    from sync import app as app_module
+
+    client = _client_with(_repo_with())
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "")
+    first = client.get("/sitemap.xml")
+    assert first.status_code == 503
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    second = client.get("/sitemap.xml")
+    assert second.status_code == 200
+
+
+def test_sitemap_cache_hit_skips_firestore(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    repo = _repo_with(_snapshot("1"))
+    client = _client_with(repo)
+
+    build_count = 0
+    original = app_module.JobCacheRepository.get_all_valid
+
+    def _counting(self: Any) -> Any:
+        nonlocal build_count
+        build_count += 1
+        return original(self)
+
+    monkeypatch.setattr(app_module.JobCacheRepository, "get_all_valid", _counting)
+
+    client.get("/sitemap.xml")
+    assert build_count == 1
+    client.get("/sitemap.xml")
+    assert build_count == 1  # second hit served from cache
+
+
+def test_sitemap_has_no_robots_tag_and_is_cacheable(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with())
+    response = client.get("/sitemap.xml")
+
+    assert "X-Robots-Tag" not in response.headers
+    assert response.headers.get("Cache-Control") == "public, max-age=3600"
+
+
+def test_robots_txt_references_sitemap_and_allows_assets(monkeypatch: Any) -> None:
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "https://recruit.aozora-cg.com")
+    client = _client_with(_repo_with())
+
+    response = client.get("/robots.txt")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+
+    body = response.text
+    assert "Sitemap: https://recruit.aozora-cg.com/sitemap.xml" in body
+    assert "Disallow: /healthz" in body
+    assert "Disallow: /jobs/search-index.json" in body
+    assert "Disallow: /assets/" not in body  # must not block CSS/JS rendering
+
+
+def test_robots_txt_degrades_gracefully_without_public_base_url(monkeypatch: Any) -> None:
+    """Asymmetric with sitemap.xml on purpose: robots.txt itself returning
+    5xx can make a crawler pause crawling the whole site, so a missing
+    PUBLIC_BASE_URL degrades to "no Sitemap: line" rather than an error
+    status."""
+    from sync import app as app_module
+
+    monkeypatch.setattr(app_module, "PUBLIC_BASE_URL", "")
+    client = _client_with(_repo_with())
+
+    response = client.get("/robots.txt")
+    assert response.status_code == 200
+    assert "Sitemap:" not in response.text
+
+
+def test_robots_txt_has_no_robots_tag() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/robots.txt")
+
+    assert "X-Robots-Tag" not in response.headers
+
+
+def test_robots_txt_is_cacheable() -> None:
+    """pr-test-analyzer finding (2026-08-09): `_apply_security_headers`'s
+    docstring says `/robots.txt` rides the same real-max-age branch as
+    `/sitemap.xml` and the static assets, but no test previously asserted
+    that for robots.txt specifically."""
+    client = _client_with(_repo_with())
+    response = client.get("/robots.txt")
+
+    assert response.headers.get("Cache-Control") == "public, max-age=3600"
