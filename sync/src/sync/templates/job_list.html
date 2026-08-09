@@ -1,28 +1,30 @@
 {% extends "base.html" %}
 
+{# Stage 3 (求人一覧デザインパリティ, 2026-08-09): mirrors Phase A's
+   `mockup/jobs.html` (search_mode — category_id-less all-jobs page, chip/
+   freeword/map/GPS search) and `mockup/jobs-{care,nurse,office,it}.html`
+   (plain category grid, no search UI). `cards` (list of `list_sections.
+   JobListCardView`) carries the colour modifier + salary/holiday chips both
+   modes share; `search_mode`/`search_index_url` gate the search-only
+   markup. See `app.py::_render_list`. #}
+
 {% block page_title %}求人一覧 | あおぞらケアグループ採用{% endblock %}
-{% block canonical_url %}{{ base_url }}/jobs/?category_id={{ page.category_id }}{% endblock %}
+{% block canonical_url %}{{ base_url }}/jobs/{% if page.category_id %}?category_id={{ page.category_id }}{% endif %}{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="/assets/css/sync-job-list.css">
+{% if search_mode %}
+<link rel="stylesheet" href="/assets/css/map-search.css">
+{% endif %}
+<link rel="stylesheet" href="/assets/css/chat-widget.css">
 {% endblock %}
 {% block main_class %}job-list{% endblock %}
 
 {% block content %}
-<nav class="job-list__breadcrumb" aria-label="パンくず">
-  <a class="job-list__back" href="/">
-    <span class="job-list__back-arrow" aria-hidden="true">←</span>
-    採用トップへ戻る
-  </a>
-</nav>
-
-<header class="job-list__header">
-  <h1 class="job-list__title">求人一覧</h1>
-  <p class="job-list__lede">{{ page.items | length }} 件の募集中ポジション</p>
-</header>
-
+{% macro job_cards() %}
 <ul class="job-list__cards" role="list">
   {% for item in page.items %}
-  <li class="job-list-card">
+  {% set card = cards_by_job_id.get(item.job_id) %}
+  <li class="job-list-card{% if card and card.category_key %} job-list-card--{{ card.category_key }}{% endif %}">
     <a class="job-list-card__link" href="{{ item.detail_url }}" rel="noopener">
       {% if item.thumbnail_url %}
       <div class="job-list-card__thumb">
@@ -43,16 +45,146 @@
         <h2 class="job-list-card__title">{{ item.title }}</h2>
         <p class="job-list-card__address">{{ item.address }}</p>
         <p class="job-list-card__description">{{ item.description }}</p>
+        {# `card` is absent for callers with no `JobSnapshot`/`JobOffer` to
+           derive salary/holiday chips from (CLI `list` subcommand) — the
+           meta-grid needs both offer fields, so it's skipped entirely
+           rather than half-rendered. #}
+        {% if card %}
+        <dl class="job-card__meta-grid">
+          <dt>月給</dt><dd class="is-accent">{{ card.salary_chip }}</dd>
+          {% if card.holiday_chip %}<dt>年休</dt><dd>{{ card.holiday_chip }}</dd>{% endif %}
+        </dl>
+        {% endif %}
         <span class="job-list-card__cta">詳細を見る</span>
       </div>
     </a>
   </li>
   {% endfor %}
 </ul>
+{% endmacro %}
+
+<nav class="job-list__breadcrumb" aria-label="パンくず">
+  <a class="job-list__back" href="/">
+    <span class="job-list__back-arrow" aria-hidden="true">←</span>
+    採用トップへ戻る
+  </a>
+</nav>
+
+<header class="job-list__header">
+  <h1 class="job-list__title">求人一覧</h1>
+  <p class="job-list__lede">{{ page.items | length }} 件の募集中ポジション</p>
+</header>
+
+{% if search_mode %}
+<div class="job-search" id="job-search" data-jobs-endpoint="{{ search_index_url }}">
+  {# Stage 3 silent-failure-hunter finding (2026-08-09): a search-index.json
+     fetch failure (Firestore outage, Cloud Run cold-start timeout, etc.)
+     used to fail into total silence — the panel/map simply never appeared,
+     with no signal to the visitor that a feature was supposed to be here.
+     `map-search.js`'s catch block now also unhides this. #}
+  <p class="job-search-empty" id="job-search-load-error" hidden>検索・地図機能を読み込めませんでした。すべての求人を表示しています。</p>
+  <div class="job-search-panel" id="job-search-panel" hidden>
+    <div class="job-search-panel__row">
+      <span class="job-search-panel__label">職種</span>
+      <div class="job-search-panel__chips" data-filter-group="category">
+        <button type="button" class="job-search-panel__chip" data-value="care" aria-pressed="false">介護・相談</button>
+        <button type="button" class="job-search-panel__chip" data-value="office" aria-pressed="false">事務</button>
+        <button type="button" class="job-search-panel__chip" data-value="it" aria-pressed="false">IT</button>
+        <button type="button" class="job-search-panel__chip" data-value="nurse" aria-pressed="false">看護</button>
+      </div>
+    </div>
+    <div class="job-search-panel__row">
+      <span class="job-search-panel__label">雇用形態</span>
+      <div class="job-search-panel__chips" data-filter-group="employment">
+        <button type="button" class="job-search-panel__chip" data-value="正社員" aria-pressed="false">正社員</button>
+        <button type="button" class="job-search-panel__chip" data-value="短時間正社員" aria-pressed="false">短時間正社員</button>
+        <button type="button" class="job-search-panel__chip" data-value="パート" aria-pressed="false">パート</button>
+        <button type="button" class="job-search-panel__chip" data-value="アルバイト" aria-pressed="false">アルバイト</button>
+      </div>
+    </div>
+    <div class="job-search-panel__row">
+      <span class="job-search-panel__label">エリア</span>
+      <div class="job-search-panel__chips" data-filter-group="area">
+        <button type="button" class="job-search-panel__chip" data-value="kagoshima" aria-pressed="false">鹿児島エリア</button>
+        <button type="button" class="job-search-panel__chip" data-value="fukuoka" aria-pressed="false">福岡エリア</button>
+      </div>
+    </div>
+    <div class="job-search-panel__row">
+      <span class="job-search-panel__label">フリーワード</span>
+      <div class="job-search-panel__freeword">
+        <input type="search" id="job-search-freeword" placeholder="施設名・キーワードで検索" aria-label="施設名・キーワードで検索">
+      </div>
+    </div>
+    <div class="job-search-panel__actions">
+      <p class="job-search-panel__count" id="job-search-count" aria-live="polite">{{ page.items | length }} 件を表示中</p>
+      <div class="job-search-panel__buttons">
+        <button type="button" class="job-search-panel__btn job-search-panel__btn--primary" id="job-search-gps">現在地から近い順</button>
+        <button type="button" class="job-search-panel__btn" id="job-search-clear">条件をクリア</button>
+      </div>
+    </div>
+    <p class="job-search-panel__gps-status" id="job-search-gps-status" hidden aria-live="polite"></p>
+  </div>
+  <div class="job-search-layout" id="job-search-layout">
+    <div class="job-map-wrap" id="job-map-wrap" hidden>
+      <div class="job-map-panels" id="job-map-panels">
+        <div class="job-map-panel">
+          <p class="job-map-panel__label">福岡エリア</p>
+          <div class="job-map-diagram" data-area="fukuoka"></div>
+        </div>
+        <div class="job-map-panel">
+          <p class="job-map-panel__label">鹿児島エリア</p>
+          <div class="job-map-diagram" data-area="kagoshima"></div>
+        </div>
+      </div>
+    </div>
+    <div class="job-search-list-col" id="job-search-list-col">
+      <div class="job-search-facility-filter" id="job-search-facility-filter" hidden>
+        <span id="job-search-facility-filter-label"></span>
+        <button type="button" class="job-search-facility-filter__clear" id="job-search-facility-filter-clear">絞り込みを解除</button>
+      </div>
+      <p class="job-search-empty" id="job-search-empty" hidden>条件に一致する求人が見つかりませんでした。条件を変更するか「条件をクリア」をお試しください。</p>
+      {{ job_cards() }}
+    </div>
+  </div>
+</div>
+{% else %}
+{{ job_cards() }}
+{% endif %}
 
 <footer class="job-list__footer">
   <p class="job-list__source-note">
     応募フォームは外部サイト（ジョブカン採用管理）に遷移します。
   </p>
 </footer>
+{% endblock %}
+
+{% block chat_widget %}
+{% if search_mode %}
+{# Google Maps JavaScript API 公式ブートストラップローダー — mockup/jobs.html
+   と同一(Phase A/B共有のAPIキー、リファラー制限に両オリジンを登録済み
+   前提。docs/runbooks/wif-setup.md参照)。#}
+<script>
+  (g => {
+    var h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__", m = document, b = window;
+    b = b[c] || (b[c] = {});
+    var d = b.maps || (b.maps = {}), r = new Set, e = new URLSearchParams, u = () => h || (h = new Promise(async (f, n) => {
+      await (a = m.createElement("script"));
+      e.set("libraries", [...r] + "");
+      for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]);
+      e.set("callback", c + ".maps." + q);
+      a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+      d[q] = f;
+      a.onerror = () => h = n(Error(p + " could not load."));
+      a.nonce = m.querySelector("script[nonce]")?.nonce || "";
+      m.head.append(a)
+    }));
+    d[l] ? console.warn(p + " only loads once. Ignoring:", g) : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n))
+  })({
+    key: "AIzaSyAoOpz0Z_SSE_7xOAF98SGcu5QcmQmj5S8",
+    v: "weekly",
+  });
+</script>
+<script src="/assets/js/map-search.js"></script>
+{% endif %}
+<script defer src="/assets/js/chat-widget.js" data-endpoint="https://aozora-chatbot-1084369586348.asia-northeast1.run.app/chat"></script>
 {% endblock %}

@@ -71,6 +71,8 @@ class Cache(Protocol):
     def set_detail(self, job_id: str, html: str) -> None: ...
     def get_list(self, category_id: str) -> str | None: ...
     def set_list(self, category_id: str, html: str) -> None: ...
+    def get_json(self, key: str) -> dict | None: ...
+    def set_json(self, key: str, value: dict) -> None: ...
     def get_negative(self, kind: str, key: str) -> int | None: ...
     def set_negative(self, kind: str, key: str, status_code: int) -> None: ...
     def clear(self) -> None: ...
@@ -101,6 +103,16 @@ class InMemoryCache:
         self._negative: TTLCache[str, int] = TTLCache(
             maxsize=self.config.maxsize,
             ttl=self.config.negative_ttl,
+            timer=self.config.timer,
+        )
+        # Stage 3 (求人一覧デザインパリティ): the search-index JSON
+        # (`GET /jobs/search-index.json`, `search_index.build_search_index`)
+        # is a single-key cache — same list_ttl as the category listings it
+        # sits next to, but its own TTLCache so a dict payload never lands
+        # in the str-typed `_list` store.
+        self._json: TTLCache[str, dict] = TTLCache(
+            maxsize=self.config.maxsize,
+            ttl=self.config.list_ttl,
             timer=self.config.timer,
         )
         self._lock = threading.Lock()
@@ -151,6 +163,12 @@ class InMemoryCache:
     def set_list(self, category_id: str, html: str) -> None:
         self._set(self._list, category_id, html)
 
+    def get_json(self, key: str) -> dict | None:
+        return self._get(self._json, key)
+
+    def set_json(self, key: str, value: dict) -> None:
+        self._set(self._json, key, value)
+
     def get_negative(self, kind: str, key: str) -> int | None:
         return self._get(self._negative, f"{kind}:{key}")
 
@@ -161,4 +179,5 @@ class InMemoryCache:
         with self._lock:
             self._detail.clear()
             self._list.clear()
+            self._json.clear()
             self._negative.clear()
