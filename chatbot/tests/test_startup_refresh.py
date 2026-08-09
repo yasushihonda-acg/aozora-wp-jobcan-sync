@@ -125,7 +125,10 @@ def test_lifespan_fetch_replaces_jobs_end_to_end() -> None:
         chat = client.post("/chat", json={"message": "求人ありますか"}).json()
 
     assert len(seen) == 1
-    assert health["knowledge"] == {"source": "fetched", "job_count": 1}
+    assert health["knowledge"]["source"] == "fetched"
+    assert health["knowledge"]["job_count"] == 1
+    assert health["knowledge"]["seconds_since_last_success"] is not None
+    assert health["knowledge"]["stale"] is False
     assert [job["id"] for job in chat["jobs"]] == ["555000"]
 
 
@@ -153,7 +156,7 @@ def test_fetched_url_is_recomputed_from_id_not_trusted() -> None:
     with TestClient(app) as client:
         chat = client.post("/chat", json={"message": "求人ありますか"}).json()
 
-    assert chat["jobs"][0]["url"] == "jobs/555000.html"
+    assert chat["jobs"][0]["url"] == "jobs/555000"
 
 
 @pytest.mark.parametrize(
@@ -188,7 +191,9 @@ def test_fetch_failure_keeps_bundled_data_and_app_stays_up(
         chat = client.post("/chat", json={"message": "こんにちは"})
 
     assert len(seen) == 1  # fetch was attempted, not skipped
-    assert health["knowledge"] == {"source": "bundled", "job_count": 37}
+    assert health["knowledge"]["source"] == "bundled"
+    assert health["knowledge"]["job_count"] == 0
+    assert health["knowledge"]["seconds_since_last_success"] is None
     assert chat.status_code == 200
     assert any("knowledge refresh failed" in record.message for record in caplog.records)
 
@@ -205,7 +210,9 @@ def test_empty_jobs_detail_url_disables_fetch() -> None:
         health = client.get("/health").json()
 
     assert seen == []
-    assert health["knowledge"] == {"source": "bundled", "job_count": 37}
+    assert health["knowledge"]["source"] == "bundled"
+    assert health["knowledge"]["job_count"] == 0
+    assert health["knowledge"]["seconds_since_last_success"] is None
 
 
 def test_no_fetch_without_lifespan_context_manager() -> None:

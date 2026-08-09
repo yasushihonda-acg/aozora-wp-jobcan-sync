@@ -64,6 +64,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ._validators import is_ascii_digit_id
 from .cache import Cache, CacheConfig, InMemoryCache
+from .chatbot_knowledge import build_chatbot_knowledge
 from .detail_sections import RelatedJob, extract_region_tag
 from .firestore_repo import JobCacheRepository, get_firestore_client
 from .list_sections import JobListCardView, build_card_view
@@ -83,6 +84,13 @@ from .snapshot import JobSnapshot
 # `set_list` (keyed only by that one string) can serve both without a
 # collision. Also used as the search-index.json cache key.
 _ALL_JOBS_CACHE_KEY = "__all__"
+
+# AIチャット知識ベース連携 (2026-08-09): `chatbot-knowledge.json` の
+# キャッシュキー。値は `search-index.json` と同じ文字列だが、
+# `proxy_cache.get_json_list`/`set_json_list` は `get_json`/`set_json` とは
+# 別の TTLCache ストアを使うため(`cache.py`)、両エンドポイントが同時に
+# `__all__` を使っても衝突しない。
+_CHATBOT_KNOWLEDGE_CACHE_KEY = "__all__"
 
 # Stage 4 P1-1 (2026-08-09): `sitemap.xml`'s cache key, same `ProxyCache.
 # get_list`/`set_list` namespace as `_ALL_JOBS_CACHE_KEY` above — distinct
@@ -555,6 +563,7 @@ def create_app(
             "Allow: /",
             "Disallow: /healthz",
             "Disallow: /jobs/search-index.json",
+            "Disallow: /jobs/chatbot-knowledge.json",
         ]
         if not PUBLIC_BASE_URL:
             _logger.error("robots.txt requested but PUBLIC_BASE_URL is unset — omitting Sitemap:")
@@ -656,6 +665,43 @@ def create_app(
         proxy_cache.set_json(_ALL_JOBS_CACHE_KEY, index)
         _logger.info("cache miss → built", extra={"kind": "search-index"})
         return JSONResponse(content=index)
+
+    # AIチャット知識ベース連携 (2026-08-09): `chatbot/` の求人グラウンディング
+    # データの唯一の供給元。旧経路(`chatbot/scripts/build_jobs_detail.py`を
+    # 人手で実行し`git push`)は Phase A の静的37件から更新が止まっており、
+    # サイト本体(Firestore、6時間ごと自動同期)と実質10倍の情報不整合を起こし
+    # ていた(2026-08-09発覚)。`chatbot/src/chatbot/knowledge.py`の
+    # `DEFAULT_JOBS_DETAIL_URL`をこのルートへ向けることで、以後は人手を介さず
+    # 常にこの6時間サイクルの実データを追随する。
+    #
+    # `/jobs/search-index.json`と同じ理由で`/jobs/{job_id}`より前に登録
+    # (Starletteは登録順マッチ、`{job_id}`は無制約な単一セグメントの
+    # ワイルドカードのため後に置くとこちらが食われる)。
+    @app.get("/jobs/chatbot-knowledge.json")
+    async def get_chatbot_knowledge() -> Response:
+        cached = proxy_cache.get_json_list(_CHATBOT_KNOWLEDGE_CACHE_KEY)
+        if cached is not None:
+            _logger.info("cache hit", extra={"kind": "chatbot-knowledge"})
+            return JSONResponse(content=cached)
+
+        try:
+            snapshots, skipped = await run_in_threadpool(lambda: _resolve_repo().get_all_valid())
+        except Exception:
+            _logger.exception("firestore read error", extra={"kind": "chatbot-knowledge"})
+            return JSONResponse(content=[], status_code=503)
+
+        if skipped:
+            _logger.error(
+                "chatbot-knowledge route: skipped malformed job_cache docs",
+                extra={"skipped_job_ids": skipped},
+            )
+
+        records, warnings = build_chatbot_knowledge(snapshots)
+        for warning in warnings:
+            _logger.warning("chatbot-knowledge build warning", extra={"detail": warning})
+        proxy_cache.set_json_list(_CHATBOT_KNOWLEDGE_CACHE_KEY, records)
+        _logger.info("cache miss → built", extra={"kind": "chatbot-knowledge"})
+        return JSONResponse(content=records)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
     async def get_job_detail(job_id: str) -> Response:

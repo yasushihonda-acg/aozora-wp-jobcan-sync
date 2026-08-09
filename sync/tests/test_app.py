@@ -162,6 +162,13 @@ def test_search_index_json_stays_noindex() -> None:
     assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
 
 
+def test_chatbot_knowledge_json_stays_noindex() -> None:
+    client = _client_with(_repo_with())
+    response = client.get("/jobs/chatbot-knowledge.json")
+
+    assert response.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
 def test_404_stays_noindex() -> None:
     client = _client_with(_repo_with())
     response = client.get("/jobs/99999999")
@@ -1088,6 +1095,101 @@ def test_get_job_search_index_not_shadowed_by_numeric_job_id_route() -> None:
     assert response.headers["content-type"].startswith("application/json")
 
 
+# ──────────────── /jobs/chatbot-knowledge.json (AIチャット連携) ────────────────
+
+
+def test_get_chatbot_knowledge_returns_json_array_for_active_jobs() -> None:
+    repo = _repo_with(
+        _snapshot(
+            "1",
+            category_ids=["18773"],
+            list_item=_list_item("1", labels=["介護職", "正社員"]),
+        )
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/chatbot-knowledge.json")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert body == [
+        {
+            "id": "1",
+            "title": "介護職員",
+            "category": "care",
+            "employment": ["正社員"],
+            "area": "unknown",
+            "facility": "福岡事業所",
+            "city": "",
+            "service_types": [],
+            "url": "jobs/1",
+        }
+    ]
+
+
+def test_get_chatbot_knowledge_excludes_closed_jobs() -> None:
+    repo = _repo_with(_snapshot("1", sync_status="closed", category_ids=["18773"]))
+    client = _client_with(repo)
+
+    response = client.get("/jobs/chatbot-knowledge.json")
+
+    assert response.json() == []
+
+
+def test_get_chatbot_knowledge_cache_hit_does_not_re_read_firestore() -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+    client = _client_with(repo)
+    client.get("/jobs/chatbot-knowledge.json")
+
+    fake_client: FakeFirestoreClient = repo._client  # type: ignore[assignment]
+    fake_client.store.clear()
+
+    response = client.get("/jobs/chatbot-knowledge.json")
+    assert len(response.json()) == 1
+
+
+def test_get_chatbot_knowledge_firestore_read_failure_returns_503(monkeypatch: Any) -> None:
+    repo = _repo_with(_snapshot("1", category_ids=["18773"]))
+
+    def _boom(self: Any) -> Any:
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr(JobCacheRepository, "get_all_valid", _boom)
+    client = _client_with(repo)
+
+    response = client.get("/jobs/chatbot-knowledge.json")
+
+    assert response.status_code == 503
+    assert response.json() == []
+
+
+def test_get_chatbot_knowledge_not_shadowed_by_numeric_job_id_route() -> None:
+    client = _client_with(_repo_with())
+
+    response = client.get("/jobs/chatbot-knowledge.json")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_get_chatbot_knowledge_cache_is_independent_of_search_index_cache() -> None:
+    """Both endpoints may share the `__all__` cache key string but must not
+    share a cache store — `search-index.json` returns a dict, this route
+    returns a list, and a stale/wrong-shaped hit from the other endpoint's
+    store would corrupt this one (`cache.py`'s `_json` vs `_json_list`)."""
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"], list_item=_list_item("1", labels=["介護職"]))
+    )
+    client = _client_with(repo)
+
+    client.get("/jobs/search-index.json")
+    knowledge_response = client.get("/jobs/chatbot-knowledge.json")
+
+    assert isinstance(knowledge_response.json(), list)
+    assert len(knowledge_response.json()) == 1
+
+
 # ─────────────────────── lazy repo resolution (import safety) ───────────────
 
 
@@ -1418,6 +1520,7 @@ def test_robots_txt_references_sitemap_and_allows_assets(monkeypatch: Any) -> No
     assert "Sitemap: https://recruit.aozora-cg.com/sitemap.xml" in body
     assert "Disallow: /healthz" in body
     assert "Disallow: /jobs/search-index.json" in body
+    assert "Disallow: /jobs/chatbot-knowledge.json" in body
     assert "Disallow: /assets/" not in body  # must not block CSS/JS rendering
 
 

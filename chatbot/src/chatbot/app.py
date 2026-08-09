@@ -32,6 +32,7 @@ necessary.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 
@@ -137,26 +138,53 @@ def create_app(
 
         Updating both in one place guarantees the system prompt and the job
         whitelist always describe the same job set — never a context
-        listing an id the whitelist doesn't know, or vice versa. Safe to
-        write as two separate statements because this only runs during
-        lifespan startup, before uvicorn binds its listen socket: no
-        request can ever observe the moment between the two assignments.
+        listing an id the whitelist doesn't know, or vice versa.
+        `build_system_instruction` is computed into a local FIRST, and both
+        `nonlocal` writes happen only after it succeeds — writing
+        `knowledge_base` before computing `system_instruction` would leave
+        the pair half-updated (new `knowledge_base`, stale
+        `system_instruction`) if the latter ever raised (own regression
+        test caught exactly this while validating the
+        `_refresh_knowledge`-side try/except fix below,
+        `test_install_failure_is_caught_and_previous_knowledge_kept`).
+        The two `nonlocal` writes themselves are safe as separate
+        statements because this function contains no `await` point:
+        asyncio's cooperative scheduler can only switch to another
+        coroutine at an `await`, so nothing (not even a concurrent `/chat`
+        request calling `_maybe_refresh_knowledge` → `_install` again) can
+        observe the moment between them. (This function is called both at
+        startup and, since Stage: AIチャットPhase B連携 2026-08-09, from
+        live request handling — do not add an `await` here without
+        re-securing atomicity.)
         """
         nonlocal knowledge_base, system_instruction
+        new_instruction = build_system_instruction(new_base.context)
         knowledge_base = new_base
-        system_instruction = build_system_instruction(new_base.context)
+        system_instruction = new_instruction
 
     async def _refresh_knowledge() -> None:
-        """Startup-only knowledge refresh from GitHub Pages.
+        """Fetch + install a fresh knowledge base, called both at startup
+        and (Stage: AIチャットPhase B連携, 2026-08-09) from live request
+        handling via `_maybe_refresh_knowledge`.
 
-        Every failure path keeps the image-bundled data and lets the app
-        start — this is not politeness, it's required: uvicorn calls
-        `sys.exit(STARTUP_FAILURE)` if a lifespan startup handler raises
-        (uvicorn/server.py), so one escaped exception here would turn a
-        transient GitHub Pages blip into a Cloud Run crash loop. Catches
-        `Exception`, not `BaseException` — `asyncio.CancelledError` (e.g.
-        Cloud Run shutting the instance down mid-startup) must still
-        propagate.
+        Every failure path keeps the previously-installed data and lets the
+        caller continue — required at startup (uvicorn calls
+        `sys.exit(STARTUP_FAILURE)` if a lifespan startup handler raises,
+        so one escaped exception here would turn a transient upstream blip
+        into a Cloud Run crash loop) and just as necessary from a live
+        `/chat` request (an escaped exception there would surface as a raw
+        500 to a job-seeker instead of the graceful "しばらくしてから" message
+        `chat()`'s own try/except already gives Gemini failures).
+        `_install(refreshed)` is deliberately INSIDE this same try block,
+        not after it (silent-failure-hunter finding, 2026-08-09): if
+        `_install`/`build_system_instruction` ever raised, leaving it
+        unprotected would let that one exception propagate all the way out
+        — at startup, a crash loop; from `/chat`, an ungraceful 500 for
+        that request and (worse) no further refresh attempts would ever
+        reach the point of updating `_last_refresh_attempt_at`'s success
+        tracking below. Catches `Exception`, not `BaseException` —
+        `asyncio.CancelledError` (e.g. Cloud Run shutting the instance down
+        mid-request) must still propagate.
         """
         if not app_config.jobs_detail_url:
             _logger.info("knowledge refresh disabled (JOBS_DETAIL_URL is empty)")
@@ -167,19 +195,76 @@ def create_app(
                 timeout_seconds=app_config.knowledge_fetch_timeout_seconds,
                 transport=http_transport,
             )
+            _install(refreshed)
         except Exception:
             _logger.warning(
-                "knowledge refresh failed; serving image-bundled data",
+                "knowledge refresh failed; serving previous data",
                 exc_info=True,
                 extra={"url": app_config.jobs_detail_url},
             )
             return
-        _install(refreshed)
+        nonlocal _last_refresh_success_at
+        _last_refresh_success_at = time.monotonic()
         _logger.info(
             "knowledge refreshed from %s (%d jobs)",
             app_config.jobs_detail_url,
             len(refreshed.jobs_by_id),
         )
+
+    # Both mutated only by `_maybe_refresh_knowledge`/`_refresh_knowledge`
+    # (and seeded by `_lifespan`'s startup fetch). `_last_refresh_attempt_at`
+    # gates *whether* a refresh is attempted (see `_maybe_refresh_knowledge`
+    # docstring for why this replaced an `asyncio.sleep`-based background
+    # timer); `_last_refresh_success_at` is exposed via `/health` (silent-
+    # failure-hunter finding, 2026-08-09) so "healthy" can be told apart
+    # from "has been failing to refresh for days but still serving old-but-
+    # once-valid data" — a gap the plain `source`/`job_count` fields alone
+    # can't reveal (both stay unchanged whether the last N attempts
+    # succeeded or every one of them failed).
+    _last_refresh_attempt_at = 0.0
+    _last_refresh_success_at: float | None = None
+
+    async def _maybe_refresh_knowledge() -> None:
+        """Request-triggered refresh check, called at the top of `/chat`.
+
+        An earlier version of this ran `_refresh_knowledge()` on a fixed
+        interval from an independent `asyncio` background task
+        (`asyncio.sleep` in a loop). That's broken under Cloud Run's
+        *default* CPU allocation mode (confirmed against the actual
+        deployed revision, 2026-08-09: `gcloud run services describe
+        aozora-chatbot` carries no `run.googleapis.com/cpu-throttling:
+        'false'` annotation, i.e. CPU is allocated only while a request is
+        in flight) — a background task's timer is frozen along with
+        everything else whenever the instance has no in-flight request, so
+        the advertised hourly cadence silently doesn't happen while idle,
+        and the first request after an idle stretch could still see
+        arbitrarily stale data while a frozen timer "catches up" on its own
+        schedule (codex review finding, 2026-08-09).
+
+        Checking "is a refresh due" inside a request handler instead only
+        ever needs CPU this service is already guaranteed to have for that
+        request — it can't be starved by scale-to-zero or CPU throttling.
+        The cost: whichever request happens to be first after the interval
+        elapses pays the fetch latency (bounded by
+        `knowledge_fetch_timeout_seconds`) inline. `/health` deliberately
+        does NOT call this — it must stay a cheap liveness probe; only
+        `/chat` (the surface that actually needs freshness) pays this cost.
+
+        The elapsed-time check and the `_last_refresh_attempt_at` update
+        happen in the same synchronous block (no `await` between them), so
+        two concurrent `/chat` requests racing this check can't both decide
+        a refresh is due — same "no other coroutine can observe the gap"
+        reasoning `_install`'s docstring already relies on.
+        """
+        interval = app_config.knowledge_refresh_interval_seconds
+        if interval <= 0:
+            return
+        nonlocal _last_refresh_attempt_at
+        now = time.monotonic()
+        if now - _last_refresh_attempt_at < interval:
+            return
+        _last_refresh_attempt_at = now
+        await _refresh_knowledge()
 
     # Holds the lazily-built real client (empty when `generate_fn` was
     # injected, i.e. every test) so `_lifespan` below can close it on
@@ -212,7 +297,9 @@ def create_app(
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        nonlocal _last_refresh_attempt_at
         await _refresh_knowledge()
+        _last_refresh_attempt_at = time.monotonic()
         try:
             yield
         finally:
@@ -241,11 +328,34 @@ def create_app(
 
     @app.get("/health")
     async def health() -> dict[str, object]:
+        # `source`/`job_count` alone can't tell "healthy" apart from "every
+        # refresh attempt has failed for days, still serving old-but-once-
+        # valid data" (silent-failure-hunter finding, 2026-08-09) — both
+        # fields stay identical either way, since a failed refresh keeps
+        # the previous snapshot installed. `seconds_since_last_success`
+        # closes that gap; `stale` flags it outright once more than 2
+        # refresh intervals have passed without a success (a single missed
+        # interval could just be low traffic delaying the next `/chat`-
+        # triggered check, not necessarily a real failure — see
+        # `_maybe_refresh_knowledge`).
+        seconds_since_last_success = (
+            time.monotonic() - _last_refresh_success_at
+            if _last_refresh_success_at is not None
+            else None
+        )
+        interval = app_config.knowledge_refresh_interval_seconds
+        stale = (
+            interval > 0
+            and seconds_since_last_success is not None
+            and seconds_since_last_success > interval * 2
+        )
         return {
             "status": "healthy",
             "knowledge": {
                 "source": knowledge_base.source,
                 "job_count": len(knowledge_base.jobs_by_id),
+                "seconds_since_last_success": seconds_since_last_success,
+                "stale": stale,
             },
         }
 
@@ -265,6 +375,19 @@ def create_app(
                 headers={"Retry-After": str(app_config.rate_limit_window_seconds)},
             )
 
+        await _maybe_refresh_knowledge()
+
+        # Snapshot the reference *after* the refresh check above and
+        # *before* the `await _generate(...)` below — both happen with no
+        # intervening `await`, so no concurrent request's `_install` call
+        # can be interleaved in between (codex review finding, 2026-08-09:
+        # without this, a refresh completing while THIS request is still
+        # awaiting Gemini would resolve `generated.job_ids` — chosen by the
+        # model against the OLD `system_instruction` — against the NEW
+        # `knowledge_base`, silently dropping any id the refresh removed
+        # even though the model's recommendation was valid against what it
+        # was actually shown).
+        current_kb = knowledge_base
         trimmed_history = _trim_history(payload.history, app_config)
 
         try:
@@ -281,8 +404,10 @@ def create_app(
 
         # `resolve_jobs` is the whitelist check — a hallucinated/stale id
         # from the model is silently dropped here rather than reaching the
-        # client (see knowledge.py docstring).
-        jobs = knowledge_base.resolve_jobs(generated.job_ids)
+        # client (see knowledge.py docstring). Resolved against `current_kb`
+        # (the snapshot captured above), not the possibly-since-refreshed
+        # `knowledge_base` — see that snapshot's comment.
+        jobs = current_kb.resolve_jobs(generated.job_ids)
         return ChatResponse(
             reply=generated.reply,
             blocked=generated.blocked,
