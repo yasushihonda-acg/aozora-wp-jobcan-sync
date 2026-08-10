@@ -117,21 +117,31 @@ gcloud secrets add-iam-policy-binding jobcan-sync-password \
   --role="roles/secretmanager.secretAccessor"
 ```
 
-**パスワード本体(シークレットのバージョン)は未登録。** 値は Claude Code の
-セッション(このファイル・チャット履歴含む)を一切経由させず、decision-maker
-が自身の別ターミナルで対話的に登録すること — `read -s` で画面にもシェル
-履歴にも残さずそのまま `gcloud` へパイプする:
+**パスワード本体(シークレットのバージョン)は、値を Claude Code のセッション
+(このファイル・チャット履歴含む)に一切経由させず、decision-maker が自身で
+登録すること。**
 
-```bash
-read -s -p "jobcan-sync@aozora-cg.com のパスワード: " JOBCAN_PW && echo && \
-  printf '%s' "$JOBCAN_PW" | gcloud secrets versions add jobcan-sync-password \
-  --project=aozora-wp-jobcan-sync \
-  --data-file=- && \
-  unset JOBCAN_PW
-```
+**2026-08-10 実施結果: `gcloud secrets versions add` は使えなかった。** zsh
+では `read -s -p` の `-p` がコプロセス入力の意味になり構文エラーになる
+(zshでプロンプト付きで読むには `read -s "VAR?プロンプト"` 形式を使う)。
+さらに `--data-file=-` でパイプ経由にすると stdin が塞がるため、Google
+アカウントの reauth (機微操作の再認証) が要求された際にプロンプトを出せず
+`Reauthentication required. Please enter your password` を繰り返すだけで
+失敗する。この reauth はパスワード入力方式のみに対応しており、
+SSO/2段階認証で運用しているアカウント(本プロジェクトの
+`yasushi.honda@aozora-cg.com` を含む)には有効なパスワードが存在しないため、
+`gcloud auth revoke` → `gcloud auth login` でブラウザ経由の再ログインを
+完全にやり直しても解消しなかった(CLIの構造的な制限、次回も同じ壁に当たる
+想定でよい)。
 
-ローテーション時も同じコマンドを再実行するだけでよい(`versions add` は
-新バージョンを追加するのみで既存バージョンを消さない)。
+**実際に機能したのは GCP コンソール(ブラウザ)経由での登録:**
+
+1. ブラウザで `https://console.cloud.google.com/security/secret-manager?project=aozora-wp-jobcan-sync` を開く(SSOログイン済みのタブでよい)
+2. `jobcan-sync-password` をクリック → 「新しいバージョン」
+3. 「シークレットの値」欄にパスワードを入力して保存
+
+ローテーション時も同じ手順でよい(コンソールの「新しいバージョン」は
+既存バージョンを消さず追加するのみ)。
 
 ## 2. Artifact Registry repository 作成 + cleanup policy 適用 (初回のみ)
 
