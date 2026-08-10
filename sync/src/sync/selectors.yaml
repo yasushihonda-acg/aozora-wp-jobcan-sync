@@ -76,21 +76,52 @@ list:
   # variable so the renderer produces site-root paths (`/assets/img/...`)
   # or proxy `/static/` prefixes — otherwise the production URL
   # `recruit.aozora-cg.com/jobs/...` will 404 on these images.
+  # 2026-08-10: synonyms were stale from Phase 2A.1c (only 6 labels across
+  # 4 categories) and never extended when the raw-label inventory grew to
+  # the full 17-category granularity (`job_types.py` JOB_TYPE_NAMES, PR
+  # #157). Most real labels (including "看護職" itself — "看護師" never
+  # actually appears) had no synonym entry, so `_resolve_display_thumbnail`
+  # silently fell through to `default_image` for the large majority of
+  # postings — every card looked like the same generic consultation scene
+  # regardless of job type (decision-maker report, 2026-08-10). Fixed by
+  # mirroring the 4-bucket grouping `list_sections.LABEL_TO_CATEGORY`
+  # already uses for the card colour modifier (same care/nurse/office/it
+  # split, 相談員 folded into care per PR #72) — keep both lists in sync
+  # when `job_types.py`'s JOB_TYPE_NAMES changes.
   thumbnail_categories:
     enabled: true
     categories:
       care:
-        synonyms: ["介護職"]
+        synonyms:
+          - "介護職"
+          - "相談員"
+          - "ホームヘルパー"
+          - "ケアマネジャー・計画作成担当者"
+          - "サービス提供責任者"
+          - "サービス管理責任者"
+          - "世話人"
+          - "夜勤専従（介護・看護）"
+          - "サポート職（清掃・洗濯・調理・送迎）"
+          - "施設長・管理者候補"
         image: "assets/img/illust-job-care.png"
       nurse:
-        synonyms: ["看護師", "相談員"]
+        synonyms:
+          - "看護職"
+          - "看護師"
+          - "訪問看護"
+          - "訪問リハビリ"
         image: "assets/img/illust-job-nurse.png"
-      it:
-        synonyms: ["ITエンジニア職", "開発エンジニア"]
-        image: "assets/img/illust-job-it.png"
       office:
-        synonyms: ["事務職"]
+        synonyms:
+          - "事務職"
+          - "総合職（営業・管理職）"
+          - "新卒・既卒総合職"
         image: "assets/img/illust-job-office.png"
+      it:
+        synonyms:
+          - "ITエンジニア職"
+          - "開発エンジニア"
+        image: "assets/img/illust-job-it.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
