@@ -94,6 +94,55 @@ echo -n "https://chat.googleapis.com/v1/spaces/AAAA/messages?key=新key&token=�
 Cloud Run (Job/Service いずれも) の実行 SA に `roles/secretmanager.secretAccessor`
 を付与すること (B-6 のサービスアカウント作成手順内で実施)。
 
+## 1.6 Secret Manager — ジョブカンCSV自動取得用パスワード (CSV移行、初回のみ)
+
+HTML解析方式からCSV自動取得方式への移行(2026-08-10開始、`docs/handoff/GOAL.md`
+参照)で使う、閲覧限定権限の専用アカウント `jobcan-sync@aozora-cg.com` の
+ログインパスワード。メールアドレス自体は非機密(既にドキュメント上に平文で
+複数箇所記載済み)なのでシークレット化せず、パスワードのみを Secret Manager
+へ格納する。
+
+シークレットコンテナと IAM 権限(実行SA: `aozora-sync-job`、既存の6時間ごと
+定期クロールJobと同じ基盤に統合する想定)は作成済み(2026-08-10):
+
+```bash
+# 既に実行済み — 再実行不要 (idempotent ではないため二重実行するとエラーになる)
+gcloud secrets create jobcan-sync-password \
+  --project=aozora-wp-jobcan-sync \
+  --replication-policy=automatic
+
+gcloud secrets add-iam-policy-binding jobcan-sync-password \
+  --project=aozora-wp-jobcan-sync \
+  --member="serviceAccount:aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+**パスワード本体(シークレットのバージョン)は、値を Claude Code のセッション
+(このファイル・チャット履歴含む)に一切経由させず、decision-maker が自身で
+登録すること。**
+
+**2026-08-10 実施結果: `gcloud secrets versions add` は使えなかった。** zsh
+では `read -s -p` の `-p` がコプロセス入力の意味になり構文エラーになる
+(zshでプロンプト付きで読むには `read -s "VAR?プロンプト"` 形式を使う)。
+さらに `--data-file=-` でパイプ経由にすると stdin が塞がるため、Google
+アカウントの reauth (機微操作の再認証) が要求された際にプロンプトを出せず
+`Reauthentication required. Please enter your password` を繰り返すだけで
+失敗する。この reauth はパスワード入力方式のみに対応しており、
+SSO/2段階認証で運用しているアカウント(本プロジェクトの
+`yasushi.honda@aozora-cg.com` を含む)には有効なパスワードが存在しないため、
+`gcloud auth revoke` → `gcloud auth login` でブラウザ経由の再ログインを
+完全にやり直しても解消しなかった(CLIの構造的な制限、次回も同じ壁に当たる
+想定でよい)。
+
+**実際に機能したのは GCP コンソール(ブラウザ)経由での登録:**
+
+1. ブラウザで `https://console.cloud.google.com/security/secret-manager?project=aozora-wp-jobcan-sync` を開く(SSOログイン済みのタブでよい)
+2. `jobcan-sync-password` をクリック → 「新しいバージョン」
+3. 「シークレットの値」欄にパスワードを入力して保存
+
+ローテーション時も同じ手順でよい(コンソールの「新しいバージョン」は
+既存バージョンを消さず追加するのみ)。
+
 ## 2. Artifact Registry repository 作成 + cleanup policy 適用 (初回のみ)
 
 `gcp.md` MUST に従って **最新 2 件保持** の cleanup policy を必ず設定。
