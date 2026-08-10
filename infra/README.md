@@ -94,6 +94,45 @@ echo -n "https://chat.googleapis.com/v1/spaces/AAAA/messages?key=新key&token=�
 Cloud Run (Job/Service いずれも) の実行 SA に `roles/secretmanager.secretAccessor`
 を付与すること (B-6 のサービスアカウント作成手順内で実施)。
 
+## 1.6 Secret Manager — ジョブカンCSV自動取得用パスワード (CSV移行、初回のみ)
+
+HTML解析方式からCSV自動取得方式への移行(2026-08-10開始、`docs/handoff/GOAL.md`
+参照)で使う、閲覧限定権限の専用アカウント `jobcan-sync@aozora-cg.com` の
+ログインパスワード。メールアドレス自体は非機密(既にドキュメント上に平文で
+複数箇所記載済み)なのでシークレット化せず、パスワードのみを Secret Manager
+へ格納する。
+
+シークレットコンテナと IAM 権限(実行SA: `aozora-sync-job`、既存の6時間ごと
+定期クロールJobと同じ基盤に統合する想定)は作成済み(2026-08-10):
+
+```bash
+# 既に実行済み — 再実行不要 (idempotent ではないため二重実行するとエラーになる)
+gcloud secrets create jobcan-sync-password \
+  --project=aozora-wp-jobcan-sync \
+  --replication-policy=automatic
+
+gcloud secrets add-iam-policy-binding jobcan-sync-password \
+  --project=aozora-wp-jobcan-sync \
+  --member="serviceAccount:aozora-sync-job@aozora-wp-jobcan-sync.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+```
+
+**パスワード本体(シークレットのバージョン)は未登録。** 値は Claude Code の
+セッション(このファイル・チャット履歴含む)を一切経由させず、decision-maker
+が自身の別ターミナルで対話的に登録すること — `read -s` で画面にもシェル
+履歴にも残さずそのまま `gcloud` へパイプする:
+
+```bash
+read -s -p "jobcan-sync@aozora-cg.com のパスワード: " JOBCAN_PW && echo && \
+  printf '%s' "$JOBCAN_PW" | gcloud secrets versions add jobcan-sync-password \
+  --project=aozora-wp-jobcan-sync \
+  --data-file=- && \
+  unset JOBCAN_PW
+```
+
+ローテーション時も同じコマンドを再実行するだけでよい(`versions add` は
+新バージョンを追加するのみで既存バージョンを消さない)。
+
 ## 2. Artifact Registry repository 作成 + cleanup policy 適用 (初回のみ)
 
 `gcp.md` MUST に従って **最新 2 件保持** の cleanup policy を必ず設定。
