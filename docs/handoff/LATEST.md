@@ -1,78 +1,63 @@
-# Handoff — 2026-08-09（Stage 4 GitHub Pagesリダイレクト + AIチャットPhase B連携）
+# Handoff — 2026-08-10（求人カード画像マッピング修正 + CSV移行 招待メール解決・Secret Manager登録）
 
 ## TL;DR
 
-**decision-maker「GitHub Pagesは決裁者自身が見る試験ページ」との指摘を受けPhase A→Bへの恒久リダイレクトを実装(PR #152)、Stage 5(ドメイン切替)をgcloud実測調査(PR #153)。続けて決裁者指摘「AIチャットは今回のアップデートに追随できてる？」を起点に、チャットボットの求人知識ベースがPhase Aの静的37件のまま2026-08-08を最後に更新停止していた本番不具合を発見・修正(PR #154)。sync側に新規API・chatbot側の接続先切替に加え、codex review 3回・pr-review-toolkit 2エージェントの指摘を反映してバックグラウンドタイマー方式からリクエスト駆動方式へ全面再設計、本番デプロイ・実機検証まで完了(PR #155でGOAL.md反映)。**
+**同日の直前セッションで職種フィルタを17区分へ拡張(PR #157、詳細はGOAL.md参照)した直後、decision-makerが本番で「看護職」フィルタの求人カード画像を確認したところ、フィルタと無関係に同じ画像(相談員がタブレットで家族に説明するシーン)が表示される不具合を発見。調査の結果、17区分拡張時にサムネイル画像のシノニム設定(`selectors.yaml`)が追従しておらず大半の求人がdefault_imageへフォールバックしていたと判明・修正(PR #159)。続けてCSVデータ取得方式への移行のブロッカーだった招待メール未着問題(専用アカウント`jobcan-sync@aozora-cg.com`)をジョブカン側の招待メール再送で解決し、ロードマップ③Secret Managerへの認証情報登録まで完了(PR #160)。**
 
 🔗 公開モック(Phase A、37件サンプル、Cloud Runへ自動リダイレクト化済み): https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
-🔗 Phase B検証URL(382件全件、まだ`recruit.aozora-cg.com`未接続): https://aozora-sync-flry56mxwa-an.a.run.app/
+🔗 Phase B本番(382件全件、まだ`recruit.aozora-cg.com`未接続): https://aozora-sync-flry56mxwa-an.a.run.app/
 🔗 チャットボットAPI(sync連携済み): https://aozora-chatbot-1084369586348.asia-northeast1.run.app
 
 ## 今セッションで完了したこと
 
-### マージ済 PR (4件) + 本番デプロイ2回
+### マージ済 PR (2件)
 
 | PR | タイトル | 内容 |
 |---|---|---|
-| #152 | `feat(mockup): GitHub Pages(Phase A)からCloud Run(Phase B)への恒久リダイレクト導線` | 44ファイルへmeta refresh/JS導線を挿入。codex reviewでjobs.htmlのquery string欠落を検出・修正 |
-| #153 | `docs: Stage 4完了・Stage 5調査結果をGOAL.mdへ反映` | docs-only |
-| #154 | `feat(chatbot): AIチャット知識ベースをPhase B(Firestore実データ)へ接続` | 19→7ファイル追加修正、計+1445/-999行。詳細は下記 |
-| #155 | `docs: AIチャット知識ベースPhase B連携の完了をGOAL.mdへ反映` | docs-only |
-| — | 本番デプロイ×2 | `aozora-sync-00009-cxr`(トラフィック100%)、`aozora-chatbot-00007-jtl`(同)。curl+Playwright実機確認済み |
+| #159 | `fix(sync): 求人カード画像の職種マッピングを17区分へ拡張` | `selectors.yaml`の`thumbnail_categories`シノニムを17ラベル全網羅へ修正。sync/tests 474件全PASS |
+| #160 | `docs(infra): CSV自動取得用パスワードのSecret Manager登録手順を追記` | `jobcan-sync-password`シークレット作成・IAM付与・登録手順を実測結果ベースで記録 |
 
-### PR #154 実装内容
+### PR #159 — 求人カード画像マッピングのバグ修正
 
-- `sync/src/sync/chatbot_knowledge.py`(新規): `build_chatbot_knowledge()`純関数。Firestoreスナップショットからchatbot向け9フィールド形状(id/title/category/employment/area/facility/city/service_types/url)を生成
-- `sync/src/sync/facility_geo.py`: `service_types_from_address()`追加。施設名の全角括弧タグ(11種語彙)→正規化サービス種別名への変換
-- `sync/src/sync/app.py`: `GET /jobs/chatbot-knowledge.json`ルート新規追加(`/jobs/search-index.json`をミラー)
-- `sync/src/sync/cache.py`: `get_json_list`/`set_json_list`追加(既存`_json`ストアはdict専用型のため別ストア新設)
-- `chatbot/src/chatbot/knowledge.py`: `DEFAULT_JOBS_DETAIL_URL`を上記エンドポイントへ切替。同梱の古い`jobs_detail.json`(37件固定)+手動更新スクリプトを完全削除、`bundled_knowledge()`はFAQのみのフォールバックに変更
-- `chatbot/src/chatbot/app.py`: リクエスト駆動リフレッシュ(`_maybe_refresh_knowledge`、下記参照)
+`sync/src/sync/selectors.yaml`の`thumbnail_categories`シノニムがPhase 2A.1c時点の6種類(介護職/看護師/相談員/ITエンジニア職/開発エンジニア/事務職)のまま、直前セッションの17区分フィルタ拡張(PR #157)に追従しておらず、実際のジョブカン生ラベル(例:「看護職」— 「看護師」という文字列は実際には出現しない)の大半が未登録だった。未一致の求人は`_resolve_display_thumbnail()`で`default_image`(相談員がタブレットで家族に説明する汎用シーン)へフォールバックしており、看護職フィルタ含む多くの職種カードが同じ画像になっていた。
 
-### 発覚した想定外の事実(このセッションの核心)
+`list_sections.LABEL_TO_CATEGORY`(カード色分け用、2026-08-09に17区分へ更新済み)と同じ4系統(介護/看護/事務/IT、相談員は介護へ統合)へ揃えて全17ラベルを網羅する形で修正。`default_config()`で19エントリが衝突なく解決されることを確認、sync/tests 474件全PASS。1ファイル・小規模のためcodex reviewは省略し手動チェックリストレビューで対応。
 
-decision-maker「定期スクレイピングの情報が常にAIチャットの対象ソース(RAG)になるのが本来必要な要件」との指摘で調査したところ、チャットボットの知識ベースが**サイト本体とは完全に独立した別パイプライン**(`mockup/jobs.html`由来の静的37件、手動スクリプト実行+`git push`でのみ更新)であることが判明。2026-08-08(PR #141)を最後に更新が止まっており、本番では「サイトには382件あるのに、チャットに聞くと37件分しか答えられない」情報不整合が発生していた。
+**反映は次回自動クロール待ち**: `thumbnail_url`はクロール時に一度解決されFirestoreに保存される設計のため、この修正だけでは本番表示はまだ変わらない。次回の6時間ごと自動クロール(Cloud Scheduler)で全382件が再解決される。即時反映(Cloud Run Job手動実行)は決裁者の選択で見送り。
 
-### 品質ゲートで発見・修正した実害バグ
+### CSVデータ取得方式移行 — 招待メール未着問題の解決 + Secret Manager登録(ステップ③)
 
-**codex review(3回、指摘計3件)**:
-- [P1] `category_key_from_labels()`/`area_from_address()`が`None`を返し得るのに、chatbot側スキーマが`str`必須のため1求人の欠損データで知識更新全体が失敗しうる不整合 → `"unknown"`フォールバック+警告ログへ修正
-- [P2] Cloud Run既定のCPU割り当て(リクエスト処理中のみ)下では、asyncioバックグラウンドタイマー方式の定期リフレッシュがインスタンスアイドル中に凍結され「1時間ごと」の約束が守られない(`gcloud run services describe aozora-chatbot`で`cpu-throttling`既定=有効を実測確認) → `/chat`リクエスト駆動の遅延リフレッシュ方式へ全面再設計
-- [P2] リフレッシュがリクエスト処理途中(Gemini呼び出し中)に完了すると、生成に使ったsystem_instructionとjob_id解決に使うknowledge_baseが食い違うレースコンディション → リクエストごとにknowledge_baseを1回スナップショットして両方に使用する設計に修正
+専用アカウント`jobcan-sync@aozora-cg.com`(Googleグループとして発行)の招待メール未着問題を、以下の順で切り分け:
 
-**pr-review-toolkit(2エージェント、CRITICAL 1件・HIGH 1件・Important 3件)**:
-- [CRITICAL] `_install()`がtry/exceptの外にあり失敗すると例外が漏れる不備 → fetchとinstallを同一tryブロックに統合。**修正中に新たな実バグを自己発見**: `_install()`が`knowledge_base`を先に書き換えてから`system_instruction`を計算していたため後者が失敗すると状態が中途半端になる非原子性があり、ローカル変数で先に計算してから両方をnonlocal代入する形に修正(自作の回帰テストで検出)
-- [HIGH] `/health`が「健全」と「何日も再取得に失敗し続けているが直前の有効データを配り続けている」を区別できない可観測性の欠落 → `seconds_since_last_success`/`stale`フィールドを追加
-- [Important×2] README.mdの記述陳腐化、`knowledge.py`内の古いコメント2箇所 → 修正
-- [Important] 「成功後の失敗時に直前の取得済みデータを保持する」という本PRの核心的性質が未検証 → 専用テスト追加
+1. Googleグループ側「投稿を許可するユーザー」設定 → システム部が修正済みと確認(スレッド一覧の内部テストメールで確認)
+2. 外部テストメール(decision-maker自身の別アドレスから送信)で到達性を確認 → 成功。受信側の問題は解消と判断
+3. それでもジョブカンからの招待メール自体は届かず → `https://id.jobcan.jp/users/invitation/new?lang=ja`からの**招待メール再送**で最終的に解決
 
-最終ラウンドのcodex reviewはfindings 0件。
+続けてSecret Manager登録(ロードマップ③)を実施:
+- `jobcan-sync-password`シークレットを作成(空コンテナ)、既存の6時間ごと定期クロールJobの実行SA `aozora-sync-job`へ`secretmanager.secretAccessor`を付与 — ここまではClaude Codeが`gcloud`で直接実施
+- **パスワード本体の登録はgcloud CLIで失敗**: `gcloud secrets versions add`が要求するreauth(機微操作の再認証)がパスワード入力方式のみに対応しており、SSO/2段階認証で運用しているアカウント(`yasushi.honda@aozora-cg.com`)には有効なパスワードが存在しないため無限ループ。`gcloud auth revoke`→`login`での完全な再ログインでも解消せず(CLIの構造的な制限と判断)。**GCPコンソール(ブラウザ)経由での登録に切替えて成功**
+- `infra/README.md` §1.6にこの経緯を含めて実測結果ベースの手順を記録(bashの`read -s -p`はzshで構文エラーになる注記も含む)
 
-### 本番実機検証
+### その他
 
-- `chatbot-knowledge.json` → 382件、正しい9フィールド形状、noindex/robots.txt Disallow確認済み
-- chatbot `/health` → `{"source":"fetched","job_count":382,"stale":false}`
-- Playwrightで実機チャットから「鹿児島で訪問看護」「博多で介護職」を質問 → 返る求人がサービス種別・エリアとも一致、詳細URLも`/jobs/{id}`(`.html`なし)で実在ページに疎通確認
-- コンテキストサイズ実測: system_instruction 32,589文字(旧5,109文字の約6.4倍)。圧縮は今回スコープ外、必要になれば別対応と明記
+決裁者向け進捗報告HTML(スクラッチパッド、リポジトリ外)を更新: PoC(実現可能性検証・完了)と自動化(未着手、Secret Manager導入で初めて人手を介さない実行になる)の違いを明記。
 
 ## 次のアクション
 
 ### 即着手タスク
-即着手タスクなし
+即着手タスクなし(残り作業はいずれも外部trigger待ちまたはdecision-maker判断待ち)
 
 ### 条件待ち（明示 trigger 付き）
 
 | # | 項目 | trigger（充足条件） | 充足時のタスク | 充足確認方法 |
 |---|------|------------------|--------------|------------|
-| 1 | [GOAL.md] Stage 5(ドメイン切替`recruit.aozora-cg.com`) | 本田様がGoogle Search ConsoleでTXTレコード検証を完了 | `gcloud beta run domain-mappings create`実行→CNAME値取得→システム部へ2回目依頼 | 本田様からの報告 |
-| 2 | [GOAL.md] Secret Manager(Google Chat webhook) | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
-| 3 | [GOAL.md] GA4設定 | 測定ID取得・設定方針の明示指示 | GA4タグ実装 | 本田様からの明示指示 |
+| 1 | PR #159の本番反映確認 | 次回自動クロール完了(最大6時間以内、Cloud Scheduler) | 実機で職種別に求人カード画像が正しく分かれているか確認(Playwright) | 本番URL `/jobs/?category_id=` を職種別に確認 |
+| 2 | [GOAL.md/中断点] CSV移行 ①②の状態確認 | decision-makerへの確認(次セッション冒頭) | ①`jobcan-sync@aozora-cg.com`でのログイン確認 ②同アカウントでのCSV取得手順再現確認、未了なら実施。完了済みなら④Playwright自動化のコード実装(CLI化、新規アーキテクチャ判断のためplan mode)へ | decision-makerからの回答 |
+| 3 | [GOAL.md] Stage 5(ドメイン切替`recruit.aozora-cg.com`) | 本田様がGoogle Search ConsoleでTXTレコード検証を完了 | `gcloud beta run domain-mappings create`実行→CNAME値取得→システム部へ2回目依頼 | 本田様からの報告 |
+| 4 | [GOAL.md] Secret Manager(Google Chat webhook `ops-webhook-url`) | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
 
 ### 却下候補（記録のみ）
-
-| # | 項目 | 検討経緯 | 着手しない理由 | 参照条件 |
-|---|------|---------|--------------|---------|
-| 1 | チャット system_instruction のコンテキスト圧縮(施設グルーピング等) | PR #154実装時、382件で32,589文字(旧6.4倍)になることを実測確認し検討 | 圧縮はjob_ids選定精度の再検証を伴い、実測データなしでは設計判断できない。現時点で応答品質の問題報告なし | 実運用でGemini応答精度の劣化が報告された場合、または decision-maker からの明示指示 |
+今セッション内での新規却下候補なし。既存の却下候補(チャットsystem_instructionのコンテキスト圧縮、GA4設定等)はGOAL.md参照。
 
 ## 再開可能性判定
 ✅ **再開可能** - ドキュメントから開発再開できます
@@ -89,10 +74,9 @@ decision-maker「定期スクレイピングの情報が常にAIチャットの�
 ✅ **セッション終了可** — 残作業ゼロ、クリーン状態達成
 
 - OPEN PR: 0件 / active Issue: 0件
-- Git: `main`は`origin/main`と同期済み、clean
-- 即着手タスク: 0件 / 条件待ち: 3件(いずれもdecision-maker判断または外部trigger待ち)
-- 残留プロセス: なし(検出された node プロセスは全てMCPインフラ・言語サーバーで、複数ターミナルセッション横断の常駐プロセス。本セッション由来のdev server等は無し)
-- 既知の blocker: なし
-- 同根再発スキャン(§4.6): `fix:`コミット1件(c9d00a5、定期リフレッシュ再設計)を確認。過去7日のhandoff archiveおよび本セッション内に同一技術パターン(Cloud Run CPU throttling前提の誤り、リクエスト間レースコンディション、`_install()`非原子性)の再発候補は0件。ただし2026-08-08のPR #141(チャットボット求人データ反映漏れ)とはテーマ的に同一領域(チャットボット知識ベースの鮮度・完全性)であり、今回PR #154はその根本原因だった手動同期パイプライン自体を完全に廃止しているため、当該領域の問題は構造的に解消されたと判断
-- 対症療法判定(§4.7): 該当なし — 修正はいずれも実測(`gcloud run services describe`によるCPU割り当て設定の確認)に基づく根本原因への対応であり、retry/timeout延長等の症状遮断ではない。動作確認もunit testに加えcurl/Playwrightによる本番実機検証を実施済み
-- 構造整合性チェック(§4): 新規API追加・共有キャッシュロジック変更に対し `/new-resource`・`/impact-analysis`・`/trace-dataflow` スキルは未実行(⚠️未確認)。代替として codex review 3回・pr-review-toolkit 2エージェント・pytest全件・本番実機検証(curl+Playwright)を実施しており、実質的なカバレッジは同等以上と判断するが、正式なスキル実行ではない点は記録として残す
+- Git: `main`は`origin/main`と同期済み、clean(本コミット含め)
+- 即着手タスク: 0件 / 条件待ち: 4件(いずれも外部trigger待ちまたはdecision-maker判断待ち)
+- 残留プロセス: あり(検出されたnode/pythonプロセスは全てMCPインフラ・言語サーバー・他プロジェクトの常駐プロセスで、本セッション由来のdev server等はなし。マシン全体スコープのチェックであり本プロジェクトに限らない)
+- 既知の blocker: なし(招待メール問題は本セッションで解消済み)
+- 同根再発スキャン(§4.6): `fix:`PR 1件(#159)を確認。過去7日のhandoff archiveおよび本セッション内で同一技術パターン(職種ラベルのハードコードリストの陳腐化)の再発候補を検索し、他の職種ラベル依存箇所(`detail_sections.py`の雇用形態サフィックスリスト)は別軸(雇用形態、17区分拡張の影響を受けない)であることを確認、追加候補0件
+- 対症療法判定(§4.7): 該当なし — PR #159は実際のJobcan生ラベル(job_types.py)とselectors.yamlの構成を直接比較して特定した根本原因への対応であり、retry/fallback等の症状遮断ではない。`default_config()`による解決結果の直接検証+テスト474件PASSで確認済み
