@@ -21,11 +21,11 @@ ACG 採用サイトのフロントを WordPress で独自構築、バックは�
 - ただし採用サイト本体が個人情報を保存しない設計 (応募フォームはジョブカン直リンク) のため、適用範囲はホスティング選定時に再判定 → `docs/specs/hosting-comparison.md`
 - 外部 SaaS (Sentry / Datadog 等) は不採用
 
-### 同期方式の優先順位 (2026-06-18 シンプル化、過剰設計巻き戻し)
-- **採用**: 案 D = 動的プロキシ (Cloud Run + httpx + BeautifulSoup + Jinja2)
+### 同期方式の優先順位 (2026-08-11 ジョブカン CSV 自動取得へ移行、PR #162)
+- **採用**: ジョブカン管理画面 (`ats.jobcan.jp`) の CSV エクスポートを Playwright で自動取得 (`sync/src/sync/jobcan_ats.py`) し `csv_ingest.py` で `JobOffer`/`JobListItem` へ変換、Cloud Run Job (`sync-run-csv-live`) が Firestore へ同期
 - ジョブカン契約者 (本田様) の自社採用情報を自社サイトに表示する **標準的 ATS 統合ユースケース**
 - 規約照会 trigger 廃止 (`.claude/memory/feedback_overengineering_recovery_2026-06-18.md` 参照、自社契約 SaaS の自社利用は通常利用範囲)
-- 代替案 (CSV 半自動 / 公式 API) は案 D が技術的に成立しない場合の fallback として記録のみ、現時点では未採用
+- 旧採用方式 (案 D = 動的プロキシ、Cloud Run + httpx + BeautifulSoup + Jinja2 による公開求人ページの HTML 解析) は、反映ラグ・新カテゴリ取りこぼし・解析誤り・募集終了判定の間接推測という構造的限界を理由に CSV 自動取得へ置き換え。コード自体は `sync-run` コマンドとして残置し、Cloud Run Job の `--args` 切替のみでロールバック可能な状態を維持 (`infra/README.md` §9)
 
 ### Phase A モックの設計規約
 - ブロック単位 BEM 命名 (`.job-card`, `.job-list-filter`, `.entry-cta`, `.blog-card`, `.news-item` 等) で Phase B 流用率向上
@@ -100,18 +100,21 @@ Cloud Scheduler `aozora-sync-daily-trigger`・Cloud Run Job `aozora-sync-daily`
   closed (`first_absent_at`、2026-08-08: クロール6時間ごと化に伴い実行回数
   ベースから時間ベースへ変更、`closed_detection.py`)、closed 率 > 30%
   (分母は前回スナップショットの非closed件数 = active + pending_review、
-  `previous_open_count`) で同期中止 + Slack
-  アラート (`closed_detection.py`)。列挙にあった「一覧に出ているが詳細取得だけ
+  `previous_open_count`) で同期中止 + Google Chat
+  アラート (`notify_ops()`、2026-08-09 に `notify_slack`/secret名`slack-webhook-url`
+  から移行済み、`closed_detection.py`)。列挙にあった「一覧に出ているが詳細取得だけ
   失敗」は不在と別枠で扱う (2026-08-07 codex review で発見・修正済み、
   `crawler.py` の `listed_job_ids`/`fully_listed`)。クロール反照合
-  (`expected_total`/`collected_total`) とクロールエラー件数は同一Slack通知に
+  (`expected_total`/`collected_total`) とクロールエラー件数は同一Google Chat通知に
   まとめて送信 (circuit breaker発火時に別警告が握り込まれないよう統合、同日
   第二意見レビューで発見・修正済み)
 - 募集終了は `sync_status=closed` 化 (削除しない、SEO/被リンク維持) →
   `closed_at` から 30 日後に GC (`closed_detection.find_gc_candidates` +
-  `firestore_repo.delete_many`、`orchestrator.run_sync` が6時間ごとの実行内で実施)
-- 6時間ごとの実行は Cloud Scheduler → Cloud Run Job (`python -m sync sync-run`)、
-  `infra/README.md` §8 に手順あり (Terraform モジュール化はしない方針)
+  `firestore_repo.delete_many`、`orchestrator.run_sync_from_crawl` が6時間ごとの
+  実行内で実施)
+- 6時間ごとの実行は Cloud Scheduler → Cloud Run Job (`python -m sync sync-run-csv-live`、
+  2026-08-11 PR #162 で CSV 自動取得へ移行するまでは `sync-run` だった)、
+  `infra/README.md` §8-9 に手順あり (Terraform モジュール化はしない方針)
 
 ### 採用FAQチャットボット (`chatbot/`、2026-07-24 デプロイ済み、2026-07-24 UX改善追加)
 採用コンサルフィードバック④への対応。決裁者方針 (GCP自前構築=Vertex AI Gemini + Cloud Run、求人FAQのみスコープ、APIキー発行なしのキーレス認証) に基づき実装 (PR #89→#90)。詳細は `chatbot/README.md`。
