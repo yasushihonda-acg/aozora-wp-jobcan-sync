@@ -635,9 +635,13 @@ class TestParseJobListPartialCardData:
         # source side: relative URL was dropped to None (validator-protected)
         assert item.source_thumbnail_url is None
         # display side: Phase 2A.1c override still fires on labels, independent
-        # of source presence. `介護職` → care image. Code-review #6 finding:
-        # this contract must be asserted, not implicit.
-        assert item.thumbnail_url == "assets/img/illust-job-care.png"
+        # of source presence. `介護職` → some image from the care pool.
+        # Code-review #6 finding: this contract must be asserted, not implicit.
+        # Membership, not a literal path (2026-08-11: `care` is now a
+        # multi-image pool in the real selectors.yaml; which member wins is
+        # `_pick_variant`'s job, not this test's).
+        care_pool = default_config().list.thumbnail_categories.synonym_to_images["介護職"]
+        assert item.thumbnail_url in care_pool
 
 
 class TestParseJobListCategoryEdgeCases:
@@ -678,12 +682,17 @@ def _make_thumb_cfg(
 ) -> ThumbnailCategoriesConfig:
     """Test helper — build a thumbnail_categories config with minimal categories."""
     if categories is None:
+        # Single-element pools by default: this helper backs the synonym-
+        # matching tests below, which are orthogonal to variant selection
+        # (covered separately by `TestThumbnailVariantSelection`) and stay
+        # simplest — and their literal-path assertions stay valid — when
+        # there is exactly one possible answer per category.
         categories = {
             "care": ThumbnailCategoryEntry(
-                synonyms=["介護職"], image="assets/img/illust-job-care.png"
+                synonyms=["介護職"], images=["assets/img/illust-job-care.png"]
             ),
             "nurse": ThumbnailCategoryEntry(
-                synonyms=["看護師", "相談員"], image="assets/img/illust-job-nurse.png"
+                synonyms=["看護師", "相談員"], images=["assets/img/illust-job-nurse.png"]
             ),
         }
     return ThumbnailCategoriesConfig(
@@ -888,10 +897,10 @@ class TestThumbnailCategoriesConfigValidation:
                 enabled=True,
                 categories={
                     "care": ThumbnailCategoryEntry(
-                        synonyms=["介護職", "相談員"], image="care.png"
+                        synonyms=["介護職", "相談員"], images=["care.png"]
                     ),
                     "nurse": ThumbnailCategoryEntry(
-                        synonyms=["相談員"], image="nurse.png"
+                        synonyms=["相談員"], images=["nurse.png"]
                     ),
                 },
                 default_image="default.png",
@@ -911,7 +920,7 @@ class TestThumbnailCategoriesConfigValidation:
                 categories={
                     "care": ThumbnailCategoryEntry(
                         synonyms=["介護職", "介護職"],  # duplicate
-                        image="care.png",
+                        images=["care.png"],
                     ),
                 },
                 default_image="default.png",
@@ -919,24 +928,194 @@ class TestThumbnailCategoriesConfigValidation:
         assert "介護職" in str(exc_info.value)
         assert "twice" in str(exc_info.value)
 
-    def test_synonym_to_image_built_at_load(self) -> None:
+    def test_synonym_to_images_built_at_load(self) -> None:
         """Phase 2A.1c code-review #4: the reverse map is populated by the
-        model_validator, ready for the parser to use without rebuilding."""
+        model_validator, ready for the parser to use without rebuilding.
+        2026-08-11: values are now the full pool (tuple), not a single path —
+        both `nurse` synonyms resolve to the SAME pool object's contents."""
         cfg = ThumbnailCategoriesConfig(
             enabled=True,
             categories={
-                "care": ThumbnailCategoryEntry(synonyms=["介護職"], image="care.png"),
+                "care": ThumbnailCategoryEntry(synonyms=["介護職"], images=["care.png"]),
                 "nurse": ThumbnailCategoryEntry(
-                    synonyms=["看護師", "相談員"], image="nurse.png"
+                    synonyms=["看護師", "相談員"], images=["nurse.png", "nurse-2.png"]
                 ),
             },
             default_image="default.png",
         )
-        assert cfg.synonym_to_image == {
-            "介護職": "care.png",
-            "看護師": "nurse.png",
-            "相談員": "nurse.png",
+        assert cfg.synonym_to_images == {
+            "介護職": ("care.png",),
+            "看護師": ("nurse.png", "nurse-2.png"),
+            "相談員": ("nurse.png", "nurse-2.png"),
         }
+
+    def test_empty_images_pool_rejected(self) -> None:
+        """`images=[]` must fail — `min_length=1` on the list."""
+        with pytest.raises(Exception, match="images"):
+            ThumbnailCategoryEntry(synonyms=["介護職"], images=[])
+
+    def test_blank_image_path_rejected(self) -> None:
+        with pytest.raises(Exception) as exc_info:
+            ThumbnailCategoryEntry(synonyms=["介護職"], images=["care.png", "   "])
+        assert "blank" in str(exc_info.value)
+
+    def test_duplicate_image_within_pool_rejected(self) -> None:
+        """Same path listed twice in one category's pool is an operator
+        copy-paste mistake — and would also silently skew the distribution
+        (that path effectively gets double the odds)."""
+        with pytest.raises(Exception) as exc_info:
+            ThumbnailCategoryEntry(synonyms=["介護職"], images=["care.png", "care.png"])
+        assert "twice" in str(exc_info.value)
+
+
+# ============================================================
+# 2026-08-11 — thumbnail_categories variant selection
+# ============================================================
+import os  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+
+from sync.parser import resolve_display_thumbnail  # noqa: E402
+
+
+def _variant_cfg(pool: list[str] | None = None) -> ThumbnailCategoriesConfig:
+    return ThumbnailCategoriesConfig(
+        enabled=True,
+        categories={
+            "care": ThumbnailCategoryEntry(
+                synonyms=["介護職"],
+                images=pool or ["care-1.png", "care-2.png", "care-3.png"],
+            ),
+            "nurse": ThumbnailCategoryEntry(synonyms=["看護職"], images=["nurse-1.png"]),
+        },
+        default_image="default.png",
+    )
+
+
+def _resolve_care(job_id: str, cfg: ThumbnailCategoriesConfig) -> str | None:
+    return resolve_display_thumbnail(
+        job_id=job_id, labels=["介護職"], source_thumbnail_url=None, thumb_cfg=cfg
+    )
+
+
+class TestThumbnailVariantSelection:
+    """A category's `images` is a pool; which member a job gets must be a
+    pure function of job_id — never of the run's other jobs or the process."""
+
+    def test_other_jobs_in_the_run_do_not_change_assignment(self) -> None:
+        """The anti-round-robin regression test. Phase A's old static-mockup
+        generator (`scripts/mockup-rebuild/rewrite_jobs_html.py`) cycled
+        variants by a counter incremented in document order — porting that
+        to Phase B would mean one job being added/removed/reordered in a
+        6-hourly sync reshuffles every OTHER job's image in that category.
+        This must not happen: resolving the same ten job_ids in three
+        different orders/contexts must yield the same per-job image."""
+        cfg = _variant_cfg()
+        job_ids = [str(100 + i) for i in range(10)]
+
+        baseline = {jid: _resolve_care(jid, cfg) for jid in job_ids}
+
+        reversed_pass = {jid: _resolve_care(jid, cfg) for jid in reversed(job_ids)}
+        assert reversed_pass == baseline
+
+        interleaved_ids = job_ids[:3] + [str(900 + i) for i in range(5)] + job_ids[3:]
+        interleaved_pass = {jid: _resolve_care(jid, cfg) for jid in interleaved_ids}
+        for jid in job_ids:
+            assert interleaved_pass[jid] == baseline[jid]
+
+    def test_variant_is_stable_across_processes(self) -> None:
+        """The `hash(job_id)` regression test. Python's builtin `hash(str)`
+        is salted per-process (`PYTHONHASHSEED`, random by default) — an
+        implementation using it would pick a DIFFERENT image for the same
+        job_id on every single Cloud Run Job execution. A single-process
+        loop cannot catch this (the salt is fixed for the process's whole
+        lifetime); this test runs the resolver in two fresh subprocesses
+        with different explicit seeds and checks they agree with each other
+        AND with this (third) process."""
+        script = (
+            "from sync.config import ThumbnailCategoriesConfig, ThumbnailCategoryEntry\n"
+            "from sync.parser import resolve_display_thumbnail\n"
+            "cfg = ThumbnailCategoriesConfig(\n"
+            "    enabled=True,\n"
+            "    categories={'care': ThumbnailCategoryEntry(\n"
+            "        synonyms=['介護職'], images=['care-1.png', 'care-2.png', 'care-3.png']\n"
+            "    )},\n"
+            "    default_image='default.png',\n"
+            ")\n"
+            "print(resolve_display_thumbnail(\n"
+            "    job_id='2264205', labels=['介護職'], source_thumbnail_url=None,\n"
+            "    thumb_cfg=cfg,\n"
+            "))\n"
+        )
+        in_process = _resolve_care("2264205", _variant_cfg())
+
+        outputs = set()
+        for seed in ("0", "12345"):
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                env={**os.environ, "PYTHONHASHSEED": seed},
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            )
+            outputs.add(result.stdout.strip())
+        outputs.add(in_process)
+        assert len(outputs) == 1, f"variant differed across processes/seeds: {outputs}"
+
+    def test_distribution_spreads_across_pool(self) -> None:
+        """A degenerate implementation (always index 0, or a low-entropy key
+        that bands unevenly) must not pass unnoticed."""
+        cfg = _variant_cfg()
+        pool = {"care-1.png", "care-2.png", "care-3.png"}
+        job_ids = [str(1_000_000 + i) for i in range(200)]
+        results = [_resolve_care(jid, cfg) for jid in job_ids]
+
+        assert set(results) == pool, f"not every pool member was chosen: {set(results)}"
+        for image in pool:
+            share = results.count(image) / len(results)
+            assert 0.10 < share < 0.60, f"{image} got a suspicious share: {share:.0%}"
+
+    def test_result_is_always_a_pool_member(self) -> None:
+        cfg = _variant_cfg()
+        pool = {"care-1.png", "care-2.png", "care-3.png"}
+        for i in range(50):
+            assert _resolve_care(str(2_000_000 + i), cfg) in pool
+
+    def test_single_element_pool_is_degenerate(self) -> None:
+        """`nurse`/`it` in production have exactly one illustration — the
+        pool mechanism must still resolve correctly, not just for pools >1."""
+        cfg = _variant_cfg()
+        for i in range(20):
+            result = resolve_display_thumbnail(
+                job_id=str(3_000_000 + i),
+                labels=["看護職"],
+                source_thumbnail_url=None,
+                thumb_cfg=cfg,
+            )
+            assert result == "nurse-1.png"
+
+
+def test_selectors_yaml_image_paths_exist_on_disk() -> None:
+    """Every path in `thumbnail_categories` (all pool members + default_image)
+    must exist under `mockup/assets/img/` — a typo'd filename previously
+    reached production as a broken `<img>` with nothing to catch it (there
+    was no test asserting against the real selectors.yaml content at all).
+    Mirrors the `REPO_ROOT` pattern in `test_design_tokens.py`."""
+    from pathlib import Path
+
+    # __file__ = aozora-wp-jobcan-sync/sync/tests/test_parser.py
+    #   parents[0] = sync/tests, parents[1] = sync, parents[2] = aozora-wp-jobcan-sync
+    repo_root = Path(__file__).resolve().parents[2]
+    thumb_cfg = default_config().list.thumbnail_categories
+
+    checked: set[str] = set()
+    for entry in thumb_cfg.categories.values():
+        checked.update(entry.images)
+    checked.add(thumb_cfg.default_image)
+
+    missing = [path for path in sorted(checked) if not (repo_root / "mockup" / path).is_file()]
+    assert missing == [], f"selectors.yaml references missing image file(s): {missing}"
 
 
 class TestSourceThumbnailPreservation:

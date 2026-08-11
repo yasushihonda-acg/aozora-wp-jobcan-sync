@@ -14,8 +14,10 @@ Phase 2A reflected (Codex review):
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
+from collections.abc import Sequence
 from urllib.parse import parse_qs, urlsplit
 
 import bleach
@@ -452,6 +454,29 @@ def _parse_list_card(
     )
 
 
+def _pick_variant(*, job_id: str, images: Sequence[str]) -> str:
+    """Deterministically map a job_id onto one image of its category's pool
+    (2026-08-11, variant selection).
+
+    MUST use a stable hash. Python's builtin `hash(str)` is salted per
+    process (`PYTHONHASHSEED`, random by default since 3.3), so
+    `hash(job_id) % len(images)` would re-roll every card's image on EVERY
+    Cloud Run Job execution — the exact "cards shuffle on every sync"
+    failure this feature exists to avoid. `hashlib.sha256` is stable across
+    processes, hosts, and Python versions, forever.
+
+    Depends only on `(job_id, images)` — never on this job's position in
+    the current run, how many other jobs exist, or wall clock — so a job
+    added/removed/reordered in a later sync cannot move any OTHER job's
+    assigned image. Only a deliberate edit to a category's `images` list in
+    `selectors.yaml` changes that category's assignments.
+    """
+    if len(images) == 1:
+        return images[0]
+    digest = hashlib.sha256(job_id.encode("utf-8")).digest()
+    return images[int.from_bytes(digest, "big") % len(images)]
+
+
 def _resolve_display_thumbnail(
     *,
     job_id: str,
@@ -464,7 +489,8 @@ def _resolve_display_thumbnail(
     Order:
       1. If `thumb_cfg.enabled` is False, return the Jobcan source URL as-is.
       2. Walk `labels` in document order; the first label that exact-matches
-         a category synonym wins. Return that category's override image.
+         a category synonym wins. That category's image *pool* is then
+         narrowed to one path by `_pick_variant(job_id, ...)`.
       3. No label matched → return `default_image` and emit a structured
          warning so operators can spot a new Jobcan job type that needs
          adding to `categories`.
@@ -475,14 +501,15 @@ def _resolve_display_thumbnail(
     if not thumb_cfg.enabled:
         return source_thumbnail_url
 
-    # The reverse `synonym -> image` map is computed once at config-validation
-    # time on `ThumbnailCategoriesConfig` (which also rejects synonym collisions
-    # across categories). The parser just looks up here.
-    synonym_to_image = thumb_cfg.synonym_to_image
+    # The reverse `synonym -> image pool` map is computed once at
+    # config-validation time on `ThumbnailCategoriesConfig` (which also
+    # rejects synonym collisions across categories). The parser just looks
+    # up here and picks one pool member.
+    synonym_to_images = thumb_cfg.synonym_to_images
     for label in labels:
-        image = synonym_to_image.get(label)
-        if image is not None:
-            return image
+        images = synonym_to_images.get(label)
+        if images is not None:
+            return _pick_variant(job_id=job_id, images=images)
 
     # No label matched any category — fall back to default + structured warning.
     # The operator-actionable signal: job_id + the actual labels seen, so they
@@ -493,7 +520,7 @@ def _resolve_display_thumbnail(
             "job_id": job_id,
             "labels": labels,
             "default_image": thumb_cfg.default_image,
-            "known_synonyms": sorted(synonym_to_image.keys()),
+            "known_synonyms": sorted(synonym_to_images.keys()),
         },
     )
     return thumb_cfg.default_image
