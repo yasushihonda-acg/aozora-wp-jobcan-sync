@@ -975,7 +975,7 @@ import os  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
 
-from sync.parser import resolve_display_thumbnail  # noqa: E402
+from sync.parser import _pick_variant, resolve_display_thumbnail  # noqa: E402
 
 
 def _variant_cfg(pool: list[str] | None = None) -> ThumbnailCategoriesConfig:
@@ -1094,6 +1094,34 @@ class TestThumbnailVariantSelection:
                 thumb_cfg=cfg,
             )
             assert result == "nurse-1.png"
+
+    def test_pool_order_change_reassigns_some_jobs(self) -> None:
+        """Reordering a category's `images` list is the ONE deliberate
+        trigger documented for changing assignments (selectors.yaml comment,
+        `ThumbnailCategoryEntry`/`ThumbnailCategoriesConfig` docstrings).
+        Pins that contract: swapping pool order must actually change at
+        least one job's resolved image, so a future refactor that made
+        selection order-insensitive (e.g. hashing a *sorted* pool, which
+        would silently break the "reorder = reshuffle" promise) fails this
+        test instead of shipping unnoticed."""
+        original_pool = ["care-1.png", "care-2.png", "care-3.png"]
+        reversed_pool = list(reversed(original_pool))
+        job_ids = [str(4_000_000 + i) for i in range(30)]
+
+        original = {jid: _pick_variant(job_id=jid, images=original_pool) for jid in job_ids}
+        reversed_results = {
+            jid: _pick_variant(job_id=jid, images=reversed_pool) for jid in job_ids
+        }
+
+        assert original != reversed_results
+
+    def test_empty_pool_raises_instead_of_zero_division(self) -> None:
+        """`_pick_variant` is unreachable with an empty pool via the normal
+        `ThumbnailCategoryEntry` validation path (`min_length=1`), but a
+        direct call — e.g. from a future refactor — must fail with a clear
+        error, not a confusing bare `ZeroDivisionError`."""
+        with pytest.raises(ValueError, match="non-empty"):
+            _pick_variant(job_id="123", images=[])
 
 
 def test_selectors_yaml_image_paths_exist_on_disk() -> None:

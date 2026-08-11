@@ -471,6 +471,13 @@ def _pick_variant(*, job_id: str, images: Sequence[str]) -> str:
     assigned image. Only a deliberate edit to a category's `images` list in
     `selectors.yaml` changes that category's assignments.
     """
+    if not images:
+        # Unreachable via `synonym_to_images` today — every pool traces back
+        # to `ThumbnailCategoryEntry.images` (`min_length=1`, config-validated
+        # at load). Guarded anyway: a bare `ZeroDivisionError` below would be
+        # a confusing failure mode if a future refactor ever fed this
+        # function a pool that skipped that validation.
+        raise ValueError("_pick_variant: images pool must be non-empty")
     if len(images) == 1:
         return images[0]
     digest = hashlib.sha256(job_id.encode("utf-8")).digest()
