@@ -513,6 +513,14 @@ def _canonical_detail_url(job_id: str) -> str:
     )
 
 
+# Public aliases so `csv_ingest.py` (which has no HTML to select a detail URL
+# / label-driven thumbnail from) can reuse this logic without either module
+# importing the other's private names. The private names above stay as the
+# canonical implementation and are unchanged everywhere else in this file.
+canonical_detail_url = _canonical_detail_url
+resolve_display_thumbnail = _resolve_display_thumbnail
+
+
 def _extract_category_id(source_url: str) -> str | None:
     """Pull `category_id` from a Jobcan list URL's query string, if present.
 

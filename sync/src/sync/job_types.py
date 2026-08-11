@@ -38,3 +38,11 @@ JOB_TYPE_NAMES: dict[str, str] = {
     "71511": "総合職（営業・管理職）",
     "73697": "新卒・既卒総合職",
 }
+
+# Reverse lookup for the CSV ingestion path (CSV-migration follow-up,
+# 2026-08-11): the CSV's「求人カテゴリ」column holds the display NAME, not the
+# category_id. Safe only because `JOB_TYPE_NAMES`'s values are unique — pinned
+# by `test_job_types.py::test_job_type_names_values_are_unique`.
+JOB_TYPE_IDS_BY_NAME: dict[str, str] = {
+    name: category_id for category_id, name in JOB_TYPE_NAMES.items()
+}
