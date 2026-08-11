@@ -12,10 +12,11 @@ import pytest
 import respx
 
 import sync.orchestrator as orchestrator
+from sync.csv_ingest import crawl_from_csv
 from sync.firestore_repo import JobCacheRepository
 from sync.jobcan_client import JOBCAN_BASE_URL, JobcanClient, JobcanClientConfig
 from sync.snapshot import snapshot_from_offer
-from tests.conftest import FakeFirestoreClient
+from tests.conftest import CSV_FIXTURES_DIR, FakeFirestoreClient
 
 _NOW = datetime(2026, 8, 7, tzinfo=UTC)
 
@@ -104,6 +105,30 @@ def test_run_sync_writes_new_jobs_as_pending_review(monkeypatch: pytest.MonkeyPa
     assert result.circuit_breaker_tripped is False
     snapshots = repo.get_all()
     assert snapshots["1"].sync_status == "pending_review"
+
+
+def test_run_sync_from_crawl_writes_csv_source_onto_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CSV-migration follow-up (2026-08-11): `run_sync_from_crawl(...,
+    source="csv")` must label every freshly-written snapshot `source="csv"` —
+    this is what lets `csv-diff`/an operator tell which pipeline produced a
+    given `job_cache` document during the parallel-running migration period.
+    `run_sync` itself (the HTML path) is untouched by this parameter and is
+    covered by every other test in this file, which is why this is the only
+    test in the module that goes through `run_sync_from_crawl` directly."""
+    monkeypatch.setattr(orchestrator, "notify_ops", lambda text: None)
+    crawl_result = crawl_from_csv([CSV_FIXTURES_DIR / "job_offer_list_page1.csv"])
+    repo = JobCacheRepository(FakeFirestoreClient())
+
+    result = orchestrator.run_sync_from_crawl(
+        crawl_result, repo, now=_NOW, review_bypass=True, source="csv"
+    )
+
+    assert result.written is True
+    assert result.added == 1
+    snapshot = repo.get_all()["1777023"]
+    assert snapshot.source == "csv"
 
 
 @respx.mock

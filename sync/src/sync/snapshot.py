@@ -30,10 +30,12 @@ SyncStatus = Literal["active", "closed", "pending_review"]
 class JobSnapshot(BaseModel):
     """One `job_cache/{job_id}` document.
 
-    `source` is always `"html_parse"` for Phase B (the only implemented
-    ingestion path); the literal keeps the door open for the `"csv"` / `"api"`
-    variants `sync-strategy.md` already documents as fallbacks, without this
-    module having to know how to produce them.
+    `source` records which ingestion pipeline produced this snapshot —
+    `"html_parse"` (the original path, `crawler.crawl_all`) or `"csv"`
+    (`csv_ingest.crawl_from_csv`, CSV-migration follow-up, 2026-08-11). Both
+    pipelines run in parallel during the migration so this field is what lets
+    an operator (or `csv-diff`) tell which one wrote a given document. `"api"`
+    remains an unused literal for the fallback `sync-strategy.md` documents.
 
     `offer` carries everything `render_job_detail` needs to re-render the
     detail page without ever touching Jobcan again (B-8). `list_item` is the
@@ -87,6 +89,7 @@ def snapshot_from_offer(
     absence_count: int = 0,
     list_item: JobListItem | None = None,
     category_ids: list[str] | None = None,
+    source: Literal["html_parse", "csv", "api"] = "html_parse",
 ) -> JobSnapshot:
     """Build the Firestore-bound snapshot for a freshly-fetched `JobOffer`.
 
@@ -106,6 +109,7 @@ def snapshot_from_offer(
         source_url=offer.source_url,
         apply_url=offer.apply_url,
         last_seen_at=now,
+        source=source,
         sync_status=sync_status,
         absence_count=absence_count,
         closed_at=None,

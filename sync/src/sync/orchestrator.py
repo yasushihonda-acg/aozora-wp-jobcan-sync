@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from .approval import apply_review_gate, review_bypass_enabled
 from .closed_detection import apply_closed_detection, find_gc_candidates
@@ -46,7 +47,39 @@ def run_sync(
     now: datetime,
     review_bypass: bool | None = None,
 ) -> SyncRunResult:
-    """Run one full crawl -> diff -> closed-detection -> review-gate -> write cycle.
+    """Run one full crawl -> diff -> closed-detection -> review-gate -> write cycle
+    over the HTML-parsing pipeline (`crawler.crawl_all`).
+
+    Thin wrapper around `run_sync_from_crawl` — see that function's docstring
+    for everything past the crawl step. Kept as a separate public entry point
+    so every existing caller (CLI's `sync-run`, `test_orchestrator.py`) is
+    unaffected by the CSV-migration follow-up (2026-08-11) that introduced
+    the crawl-result-first split.
+    """
+    crawl_result = crawl_all(client)
+    return run_sync_from_crawl(
+        crawl_result, repo, now=now, review_bypass=review_bypass, source="html_parse"
+    )
+
+
+def run_sync_from_crawl(
+    crawl_result: CrawlResult,
+    repo: JobCacheRepository,
+    *,
+    now: datetime,
+    review_bypass: bool | None = None,
+    source: Literal["html_parse", "csv", "api"] = "html_parse",
+) -> SyncRunResult:
+    """Run one diff -> closed-detection -> review-gate -> write cycle over an
+    already-produced `CrawlResult`.
+
+    Pipeline-agnostic by design (CSV-migration follow-up, 2026-08-11):
+    `run_sync` (HTML path, `crawler.crawl_all`) and the CSV path
+    (`csv_ingest.crawl_from_csv`, wired up via `cli.py`'s `sync-run-csv`) both
+    call this function with their own `CrawlResult` and `source` label —
+    neither pipeline needs to know anything about diff/closed-detection/
+    review-gate/Firestore, and this function needs no knowledge of how its
+    `CrawlResult` was produced.
 
     `review_bypass=None` (the default) reads the `REVIEW_BYPASS` env var via
     `approval.review_bypass_enabled()`; pass an explicit bool in tests to
@@ -75,7 +108,6 @@ def run_sync(
     if review_bypass is None:
         review_bypass = review_bypass_enabled()
 
-    crawl_result = crawl_all(client)
     previous_snapshots = repo.get_all()
     diff = compute_diff(
         crawl_result.offers,
@@ -120,6 +152,7 @@ def run_sync(
         skip_absence_bookkeeping=not crawl_result.fully_listed or reconciliation_mismatch,
         list_items=crawl_result.list_items,
         category_ids=crawl_result.category_ids,
+        source=source,
     )
 
     if closed_result.circuit_breaker_tripped:
