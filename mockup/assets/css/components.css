@@ -452,6 +452,49 @@
   .category-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
+/* その他の募集職種タグ (2026-08-11、専用イラストのない11職種向け軽量入口) —
+   .job-list-filter__chip と同一トーンだがリンク要素なので aria-pressed は使わない */
+.job-type-tags {
+  margin-top: var(--space-8);
+  text-align: center;
+}
+.job-type-tags__label {
+  display: block;
+  font-size: var(--text-sm);
+  letter-spacing: 0.06em;
+  color: var(--color-accent-dark);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-3);
+}
+.job-type-tags__list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.job-type-tags__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  background: #fff;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-heading);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+.job-type-tags__link:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-dark);
+}
+
 /* =========================================================
  * Career Ladder — 入社からのキャリアアップモデル
  * ========================================================= */

@@ -138,6 +138,21 @@ _LEGACY_CATEGORY_IDS: dict[str, str] = {
     "care-manager": "18985",  # ケアマネジャー — via `jobs.html?job_type=care-manager` only
     "office": "58859",
     "it": "69384",
+    # Remaining 11 of the 17 job_types.py categories (2026-08-11, 決裁者
+    # feedback: no top-page entry point existed for 訪問看護 or the other 10)
+    # — query-value-only like visit/care-manager above, no dedicated static
+    # page, all reached via `jobs.html?job_type=...`.
+    "consultant": "18984",  # 相談員
+    "visiting-nurse": "18987",  # 訪問看護
+    "night-shift": "18988",  # 夜勤専従（介護・看護）
+    "facility-manager": "18989",  # 施設長・管理者候補
+    "service-lead": "18990",  # サービス提供責任者
+    "service-manager": "22014",  # サービス管理責任者
+    "caretaker": "39695",  # 世話人
+    "visiting-rehab": "41046",  # 訪問リハビリ
+    "support": "43764",  # サポート職（清掃・洗濯・調理・送迎）
+    "general": "71511",  # 総合職（営業・管理職）
+    "new-grad": "73697",  # 新卒・既卒総合職
 }
 
 # `mockup/index.html` is shared with the still-live Phase A GitHub Pages
@@ -185,6 +200,51 @@ _TOP_PAGE_LINK_REWRITES: tuple[tuple[str, str], ...] = (
     (
         'href="jobs-it.html"',
         f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["it"]}"',
+    ),
+    # Remaining 11 job-type tags (2026-08-11, 「その他の募集職種」section).
+    (
+        'href="jobs.html?job_type=consultant"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["consultant"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=visiting-nurse"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["visiting-nurse"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=night-shift"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["night-shift"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=facility-manager"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["facility-manager"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=service-lead"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["service-lead"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=service-manager"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["service-manager"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=caretaker"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["caretaker"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=visiting-rehab"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["visiting-rehab"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=support"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["support"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=general"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["general"]}"',
+    ),
+    (
+        'href="jobs.html?job_type=new-grad"',
+        f'href="/jobs/?category_id={_LEGACY_CATEGORY_IDS["new-grad"]}"',
     ),
 )
 

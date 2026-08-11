@@ -68,13 +68,25 @@ _CATEGORY_IDS = {
     "office": "58859",
     "it": "69384",
 }
-# `_JOB_TYPE_CATEGORY_IDS`: the other 2 entries, query-string-only on Phase A
-# (`mockup/index.html`'s ホームヘルパー/ケアマネジャー cards link to
-# `jobs.html?job_type=...`, never their own static page) — consumed by
-# `jobs.html`'s inline script, not the plain per-file meta refresh below.
+# `_JOB_TYPE_CATEGORY_IDS`: the other 13 entries, query-string-only on Phase A
+# (`mockup/index.html`'s ホームヘルパー/ケアマネジャー cards, and the 11
+# 「その他の募集職種」tags added 2026-08-11, link to `jobs.html?job_type=...`,
+# never their own static page) — consumed by `jobs.html`'s inline script,
+# not the plain per-file meta refresh below.
 _JOB_TYPE_CATEGORY_IDS = {
     "visit": "18986",  # ホームヘルパー
     "care-manager": "18985",  # ケアマネジャー
+    "consultant": "18984",  # 相談員
+    "visiting-nurse": "18987",  # 訪問看護
+    "night-shift": "18988",  # 夜勤専従（介護・看護）
+    "facility-manager": "18989",  # 施設長・管理者候補
+    "service-lead": "18990",  # サービス提供責任者
+    "service-manager": "22014",  # サービス管理責任者
+    "caretaker": "39695",  # 世話人
+    "visiting-rehab": "41046",  # 訪問リハビリ
+    "support": "43764",  # サポート職（清掃・洗濯・調理・送迎）
+    "general": "71511",  # 総合職（営業・管理職）
+    "new-grad": "73697",  # 新卒・既卒総合職
 }
 
 _PHASE_A_REDIRECT_BLOCK_RE = re.compile(
