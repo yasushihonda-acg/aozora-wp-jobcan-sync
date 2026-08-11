@@ -45,6 +45,21 @@ class JobcanStructureChangeError(JobcanError):
         super().__init__(msg)
 
 
+class JobcanAtsError(JobcanError):
+    """Raised by `jobcan_ats.py` when the ATS admin-screen automation
+    (CSV-migration follow-up, 2026-08-11) hits a problem — a distinct
+    exception family from the public-page errors above because the ATS
+    screens are a different surface (authenticated, SPA, no CSS-selector
+    contract) with different failure modes."""
+
+
+class JobcanAtsSafetyError(JobcanAtsError):
+    """Raised when a safety guard rejects an ATS bulk-action selection before
+    an irreversible click. NEVER retried and NEVER silently downgraded —
+    every other `JobcanAtsError` may be retried by the caller, this one must
+    always abort the run (see `jobcan_ats.assert_safe_bulk_action`)."""
+
+
 class JobcanValidationError(JobcanError):
     """Raised when required fields are extracted as empty or malformed.
 
