@@ -1,8 +1,8 @@
-# Handoff — 2026-08-10（求人カード画像マッピング修正 + CSV移行 招待メール解決・Secret Manager登録）
+# Handoff — 2026-08-11（求人カード画像マッピング根本修正 + 同一職種内バリエーション追加）
 
 ## TL;DR
 
-**同日の直前セッションで職種フィルタを17区分へ拡張(PR #157、詳細はGOAL.md参照)した直後、decision-makerが本番で「看護職」フィルタの求人カード画像を確認したところ、フィルタと無関係に同じ画像(相談員がタブレットで家族に説明するシーン)が表示される不具合を発見。調査の結果、17区分拡張時にサムネイル画像のシノニム設定(`selectors.yaml`)が追従しておらず大半の求人がdefault_imageへフォールバックしていたと判明・修正(PR #159)。続けてCSVデータ取得方式への移行のブロッカーだった招待メール未着問題(専用アカウント`jobcan-sync@aozora-cg.com`)をジョブカン側の招待メール再送で解決し、ロードマップ③Secret Managerへの認証情報登録まで完了(PR #160)。**
+**決裁者から「PR #159で直したはずの求人カード画像が、選択した職種タグの意味とまだ合っていない。訪問介護=ホームヘルパーのように意味が近い職種は同じ画像にすべき。また以前は1職種内で複数画像を使い分けていたはずで、それも直してほしい」との指摘。調査の結果、PR #159がカード色分け用の粗い4系統グルーピングをそのまま画像選択にも流用しており、専用生成済みだった`illust-job-visit.png`(訪問介護)・`illust-job-consultant.png`(相談員)が本番マッピングで一度も使われていなかったことが判明。6系統への再分割(PR #165)+ job_id決定的ハッシュによる同一職種内バリエーション機能(PR #166)を実装し、Docker再ビルド・Cloud Run Job更新・手動トリガーまで実施、本番実機で両方とも反映を確認済み。**
 
 🔗 公開モック(Phase A、37件サンプル、Cloud Runへ自動リダイレクト化済み): https://yasushihonda-acg.github.io/aozora-wp-jobcan-sync/mockup/
 🔗 Phase B本番(382件全件、まだ`recruit.aozora-cg.com`未接続): https://aozora-sync-flry56mxwa-an.a.run.app/
@@ -14,50 +14,44 @@
 
 | PR | タイトル | 内容 |
 |---|---|---|
-| #159 | `fix(sync): 求人カード画像の職種マッピングを17区分へ拡張` | `selectors.yaml`の`thumbnail_categories`シノニムを17ラベル全網羅へ修正。sync/tests 474件全PASS |
-| #160 | `docs(infra): CSV自動取得用パスワードのSecret Manager登録手順を追記` | `jobcan-sync-password`シークレット作成・IAM付与・登録手順を実測結果ベースで記録 |
+| #165 | `fix(sync): 求人カード画像の職種マッピングを意味の近さで再分割` | `selectors.yaml`の`thumbnail_categories`を4→6系統(care/visit/consultant/nurse/office/it)へ再分割 |
+| #166 | `feat(sync): 求人カード画像に同一職種内バリエーションを追加` | `image: str`→`images: list[str]`(プール化)、`sha256(job_id)`による決定的バリエーション選択を追加 |
 
-### PR #159 — 求人カード画像マッピングのバグ修正
+### PR #165 — 求人カード画像マッピングの根本修正
 
-`sync/src/sync/selectors.yaml`の`thumbnail_categories`シノニムがPhase 2A.1c時点の6種類(介護職/看護師/相談員/ITエンジニア職/開発エンジニア/事務職)のまま、直前セッションの17区分フィルタ拡張(PR #157)に追従しておらず、実際のジョブカン生ラベル(例:「看護職」— 「看護師」という文字列は実際には出現しない)の大半が未登録だった。未一致の求人は`_resolve_display_thumbnail()`で`default_image`(相談員がタブレットで家族に説明する汎用シーン)へフォールバックしており、看護職フィルタ含む多くの職種カードが同じ画像になっていた。
+PR #159(2026-08-10)は17区分のシノニム漏れによる`default_image`大量フォールバックを解消したが、修正時に**カード色分け用の4系統グルーピング(`list_sections.LABEL_TO_CATEGORY`)をそのまま画像選択にも流用**していた。色分けは4系統(介護/看護/事務/IT、専用CSS修飾子が4種のみのため)で正しいが、画像選択は意味の近さで分けるべきで、ホームヘルパー・相談員・ケアマネジャー・サービス提供責任者・サービス管理責任者・世話人・夜勤専従・サポート職・施設長候補の10種類が全て同じ介護シーン画像(`illust-job-care.png`)になっていた。一方で専用イラスト`illust-job-visit.png`(訪問介護員/ヘルパー、SCENE #14)・`illust-job-consultant.png`(相談員/ケアマネジャー、SCENE #2)は既に生成済みだったが本番マッピングで一度も使われていなかった。
 
-`list_sections.LABEL_TO_CATEGORY`(カード色分け用、2026-08-09に17区分へ更新済み)と同じ4系統(介護/看護/事務/IT、相談員は介護へ統合)へ揃えて全17ラベルを網羅する形で修正。`default_config()`で19エントリが衝突なく解決されることを確認、sync/tests 474件全PASS。1ファイル・小規模のためcodex reviewは省略し手動チェックリストレビューで対応。
+6系統(care/visit/consultant/nurse/office/it)へ再分割し、上記2画像を活用。2ファイル・48行の小規模修正のため手動チェックリストレビュー(codex review省略基準内)。実データロードで17タグ全件がマッチ漏れなく解決されることを確認、pytest 532件全PASS。
 
-**反映は次回自動クロール待ち**: `thumbnail_url`はクロール時に一度解決されFirestoreに保存される設計のため、この修正だけでは本番表示はまだ変わらない。次回の6時間ごと自動クロール(Cloud Scheduler)で全382件が再解決される。即時反映(Cloud Run Job手動実行)は決裁者の選択で見送り。
+**本番反映**: PR #159のときは次回自動クロール待ちの方針だったが、今回は決裁者から「いますぐ対応してください」の明示指示を受け、Docker再ビルド(`sync/Dockerfile.job`)→Artifact Registry push→`gcloud run jobs update`(本田様実行、自動モード分類器がブロックしたためAskUserQuestionで承認後に本田様がbash-inputで実行)→Cloud Scheduler手動トリガー→本番実機確認、まで完了。`/jobs/?category_id=18986`(ホームヘルパー)で`illust-job-visit.png`、`/jobs/?category_id=18984`(相談員)で`illust-job-consultant.png`への切り替わりを確認。
 
-### CSVデータ取得方式移行 — 招待メール未着問題の解決 + Secret Manager登録(ステップ③)
+### PR #166 — 同一職種内バリエーション機能の追加
 
-専用アカウント`jobcan-sync@aozora-cg.com`(Googleグループとして発行)の招待メール未着問題を、以下の順で切り分け:
+決裁者から「以前は1職種内でも求人カードごとに違う画像を使っていたはず」との追加指摘。調査の結果、Phase A(旧静的モック生成スクリプト`scripts/mockup-rebuild/rewrite_jobs_html.py`)には`CATEGORY_VARIANTS`+ラウンドロビンカウンタによる画像分散機構が実在したが、Phase B(Firestore、6時間ごと自動再同期)への移植時に欠落していたと判明。
 
-1. Googleグループ側「投稿を許可するユーザー」設定 → システム部が修正済みと確認(スレッド一覧の内部テストメールで確認)
-2. 外部テストメール(decision-maker自身の別アドレスから送信)で到達性を確認 → 成功。受信側の問題は解消と判断
-3. それでもジョブカンからの招待メール自体は届かず → `https://id.jobcan.jp/users/invitation/new?lang=ja`からの**招待メール再送**で最終的に解決
+plan modeで設計: Phase Aのラウンドロビン方式(出現順依存)をそのまま移植すると、求人が1件増減/並び替わるだけで**他の求人の画像まで意図せずシャッフルされる**(今回の指摘の再発になる)ため不採用。代わりに`job_id`の`sha256`ハッシュで決定的に1枚を選ぶ方式(`parser._pick_variant`)を新設 — 同じ求人は常に同じ画像、他の求人の増減で割り当てが変わらないことを保証。Python組み込みの`hash()`はプロセスごとにランダム化されるため使用禁止、という設計上の注意点をdocstring・テストの両方に明記。
 
-続けてSecret Manager登録(ロードマップ③)を実施:
-- `jobcan-sync-password`シークレットを作成(空コンテナ)、既存の6時間ごと定期クロールJobの実行SA `aozora-sync-job`へ`secretmanager.secretAccessor`を付与 — ここまではClaude Codeが`gcloud`で直接実施
-- **パスワード本体の登録はgcloud CLIで失敗**: `gcloud secrets versions add`が要求するreauth(機微操作の再認証)がパスワード入力方式のみに対応しており、SSO/2段階認証で運用しているアカウント(`yasushi.honda@aozora-cg.com`)には有効なパスワードが存在しないため無限ループ。`gcloud auth revoke`→`login`での完全な再ログインでも解消せず(CLIの構造的な制限と判断)。**GCPコンソール(ブラウザ)経由での登録に切替えて成功**
-- `infra/README.md` §1.6にこの経緯を含めて実測結果ベースの手順を記録(bashの`read -s -p`はzshで構文エラーになる注記も含む)
+`ThumbnailCategoryEntry.image: str`→`images: list[str]`(画像プール化)、care(3枚)/visit(3枚)/consultant(2枚)/office(2枚)を複数画像化。品質ゲート: `codex review --base main -c model_reasoning_effort=high`(指摘0件)+ `pr-review-toolkit`3エージェント並列セカンドオピニオン(code-reviewer/silent-failure-hunter/type-design-analyzer)。type-design-analyzerの改善提案3件中2件(`_pick_variant`の空プールガード、並べ替え契約を検証するテスト)を同PR内で反映、残り1件(既存クラスの`frozen=True`化)はPRスコープ外として見送り理由を明記。
 
-### その他
-
-決裁者向け進捗報告HTML(スクラッチパッド、リポジトリ外)を更新: PoC(実現可能性検証・完了)と自動化(未着手、Secret Manager導入で初めて人手を介さない実行になる)の違いを明記。
+pytest 543件全PASS(新規11件、プロセス間安定性・分布・並べ替え契約等)、ruff/pyright 0件。本番反映後、介護職(53件がcare/-2/-3に分散)・ホームヘルパー(15件)・相談員(36件)いずれも複数画像への分散を実機確認。
 
 ## 次のアクション
 
 ### 即着手タスク
-即着手タスクなし(残り作業はいずれも外部trigger待ちまたはdecision-maker判断待ち)
+即着手タスクなし(残り作業はいずれも decision-maker 判断待ち、AI 側の着手対象外)
 
 ### 条件待ち（明示 trigger 付き）
 
 | # | 項目 | trigger（充足条件） | 充足時のタスク | 充足確認方法 |
 |---|------|------------------|--------------|------------|
-| 1 | PR #159の本番反映確認 | 次回自動クロール完了(最大6時間以内、Cloud Scheduler) | 実機で職種別に求人カード画像が正しく分かれているか確認(Playwright) | 本番URL `/jobs/?category_id=` を職種別に確認 |
-| 2 | [GOAL.md/中断点] CSV移行 ①②の状態確認 | decision-makerへの確認(次セッション冒頭) | ①`jobcan-sync@aozora-cg.com`でのログイン確認 ②同アカウントでのCSV取得手順再現確認、未了なら実施。完了済みなら④Playwright自動化のコード実装(CLI化、新規アーキテクチャ判断のためplan mode)へ | decision-makerからの回答 |
-| 3 | [GOAL.md] Stage 5(ドメイン切替`recruit.aozora-cg.com`) | 本田様がGoogle Search ConsoleでTXTレコード検証を完了 | `gcloud beta run domain-mappings create`実行→CNAME値取得→システム部へ2回目依頼 | 本田様からの報告 |
-| 4 | [GOAL.md] Secret Manager(Google Chat webhook `ops-webhook-url`) | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
+| 1 | [GOAL.md] Stage 5(ドメイン切替`recruit.aozora-cg.com`) | 本田様がGoogle Search ConsoleでTXTレコード検証を完了 | `gcloud beta run domain-mappings create`実行→CNAME値取得→システム部へ2回目依頼 | 本田様からの報告 |
+| 2 | [GOAL.md] Secret Manager(Google Chat webhook `ops-webhook-url`) | webhook URL入手 | `infra/README.md` §1.5の手順で追加 | 本田様への確認 |
+| 3 | [GOAL.md/Issue③] 外国人採用特設ページ(特定技能・介護ビザ) | 法務/人事確認 + decision-maker指示 | 内容確定後にplan modeで実装検討 | 本田様への確認 |
+| 4 | [GOAL.md/Issue⑤] スタッフインタビュー再考 | decision-makerの再判断(コンサル提案〈イニシャル+AI生成画像〉の採否) | 採用ならplan modeで実装検討 | 本田様への確認 |
+| 5 | トンマナ刷新第2フェーズ Stage 3(コンポーネントリデザイン) | decision-makerが本番サイトを見て具体的指摘を出す(進行中のプロセスなし、任意タイミングで開始可能) | 具体的指摘を得て個別plan modeで着手 | 本田様への確認 |
 
 ### 却下候補（記録のみ）
-今セッション内での新規却下候補なし。既存の却下候補(チャットsystem_instructionのコンテキスト圧縮、GA4設定等)はGOAL.md参照。
+今セッション内での新規却下候補なし。
 
 ## 再開可能性判定
 ✅ **再開可能** - ドキュメントから開発再開できます
@@ -74,9 +68,9 @@
 ✅ **セッション終了可** — 残作業ゼロ、クリーン状態達成
 
 - OPEN PR: 0件 / active Issue: 0件
-- Git: `main`は`origin/main`と同期済み、clean(本コミット含め)
-- 即着手タスク: 0件 / 条件待ち: 4件(いずれも外部trigger待ちまたはdecision-maker判断待ち)
-- 残留プロセス: あり(検出されたnode/pythonプロセスは全てMCPインフラ・言語サーバー・他プロジェクトの常駐プロセスで、本セッション由来のdev server等はなし。マシン全体スコープのチェックであり本プロジェクトに限らない)
-- 既知の blocker: なし(招待メール問題は本セッションで解消済み)
-- 同根再発スキャン(§4.6): `fix:`PR 1件(#159)を確認。過去7日のhandoff archiveおよび本セッション内で同一技術パターン(職種ラベルのハードコードリストの陳腐化)の再発候補を検索し、他の職種ラベル依存箇所(`detail_sections.py`の雇用形態サフィックスリスト)は別軸(雇用形態、17区分拡張の影響を受けない)であることを確認、追加候補0件
-- 対症療法判定(§4.7): 該当なし — PR #159は実際のJobcan生ラベル(job_types.py)とselectors.yamlの構成を直接比較して特定した根本原因への対応であり、retry/fallback等の症状遮断ではない。`default_config()`による解決結果の直接検証+テスト474件PASSで確認済み
+- Git: `main`は`origin/main`と同期済み、clean
+- 即着手タスク: 0件 / 条件待ち: 5件(いずれも decision-maker 判断待ち)
+- 残留プロセス: なし
+- 既知の blocker: なし
+- 同根再発スキャン(§4.6): `fix:`PR 1件(#165)を確認。同一テーマ(求人カード画像マッピング)の直前修正PR #159(2026-08-09)がヒット — ただし今回のPR #165は「なぜPR #159の修正が不十分だったか」を明示的に調査・特定(カード色分け用4系統グルーピングを画像選択に流用したことが根本原因)しており、症状の再発ではなく根本原因への到達。追加候補0件
+- 対症療法判定(§4.7): 基準3(過去30日以内の同症状修正PR)のみ該当、基準1・2・4は明確に反証(retry/fallback等ではなく設計修正、原因調査ログあり、実データ+本番実機での構造的検証あり)。WebSearch実施(`pydantic thumbnail synonym mapping category fallback bug regression 2026`)も外部要因なし、社内固有の設計課題と確認。対症療法ではないと判断
