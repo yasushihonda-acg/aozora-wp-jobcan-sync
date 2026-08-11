@@ -130,6 +130,20 @@ def test_bad_rows_are_skipped_not_fatal() -> None:
     assert result.category_ids["9999903"] == []
 
 
+def test_row_conversion_failure_still_marks_the_job_id_as_listed() -> None:
+    """codex review finding (2026-08-11): a row that fails conversion
+    (unknown facility code, blank salary) is still a posting Jobcan is
+    showing in the CSV — it must land in `listed_job_ids` even though it has
+    no `JobOffer`. Otherwise `compute_diff` treats it as `removed` instead of
+    `unfetched`, and a transient CSV data problem could drift a
+    still-published posting toward the 48h auto-close threshold. A
+    non-numeric job_id (`abc123`) cannot be recorded as listed — there is no
+    valid id to record."""
+    result = crawl_from_csv([CSV_FIXTURES_DIR / "job_offer_list_bad_rows.csv"])
+    assert {"9999902", "9999904"} <= result.listed_job_ids
+    assert "abc123" not in result.listed_job_ids
+
+
 def test_bad_header_raises_structure_change_error() -> None:
     import pytest
 

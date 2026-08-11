@@ -488,21 +488,28 @@ class JobcanAtsClient:
         # Polled rather than read once immediately after the click: the SPA
         # takes a moment to flip every row's checkbox state after select-all
         # (confirmed against the live UI, 2026-08-11 — an instant read
-        # produced a false-positive "0 checked" on a healthy page). A
-        # genuine permission problem (view-only role, empty `<td></td>` row
-        # cells — the exact symptom this session's manual investigation hit)
-        # never reaches >=1 no matter how long this polls, so it still fails
-        # loudly rather than hanging on a button that will never enable.
+        # produced a false-positive "0 checked" on a healthy page). Scoped to
+        # `tbody` specifically (codex review finding, 2026-08-11): counting
+        # ALL checked checkboxes — including the header's own — let the poll
+        # exit the instant the header toggled, before the SPA had propagated
+        # that state to any row, so a bulk action could fire against an
+        # empty or partially-selected page. The exit condition is now "every
+        # visible row is checked", not merely "at least one is". A genuine
+        # permission problem (view-only role, empty `<td></td>` row cells —
+        # the exact symptom this session's manual investigation hit) never
+        # reaches that count no matter how long this polls, so it still
+        # fails loudly rather than hanging on a button that will never
+        # enable.
         checked_count = 0
         deadline = time.monotonic() + (self.config.action_timeout_ms / 1000)
         while time.monotonic() < deadline:
             checked_count = page.eval_on_selector_all(
-                'input[type="checkbox"]:checked', "els => els.length"
+                'table tbody input[type="checkbox"]:checked', "els => els.length"
             )
-            if checked_count >= 1:
+            if checked_count >= visible_rows > 0:
                 break
             time.sleep(0.2)
-        if checked_count < 1 or visible_rows < 1:
+        if checked_count < visible_rows or visible_rows < 1:
             raise JobcanAtsError(
                 f"page {page_number}: select-all produced {checked_count} checked "
                 f"rows out of {visible_rows} visible — the account's role likely "

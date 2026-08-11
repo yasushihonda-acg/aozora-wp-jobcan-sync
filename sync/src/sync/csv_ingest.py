@@ -373,11 +373,27 @@ def crawl_from_csv(
 
         for row in rows[1:]:
             total_rows += 1
+            row_job_id = row[_C_JOB_ID].strip() if row else ""
+            # Recorded BEFORE conversion is attempted, independent of whether
+            # the row's other columns are valid: the CSV row's mere presence
+            # is what "listed" means for this pipeline (the CSV *is* the
+            # listing, unlike the HTML path where a listing row and its
+            # detail-page fetch are two separate requests). A row that fails
+            # validation (unknown facility code, blank salary, ...) is still
+            # a posting Jobcan is showing — recording it here is what makes
+            # `compute_diff` treat it as "unfetched" instead of "removed", so
+            # a transient CSV data problem can never make a still-published
+            # posting drift toward the 48h auto-close threshold (codex
+            # review finding, 2026-08-11: the previous version only added to
+            # `listed_job_ids` after a successful conversion).
+            if is_ascii_digit_id(row_job_id):
+                result.listed_job_ids.add(row_job_id)
             try:
                 offer, list_item, category_ids = _offer_and_item_from_row(row, cfg)
             except (_RowError, JobcanValidationError) as exc:
-                job_id = row[_C_JOB_ID].strip() if row else ""
-                result.errors.append({"job_id": job_id, "error": f"{type(exc).__name__}: {exc}"})
+                result.errors.append(
+                    {"job_id": row_job_id, "error": f"{type(exc).__name__}: {exc}"}
+                )
                 _logger.error("csv_ingest: row failed, skipping", extra={"error": str(exc)})
                 continue
 
