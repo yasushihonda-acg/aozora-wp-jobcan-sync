@@ -38,6 +38,13 @@ from .snapshot import JobSnapshot
 #   責任者/サービス管理責任者/世話人/施設長/夜勤専従/サポート職)
 # - nurse: 看護職 + 訪問看護・リハビリ系
 # - office: 事務職 + 総合職(営業・管理・新卒)
+#
+# 2026-08-11: `selectors.yaml`の`thumbnail_categories`(求人カードの挿絵選択)
+# は本マッピングとは別物として6系統(care/visit/consultant/nurse/office/it)
+# へ分離した — ホームヘルパー等の訪問系・相談員等の相談支援系に専用イラスト
+# (illust-job-visit.png/illust-job-consultant.png)が既にあり、挿絵選択では
+# それらを使うのが自然だが、CSSカラー修飾子は4系統のまま(専用色が無いため)。
+# 挿絵側の変更にあわせて本マッピングを4→6系統へ追従させる必要はない。
 LABEL_TO_CATEGORY: dict[str, str] = {
     "介護職": "care",
     "相談員": "care",
