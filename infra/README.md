@@ -514,6 +514,138 @@ gcloud logging read \
   --format=json
 ```
 
+## 9. CSV 取得経路 (ATS 自動化、CSV移行フォローアップ、2026-08-11)
+
+`docs/handoff/GOAL.md` の CSV 移行検討を受け、HTML 解析 (`sync-run`、§8) と
+並行して ATS 管理画面 (`ats.jobcan.jp`) の CSV エクスポートを Playwright で
+自動取得する経路 (`sync-run-csv-live`、`sync/src/sync/jobcan_ats.py` +
+`csv_ingest.py`) を追加する。**HTML 経路は削除しない** — `--args` の
+書き換えだけでいつでも元に戻せることが、この節の設計全体の前提。
+
+事前に済んでいること: `jobcan-sync@aozora-cg.com` アカウントへの
+「求人の登録・編集：全て登録・編集可」権限付与 (`ats.jobcan.jp/configs/
+authority_configs`、2026-08-10 決裁者承認済み — CSV ダウンロードの一括操作に
+必要、閲覧専用のままだと行チェックボックスが描画されない)、
+`jobcan-sync-password` シークレット登録 (§1.6)、実機での `ats-download`
+2 回実行での再現性確認と `csv-diff` によるFirestore実データとの突合 (この
+CLI セッションで完了、382 件完全一致・主要フィールド差分ゼロ)。
+
+### 9.1 Artifact Registry — 別リポジトリを新設する理由
+
+`cleanup-policy.json` は **最新 2 バージョンのみ保持**。既存の `aozora-sync`
+リポジトリに Job 用イメージも push すると、Service 用 push と Job 用 push が
+互いのバージョンを退避させ合い、ロールバックに必要な旧イメージが消える
+リスクがある。Job 専用の別リポジトリを切る:
+
+```bash
+gcloud artifacts repositories create aozora-sync-job \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1 \
+  --repository-format=docker \
+  --description="aozora-sync Cloud Run Job images (CSV 取得経路、Playwright 同梱)"
+
+gcloud artifacts repositories set-cleanup-policies aozora-sync-job \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1 \
+  --policy=infra/cleanup-policy.json \
+  --dry-run
+
+gcloud artifacts repositories set-cleanup-policies aozora-sync-job \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1 \
+  --policy=infra/cleanup-policy.json \
+  --no-dry-run
+```
+
+### 9.2 Docker image build + push
+
+`sync/Dockerfile.job` は `sync/Dockerfile` (配信用 FastAPI イメージ) とは別物
+— Chromium を同梱するため `mcr.microsoft.com/playwright/python` ベース
+(~1.6-2GB、配信用イメージは Chromium 非同梱のまま変更なし)。build context は
+`sync/Dockerfile` と同じくリポジトリルート:
+
+```bash
+CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync \
+docker buildx build --platform linux/amd64 --push \
+  -f sync/Dockerfile.job \
+  -t asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync-job/aozora-sync-job:latest .
+```
+
+### 9.3 Cloud Run Job 更新
+
+既存の `aozora-sync-job` サービスアカウント・`jobcan-sync-password` の
+secretAccessor 権限は使い回す (§1.6, §8.1 で付与済み)。**メモリ/CPU を
+引き上げる** — Chromium のヘッドレス実行は既存の 512Mi では不足する:
+
+```bash
+gcloud run jobs update aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --image=asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync-job/aozora-sync-job:latest \
+  --command=python \
+  --args="-m,sync,sync-run-csv-live" \
+  --memory=2Gi \
+  --cpu=2 \
+  --set-env-vars=REVIEW_BYPASS=true
+```
+
+`aozora-sync-daily` / `aozora-sync-daily-trigger` の名前・6 時間ごとの
+Cloud Scheduler 設定 (§8.3) は変更しない — 同じ Job リソースのイメージと
+起動コマンドだけを差し替える形にすることで、ロールバックを 1 コマンドに
+留める。
+
+### 9.4 ロールバック
+
+HTML 経路(§8)へ即座に戻す — 削除していないので `--image`/`--args` の
+書き換えだけで完結する:
+
+```bash
+gcloud run jobs update aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1 \
+  --image=asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync/aozora-sync:latest \
+  --command=python \
+  --args="-m,sync,sync-run" \
+  --memory=512Mi \
+  --cpu=1
+```
+
+### 9.5 手動検証コマンド (本番切替前、Cloud Run 実行前にローカルで実施済み)
+
+```bash
+# ダウンロードのみ(Firestore書き込みなし)、ファイルを目視確認
+cd sync && uv sync --extra ats && uv run playwright install chromium
+uv run python -m sync ats-download --out-dir /tmp/ats
+
+# Firestore実データとの差分確認(書き込みなし)
+uv run python -m sync csv-diff --csv-file /tmp/ats/page_1.csv --csv-file /tmp/ats/page_2.csv \
+  --csv-file /tmp/ats/page_3.csv --csv-file /tmp/ats/page_4.csv
+```
+
+### 9.6 動作確認 (§8.4 と同様)
+
+```bash
+gcloud scheduler jobs run aozora-sync-daily-trigger \
+  --project=aozora-wp-jobcan-sync \
+  --location=asia-northeast1
+
+gcloud run jobs executions list \
+  --job=aozora-sync-daily \
+  --project=aozora-wp-jobcan-sync \
+  --region=asia-northeast1
+
+gcloud logging read \
+  'resource.type="cloud_run_job" resource.labels.job_name="aozora-sync-daily"' \
+  --project=aozora-wp-jobcan-sync \
+  --limit=50 \
+  --format=json
+```
+
+完了条件: ログに `added=0 changed=382 unchanged=0 removed=0 newly_closed=0
+ats_errors=0 crawl_errors=0 written=True`(初回切替時は`content_hash`が
+HTML経路と異なるため全件changed扱い、想定内)。`/jobs/` が382件表示、
+詳細ページの抜き取り確認、Firestore上のドキュメントが`source="csv"`。
+
 ## B-8 初回ロールアウト順序 (この順を守る)
 
 Phase B のインフラは 2026-08-07 時点で何も存在しない状態から作る (§1 冒頭の

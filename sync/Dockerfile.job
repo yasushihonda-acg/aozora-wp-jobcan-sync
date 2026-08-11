@@ -1,0 +1,84 @@
+# Cloud Run Job image for the CSV-migration follow-up (2026-08-11) —
+# `python -m sync sync-run-csv` / `ats-download`. Separate from `sync/Dockerfile`
+# (the FastAPI request-serving image) on purpose: a request-path container has
+# no business shipping a ~180MB Chromium browser, and `sync/Dockerfile`'s image
+# stays exactly as small as it was before this migration.
+#
+# Base is the official Playwright Python image rather than `python:3.12-slim` +
+# `playwright install --with-deps chromium`: browser + its ~100-package OS
+# dependency set are version-pinned together upstream, so there is no apt-layer
+# to maintain as Debian releases drift. It also ships a non-root `pwuser`,
+# matching the security posture `sync/Dockerfile` already has with its own
+# non-root `app` user.
+#
+# Build context is the REPO ROOT, same reasoning as `sync/Dockerfile` (its own
+# header explains why) — even though this image does NOT copy `mockup/assets`
+# (the Job never serves static files), keeping the same build-context
+# convention avoids a second `.dockerignore`/context to maintain.
+#   docker buildx build --platform linux/amd64 --push -f sync/Dockerfile.job \
+#     -t asia-northeast1-docker.pkg.dev/aozora-wp-jobcan-sync/aozora-sync-job/aozora-sync-job:latest .
+
+# ─────────────────────────────── Build stage ───────────────────────────────
+
+# MUST match the runtime stage's base image exactly (not just "some Python
+# 3.12"), and CANNOT be `python:3.12-slim` the way `sync/Dockerfile`'s builder
+# is: `uv sync` bakes the venv's `site-packages` path and compiled bytecode
+# against this stage's specific Python build, and copying that venv onto a
+# *different* base image's Python at runtime breaks resolution silently at
+# import time (confirmed the hard way — the first real deploy of this
+# Dockerfile crashed on `ModuleNotFoundError: No module named 'typer'` despite
+# a clean, successful build; both stages were "Python 3.12" but from
+# different base images, 2026-08-11).
+FROM mcr.microsoft.com/playwright/python:v1.62.0-noble AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:0.5.1 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+
+COPY sync/pyproject.toml sync/uv.lock ./
+
+# `--extra ats` is the one difference from `sync/Dockerfile`'s build stage —
+# pulls in `playwright` (see `pyproject.toml`'s `[project.optional-dependencies]`).
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev --extra ats
+
+COPY sync/src/ src/
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra ats
+
+# ──────────────────────────────── Runtime stage ────────────────────────────
+
+# MUST equal the builder stage's tag (see that stage's comment) AND
+# `pyproject.toml`'s pinned `playwright==` version exactly — the pip package
+# and the base image's own bundled browser binary must be the exact same
+# release, not just "new enough". Playwright refuses to launch otherwise
+# (`playwright.sync_api._connection`'s own version-mismatch check, confirmed
+# against the second real deploy attempt: pip resolved `playwright==1.62.0`
+# against a `>=1.49.0` floor while this base image still shipped 1.49.0's
+# browser, 2026-08-11). Bump this tag and `pyproject.toml` together, never
+# one without the other.
+FROM mcr.microsoft.com/playwright/python:v1.62.0-noble AS runtime
+
+WORKDIR /app
+
+# The base image already provides a non-root `pwuser` with Chromium's sandbox
+# permissions correctly set up — reusing it (rather than `sync/Dockerfile`'s
+# own `app` user) avoids re-deriving those permissions from scratch.
+COPY --from=builder --chown=pwuser:pwuser /app/.venv /app/.venv
+COPY --from=builder --chown=pwuser:pwuser /app/src /app/src
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app/src" \
+    PYTHONUNBUFFERED=1
+
+USER pwuser
+
+# `sync-run-csv-live` is the download+ingest combined entry point — a Cloud
+# Run Job execution has no durable disk between separate commands, so the
+# browser-driven download and the Firestore write must happen in one process.
+CMD ["python", "-m", "sync", "sync-run-csv-live"]
