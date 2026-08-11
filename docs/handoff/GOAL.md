@@ -1,5 +1,5 @@
 ---
-updated: 2026-08-10
+updated: 2026-08-11
 ---
 
 ## 現在のミッション
@@ -202,9 +202,25 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [ ] ⑤ スタッフインタビュー再考 — 2026-07-14廃止指示の理由(実写とイラストの不整合)をコンサル提案(イニシャル+AI生成画像)が解消しうるため再検討の価値ありとdecision-makerに提示済み、再判断待ち
 
 ## 🔄 中断点（in-flight）
-- **CSVデータ取得方式への移行検討(2026-08-10開始、本セッションで③まで完了)**: 決裁者から「求人カテゴリの粒度不一致」指摘を起点に、HTML解析方式の限界(反映ラグ・新カテゴリ取りこぼし・解析誤り・募集終了判定の間接推測)への懸念が拡大し、ジョブカン管理画面のCSV出力を自動取得する方式への切り替えを検討。設計はほぼ固まり、Playwright PoCで実現可能性を実証済み(本田氏がログイン・実行ボタンを担当、AIはナビゲーションのみ担当する安全な役割分担で実施。求人カテゴリ・給与等CSV列の構造検証、施設コード→名称の対応表確立(拠点一覧`/configs/branches`から27拠点分取得、スクラッチパッドに`facility_codes.py`として保存済み・未コミット)まで完了)。ブロッカーだった招待メール未着問題は、Googleグループ側の「投稿を許可するユーザー」設定修正だけでは解消せず、`https://id.jobcan.jp/users/invitation/new?lang=ja`からの招待メール再送で解決(2026-08-10)。続けて③Secret Managerへ認証情報登録が完了(PR #160): `jobcan-sync-password`シークレット作成+`aozora-sync-job` SAへの読み取り権限付与+パスワード本体登録まで完了(gcloud CLIはSSO/2段階認証アカウントの再認証チャレンジに対応できずコンソール経由に切替、詳細`infra/README.md`§1.6)。**次の一手**: ①jobcan-sync@aozora-cg.comでのログイン確認 ②同アカウントでの求人一覧CSV取得手順の再現確認(閲覧限定権限でも動作するか)は本セッション内で明示確認したログがない(decision-makerが③に直接進んだため完了している可能性が高いが未確認) — 次セッション冒頭で①②の状態を確認してから④Playwright自動化のコード実装(CLI化)へ進む。自動化の利用規約についてジョブカンへ照会する案は「自社の正規アカウントでの自動操作は通常運用の範囲」との判断で不要と結論済み(照会不要)
 - Secret Manager (`ops-webhook-url` = Google Chat webhook) は未設定 — `notify_ops()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。組織の運用チャンネルはSlackではなくGoogle Chatのため、2026-08-09に通知実装をGoogle Chat webhook前提へ移行済み(`notify_slack`→`notify_ops`、secret名`slack-webhook-url`→`ops-webhook-url`、Slack絵文字記法→Unicode絵文字)。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
 - ~~`mockup/index.html`の「訪問介護員(ヘルパー)」「ケアマネジャー」カードの`job_type`クエリ導線切れ~~ → **2026-08-09 PR #152で解消済み**。GitHub Pages(Phase A)側の`jobs.html`にjob_type-aware JSリダイレクトを追加したため、`map-search.js`が実行される前にCloud Run側の正しいフィルタ済みURL(`category_id=18986`/`18985`)へ自動遷移するようになった(実機Playwright確認済み)
+
+## 完了の定義 (ジョブカンCSV自動取得への移行) — 2026-08-11 実装完了・本番切替完了・PR #162
+
+決裁者指摘「求人カテゴリの粒度不一致」を起点にしたHTML解析方式の限界(反映ラグ・新カテゴリ取りこぼし・解析誤り・募集終了判定の間接推測)への懸念を解消するため、ジョブカン管理画面(`ats.jobcan.jp`)のCSVエクスポートを`jobcan-sync@aozora-cg.com`アカウントでPlaywright自動取得する経路を新設し、HTML解析経路と並行稼働可能な形で実装、実データ検証のうえ本番切替した。
+
+- [x] `facility_codes.py`(拠点コード→名称・住所30エントリ)を正式コミット、`facility_geo.FACILITY_COORDS`との整合性テスト追加(既知の3例外`b013`/`b022`/`b023`)
+- [x] `csv_ingest.py`: CSV→`CrawlResult`の純粋変換層。UTF-8版CSV(`output_file_utf8`)を41列ヘッダー検証つきで解析、HTML経路の`parser.py`/`detail_sections.py`ロジック(`_jobcan_text`/`canonical_detail_url`/`resolve_display_thumbnail`)を再利用しHTML経路との出力パリティを実データ(job_id 2267337, 1777023)で実証。「休暇・休日」(CSV実列名、HTML経路の「休日・休暇」と逆順)の読み替え、社内専用列(採用担当者・評価設問・社内メモ等)の構造的除外(列インデックス定数のみ参照)を実装
+- [x] `orchestrator.run_sync`を`run_sync_from_crawl`として抽出、`source: Literal["html_parse","csv","api"]`を`JobSnapshot`まで配線
+- [x] `jobcan_ats.py`: Playwright自動化。一括アクションのプルダウンに「求人削除」等破壊的操作が同居するUIのため、ホワイトリスト+ラベル接頭辞+禁止語+実行直前3回のアサーションからなる4層安全ガード(`assert_safe_bulk_action`)を実装。実機で確認した16選択肢全件を分類するテスト(`test_jobcan_ats_safety.py`)で担保
+- [x] `sync-run-csv-live`(Cloud Run Job本体)/`sync-run-csv`/`csv-diff`/`ats-download`の4CLIコマンドを追加、Playwright依存はコマンド関数内ローカルimportに限定し配信用イメージからは分離
+- [x] `Dockerfile.job`新設(`mcr.microsoft.com/playwright/python:v1.62.0-noble`、builder/runtime両ステージ統一)、Artifact Registry別リポジトリ`aozora-sync-job`を新設、`playwright==1.62.0`に完全ピン留め
+- [x] 実機検証で3件の重大バグを発見・修正: ①ATS OAuthハンドシェイク未経由でのセッション未確立 ②リロード後の既フィルタ済み状態を「未フィルタ」と誤判定する安全ガード誤発火 ③ページネーション`get_by_text`のstrict mode違反(2箇所のページネーションUIに同時マッチ)。2回連続実行で382件完全一致を確認
+- [x] `csv-diff`でFirestore実データとの差分を確認: job_id集合382=382完全一致、address/label/location/title/apply_url/source_url/page_title不一致0件、当初懸念していた`category_ids`(クロス掲載)差分もゼロで決裁者への追加確認は不要と判明
+- [x] `codex review --base main -c model_reasoning_effort=high`実施、P1(CSV行変換失敗時に`listed_job_ids`へ未記録のまま誤クローズしうるリスク)・P2(チェックボックスポーリングがヘッダー自身を含めてカウントする部分エクスポートバグ)を検出、同PR内で修正し本番Cloud Run Jobへ再デプロイ・再実行確認済み
+- [x] 本番切替完了: Cloud Run Job `aozora-sync-daily`を`sync-run-csv-live`経路へ更新、実行結果`added=0 changed=0 unchanged=382 written=True`(切替直後の1回はcontent_hash差分により全382件changed、以降は安定)。全532テストPASS、ruff/pyright clean
+
+🎯 **完了**。以後、求人データはHTML解析ではなくジョブカン管理画面のCSVエクスポートを唯一のソースとして6時間ごとに同期される。HTML解析経路(`sync-run`)は`--args`切替のみでロールバック可能な状態のまま保持。
 
 ## セッション履歴: 2026-08-10 求人カード画像マッピング修正(PR #159) + CSV移行 招待メール解決・Secret Manager登録(PR #160)
 
