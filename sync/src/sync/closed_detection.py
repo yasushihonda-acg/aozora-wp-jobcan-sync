@@ -41,6 +41,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Literal
 
 from .diff import DiffResult
 from .models import JobListItem
@@ -87,6 +88,7 @@ def apply_closed_detection(
     skip_absence_bookkeeping: bool = False,
     list_items: dict[str, JobListItem] | None = None,
     category_ids: dict[str, list[str]] | None = None,
+    source: Literal["html_parse", "csv", "api"] = "html_parse",
 ) -> ClosedDetectionResult:
     """Fold this crawl's diff into the next `job_cache` snapshot set.
 
@@ -115,6 +117,11 @@ def apply_closed_detection(
     indistinguishable, so nothing should be counted toward closure (no
     advance) but also nothing should be assumed confirmed-present (no reset)
     until a run with a complete picture settles it either way.
+
+    `source` (CSV-migration follow-up, 2026-08-11) is threaded through to
+    every freshly-built snapshot's `JobSnapshot.source` unchanged — this
+    function has no opinion on which pipeline produced `diff`, it just labels
+    the output the same way the caller labelled the input.
 
     `list_items`/`category_ids` (B-8: `CrawlResult.list_items`/`category_ids`)
     are threaded through to every freshly-built snapshot so `app.py` can serve
@@ -152,6 +159,7 @@ def apply_closed_detection(
             now=now,
             list_item=list_items.get(offer.job_id),
             category_ids=this_run_category_ids,
+            source=source,
         )
 
     for previous in diff.unfetched:

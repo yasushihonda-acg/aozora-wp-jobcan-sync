@@ -8,6 +8,7 @@ import pytest
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "jobcan_responses"
+CSV_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "jobcan_csv"
 SAMPLE_JOB_ID = "1777023"
 SAMPLE_SOURCE_URL = (
     f"https://recruit.jobcan.jp/aozora/job_offers/{SAMPLE_JOB_ID}"

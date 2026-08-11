@@ -6,7 +6,7 @@ Jobcan category_id → 職種名 table (job-type-filter-granularity follow-up,
 from __future__ import annotations
 
 from sync.crawler import KNOWN_CATEGORY_IDS
-from sync.job_types import JOB_TYPE_NAMES
+from sync.job_types import JOB_TYPE_IDS_BY_NAME, JOB_TYPE_NAMES
 from sync.list_sections import LABEL_TO_CATEGORY
 
 
@@ -20,6 +20,19 @@ def test_job_type_names_ids_are_unique() -> None:
     # would still leave the dict at 17 keys if the duplicate replaced a
     # distinct id — the len() check above wouldn't catch that case).
     assert len(set(JOB_TYPE_NAMES)) == len(JOB_TYPE_NAMES)
+
+
+def test_job_type_names_values_are_unique() -> None:
+    """`JOB_TYPE_IDS_BY_NAME` (the CSV-ingestion reverse lookup) is only safe
+    if no two category_ids share a display name — a collision would make the
+    reverse lookup silently pick whichever id happened to be inserted last."""
+    assert len(set(JOB_TYPE_NAMES.values())) == len(JOB_TYPE_NAMES)
+
+
+def test_job_type_ids_by_name_is_the_exact_reverse_of_job_type_names() -> None:
+    assert len(JOB_TYPE_IDS_BY_NAME) == len(JOB_TYPE_NAMES)
+    for category_id, name in JOB_TYPE_NAMES.items():
+        assert JOB_TYPE_IDS_BY_NAME[name] == category_id
 
 
 def test_known_category_ids_derives_from_job_type_names() -> None:

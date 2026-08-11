@@ -19,6 +19,24 @@ dependencies = [
     "google-cloud-secret-manager>=2.20.0",
 ]
 
+[project.optional-dependencies]
+# CSV-migration follow-up (2026-08-11): only `jobcan_ats.py` imports
+# playwright, and only inside its command bodies (`cli.py`'s `ats-download`),
+# never at module level — the request-serving image (`sync/Dockerfile`) and
+# every other environment (tests, `sync-run`, `sync-run-csv --csv-file`)
+# never install this extra. See `sync/Dockerfile.job` for the Job-only image
+# that does.
+#
+# Pinned EXACT, not `>=`: `sync/Dockerfile.job`'s base image
+# (`mcr.microsoft.com/playwright/python:vX.Y.Z-noble`) bundles one specific
+# Chromium build per Playwright release, and the pip package refuses to
+# launch a browser when its own version doesn't match the installed browser
+# exactly (confirmed the hard way — a `>=1.49.0` floor let pip resolve a
+# newer 1.62.0 than the 1.49.0-pinned base image shipped, 2026-08-11 second
+# real deploy attempt). Bump this version and Dockerfile.job's tag together,
+# never one without the other.
+ats = ["playwright==1.62.0"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
