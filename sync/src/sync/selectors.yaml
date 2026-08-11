@@ -99,6 +99,18 @@ list:
   # illustration; `list_sections.LABEL_TO_CATEGORY`'s 4-colour grouping is
   # intentionally left as-is (colour ≠ image, do not re-merge these).
   # `list_sections.py` module docstring also documents this split.
+  #
+  # 2026-08-11 (2nd): `image` (single path) -> `images` (a pool). Every
+  # category already had multiple generated illustrations sitting unused
+  # (decision-maker report: every card in a category showed the literal
+  # same image). Which pool member a given job_id resolves to is
+  # `sha256(job_id) % len(images)` (`parser._pick_variant`) — stable
+  # forever for that job_id, independent of every other job in the sync
+  # run. Adding/removing/reordering entries in one category's `images`
+  # list reshuffles ONLY that category's assignments; that is the one and
+  # only intended trigger, and it happens on a deliberate config edit, not
+  # as a side effect of a normal 6-hourly sync. `default_image` stays a
+  # single image on purpose — see `ThumbnailCategoriesConfig` docstring.
   thumbnail_categories:
     enabled: true
     categories:
@@ -109,36 +121,48 @@ list:
           - "施設長・管理者候補"
           - "サポート職（清掃・洗濯・調理・送迎）"
           - "世話人"
-        image: "assets/img/illust-job-care.png"
+        images:
+          - "assets/img/illust-job-care.png"
+          - "assets/img/illust-job-care-2.png"
+          - "assets/img/illust-job-care-3.png"
       visit:
         synonyms:
           - "ホームヘルパー"
           - "サービス提供責任者"
-        image: "assets/img/illust-job-visit.png"
+        images:
+          - "assets/img/illust-job-visit.png"
+          - "assets/img/illust-job-visit-2.png"
+          - "assets/img/illust-job-visit-3.png"
       consultant:
         synonyms:
           - "相談員"
           - "ケアマネジャー・計画作成担当者"
           - "サービス管理責任者"
-        image: "assets/img/illust-job-consultant.png"
+        images:
+          - "assets/img/illust-job-consultant.png"
+          - "assets/img/illust-job-consultant-2.png"
       nurse:
         synonyms:
           - "看護職"
           - "看護師"
           - "訪問看護"
           - "訪問リハビリ"
-        image: "assets/img/illust-job-nurse.png"
+        images:
+          - "assets/img/illust-job-nurse.png"
       office:
         synonyms:
           - "事務職"
           - "総合職（営業・管理職）"
           - "新卒・既卒総合職"
-        image: "assets/img/illust-job-office.png"
+        images:
+          - "assets/img/illust-job-office.png"
+          - "assets/img/illust-job-office-2.png"
       it:
         synonyms:
           - "ITエンジニア職"
           - "開発エンジニア"
-        image: "assets/img/illust-job-it.png"
+        images:
+          - "assets/img/illust-job-it.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:

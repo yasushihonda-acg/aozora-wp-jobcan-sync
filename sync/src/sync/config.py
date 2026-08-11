@@ -90,10 +90,34 @@ class ThumbnailCategoryEntry(BaseModel):
     `synonyms` lists every Jobcan job-type label that maps to this category.
     Matching is exact-string (no fuzzy match — same rule as `RequiredTableField`):
     "ITエンジニア職" matches, "ITエンジニア" does NOT.
+
+    `images` is a *pool*, not a single override (2026-08-11, variant
+    selection). Which pool member a given job_id resolves to is decided by
+    `parser._pick_variant` (stable per job_id, order in this list matters —
+    see `ThumbnailCategoriesConfig` docstring). A category with only one
+    illustration still uses a one-element list.
     """
 
     synonyms: list[str] = Field(..., min_length=1)
-    image: str = Field(..., min_length=1, description="In-house override image path")
+    images: list[str] = Field(
+        ..., min_length=1, description="In-house override image pool (one path per element)"
+    )
+
+    @field_validator("images")
+    @classmethod
+    def _images_must_be_distinct_non_blank(cls, value: list[str]) -> list[str]:
+        # `min_length=1` on the list constrains element COUNT only, not
+        # per-element content — a blank string is a valid list member as far
+        # as Pydantic is concerned. Both checks below catch operator
+        # copy-paste mistakes while editing selectors.yaml.
+        for path in value:
+            if not path.strip():
+                raise ValueError("images entry is blank; every pool member needs a real path")
+        if len(set(value)) != len(value):
+            raise ValueError(
+                f"images pool {value!r} lists the same path twice; remove the duplicate."
+            )
+        return value
 
 
 class ThumbnailCategoriesConfig(BaseModel):
@@ -106,25 +130,32 @@ class ThumbnailCategoriesConfig(BaseModel):
     `default_image` is the fallback shown when none of the card's labels
     matches any synonym — the parser also emits a structured warning when it
     falls through, so the operator can spot Jobcan introducing a new job type
-    (e.g. "ケアマネージャー") that needs adding to `categories`.
+    (e.g. "ケアマネージャー") that needs adding to `categories`. Deliberately
+    stays a single image (not a pool, unlike `ThumbnailCategoryEntry.images`):
+    this path is a "you forgot a synonym" signal, and diversifying it would
+    camouflage exactly the operator-actionable cue that a whole page of
+    identical unknown-label cards is meant to be.
 
-    The reverse lookup `synonym_to_image` is materialised once at validation
-    time so the parser does not rebuild it per card. A `@model_validator`
-    also rejects configurations where the same synonym is shared by two
-    categories (silent last-writer-wins is a footgun — code-review medium
-    #3 / Phase 2A.1c).
+    The reverse lookup `synonym_to_images` is materialised once at validation
+    time so the parser does not rebuild it per card — each synonym maps to
+    its category's full image *pool* (a tuple, so callers can't mutate the
+    shared list); which pool member wins for a given job is decided later by
+    `parser._pick_variant`, not here. A `@model_validator` also rejects
+    configurations where the same synonym is shared by two categories
+    (silent last-writer-wins is a footgun — code-review medium #3 / Phase
+    2A.1c).
     """
 
     enabled: bool = True
     categories: dict[str, ThumbnailCategoryEntry] = Field(..., min_length=1)
     default_image: str = Field(..., min_length=1)
-    # Populated by `_build_synonym_to_image` below; never set from YAML.
+    # Populated by `_build_synonym_to_images` below; never set from YAML.
     # `exclude=True` keeps it out of `model_dump()` snapshots.
-    synonym_to_image: dict[str, str] = Field(default_factory=dict, exclude=True)
+    synonym_to_images: dict[str, tuple[str, ...]] = Field(default_factory=dict, exclude=True)
 
     @model_validator(mode="after")
-    def _build_synonym_to_image(self) -> ThumbnailCategoriesConfig:
-        reverse: dict[str, str] = {}
+    def _build_synonym_to_images(self) -> ThumbnailCategoriesConfig:
+        reverse: dict[str, tuple[str, ...]] = {}
         owners: dict[str, str] = {}
         for category_name, entry in self.categories.items():
             seen_in_this_category: set[str] = set()
@@ -144,14 +175,14 @@ class ThumbnailCategoriesConfig(BaseModel):
                         "A label can map to at most one category."
                     )
                 owners[syn] = category_name
-                reverse[syn] = entry.image
-        # `synonym_to_image` is a derived (non-input) field. Pydantic's
+                reverse[syn] = tuple(entry.images)
+        # `synonym_to_images` is a derived (non-input) field. Pydantic's
         # `model_validator(mode='after')` runs after __init__, so a plain
         # attribute assignment works on a non-frozen model (this class is
         # not frozen; its parent `SelectorConfig.frozen=True` does not propagate
         # to child models). We use `object.__setattr__` defensively in case the
         # frozen policy is ever flipped on later — it would still write through.
-        object.__setattr__(self, "synonym_to_image", reverse)
+        object.__setattr__(self, "synonym_to_images", reverse)
         return self
 
 
