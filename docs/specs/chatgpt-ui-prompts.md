@@ -350,6 +350,20 @@ SCENE #14 と同一プロンプトから生成された歩行介助シーン。�
 
 **方向性メモ (次回着手時の起点)**: 人物なし・環境イラストである点は SCENE #13 (ヒーロー背景) に近い。「数字で見る、あおぞら」は年間休日・新規入職者数・拠点数・平均勤続年数という定量データセクションのため、単なる町並みではなく、統計/成長を示唆する構図 (例: 複数の建物・拠点を俯瞰するスカイライン、または SCENE #13 と対になる構図) を SCENE #13 の CRITICAL 制約 (フラットセル塗り・都市スカイラインシルエット必須) を踏襲して検討する。
 
+### 18. `illust-job-visiting-nurse.png` — 求人カード 訪問看護 (2026-08-11 新規追加、決裁者フィードバック対応)
+
+**経緯**: トップページ「募集中の職種」に入口のない職種が11件あるとの決裁者指摘 (2026-08-11)、うち訪問看護 (category_id=18987、15件) が名指しで指摘された。既存 SCENE #3 `illust-job-nurse.png` は JOB CATEGORY 記述上「訪問看護師」だが、実際は「看護職」(category_id=18983、施設内看護含む) カードで使用中のため、本 SCENE は視覚的に明確に区別できる別シーンを指定する。
+
+```
+JOB CATEGORY: Visiting nurse making a home visit (訪問看護) — traveling to a patient's own home to provide nursing care, distinct from facility/clinic-based nursing.
+
+ACCESSORY RULE: NO earring ideally; tiny dot stud maximum. NO hoop, NO drop, NO dangle. Simple medical-appropriate watch OK.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Environmental scene showing a specific in-home nursing action that reads as clearly different from [illust-job-nurse.png] (e.g. blood pressure check with a portable device at the patient's dining table, medication management guidance, wound dressing change — you choose what best fits and looks visibly distinct).
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
