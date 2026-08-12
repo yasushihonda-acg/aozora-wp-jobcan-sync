@@ -384,11 +384,13 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific nigh
 Please generate one illustration.
 ```
 
-### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加、**1回目生成はACCESSORY RULE違反で不採用・再挑戦中**)
+### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加 → 1回目生成はACCESSORY RULE違反で不採用 → **2回目生成を同日採用済み**)
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数2位 (38件) の施設長・管理者候補を次の対象に選定。マネジメント職として、既存の相談員/ケアマネジャー (1対1の相談シーン) や事務スタッフ (デスクワーク) と明確に区別できる「統率・マネジメント」の構図を指定する。
 
-**1回目生成の不採用理由 (2026-08-12)**: 本田様がChatGPT UIで3枚生成、10項目採点では全てPassと判定し一度トップページに反映したが、`codex review`(PR #174)が3枚全てに耳元の垂れ下がるピアス(ACCESSORY RULE違反)を検出。Claudeの目視採点で見落としていた実害バグ(サムネイル表示のみで細部を確認していなかった)。PR #174はクローズ、以下のACCESSORY RULEを強化した上で再生成を依頼する。
+**1回目生成の不採用理由 (2026-08-12)**: 本田様がChatGPT UIで3枚生成、10項目採点では全てPassと判定し一度トップページに反映したが、`codex review`(PR #174)が3枚全てに耳元の垂れ下がるピアス(ACCESSORY RULE違反)を検出。Claudeの目視採点で見落としていた実害バグ(サムネイル表示のみで細部を確認していなかった)。PR #174はクローズ、以下のACCESSORY RULEを強化した上で再生成を依頼した。
+
+**採用結果 (2026-08-12、2回目生成)**: 本田様が新規ChatGPT UI会話で1枚生成、耳がほぼ髪に隠れピアス描画なしを拡大確認のうえ10項目Pass。施設ロビーでタブレットと書類を確認するシーンを `illust-job-facility-manager.png` としてトップページ「施設長・管理者候補」カードに採用(バリエーションなし、1枚のみで進める決裁者判断)。OUTFIT VARIATION指定のテーラードジャケットは今回も反映されず黒ポロシャツ単体だが、コアidentityは維持のため許容。
 
 ```
 JOB CATEGORY: Facility manager / administrator candidate (施設長・管理者候補) — overseeing daily facility operations, leading and supporting staff, coordinating with families and external partners at an eldercare facility.
