@@ -133,6 +133,12 @@ list:
   # composition as `illust-job-visiting-nurse.png` (in-home blood-pressure
   # check), so showing both in one listing reads as "same picture, day vs
   # night" rather than two distinct scenes.
+  #
+  # 2026-08-13: 9 -> 10 buckets, same MOVE pattern as above. `総合職（営業・
+  # 管理職）` split out of `office` into its own `general` bucket with 2
+  # dedicated illustrations (a presentation scene + a facility-walkthrough
+  # scene). `office`'s pool (`illust-job-office.png`/`-2.png`) is otherwise
+  # untouched, so 事務職/新卒・既卒総合職 assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
@@ -171,7 +177,6 @@ list:
       office:
         synonyms:
           - "事務職"
-          - "総合職（営業・管理職）"
           - "新卒・既卒総合職"
         images:
           - "assets/img/illust-job-office.png"
@@ -200,6 +205,12 @@ list:
           - "施設長・管理者候補"
         images:
           - "assets/img/illust-job-facility-manager.png"
+      general:
+        synonyms:
+          - "総合職（営業・管理職）"
+        images:
+          - "assets/img/illust-job-general.png"
+          - "assets/img/illust-job-general-2.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
