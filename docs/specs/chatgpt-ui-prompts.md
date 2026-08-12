@@ -404,6 +404,22 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A scene that re
 Please generate one illustration.
 ```
 
+### 21. `illust-job-consultation.png` — 求人カード 相談員 (2026-08-12 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数3位 (36件) の相談員を次の対象に選定。既存 `illust-job-consultant.png` (SCENE #2) は「相談員 / ケアマネジャー」向けに作られたが、実際は「ケアマネジャー」カード (ケアプラン作成の複数人ミーティング) で使用中のため、本 SCENE は相談員固有の業務 (入所前の窓口相談・施設見学案内など、ケアプラン策定より前段の一次窓口) を明確に描写し視覚的に区別する。
+
+```
+JOB CATEGORY: Resident/family intake consultation staff (相談員) — the first point of contact for prospective residents and their families: facility tours, intake counseling, and ongoing life-support consultation at an eldercare facility. Distinct from ケアマネジャー (care-plan formulation with a multi-person team meeting).
+
+ACCESSORY RULE (CRITICAL — a previous generation for a different role violated this and required a redo): NO earring is strongly preferred. If an earring appears at all, it MUST be an extremely small flat stud sitting flush against the earlobe with ZERO visible drop, chain, or dangling element of any length (even a few millimeters of hanging chain/thread is a violation). NO hoop, NO drop, NO dangle, NO chain/threader earring under any circumstance. Simple watch OK.
+
+OUTFIT VARIATION: keep the black polo shirt as base; a subtle charcoal or muted-navy cardigan open over it is optional.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A one-on-one or small-scale intake/reception scene — e.g. greeting a prospective family at a reception desk with a facility brochure, guiding a family on a tour of the facility, a calm explanatory conversation at a low table with tea served. Should look visibly distinct from [illust-job-consultant.png] (multi-person care-plan meeting) and read clearly as a welcoming first-contact/reception moment, not a planning meeting.
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
