@@ -366,6 +366,22 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Environmental s
 Please generate one illustration.
 ```
 
+### 19. `illust-job-night-shift.png` — 求人カード 夜勤専従（介護・看護） (2026-08-12 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数最多 (41件) の夜勤専従を次の対象に選定。既存の care/nurse 系カードは全て昼間の青空シーンのため、本 SCENE は「夜」を明確に打ち出し視覚的に区別する。PREAMBLE の「澄んだ青空」制約から意図的に逸脱する初めてのシーンであるため、下記 NIGHT SETTING 指定を通常の PREAMBLE 直後に必ず貼ること。
+
+```
+JOB CATEGORY: Night-shift care and nursing staff (夜勤専従、介護・看護) — overnight duty at an eldercare facility, covering both nursing and care work during night hours (e.g. rounds, monitoring, care recording, resident check-ins).
+
+ACCESSORY RULE: NO earring ideally; tiny dot stud maximum. NO hoop, NO drop, NO dangle. Short natural nails.
+
+NIGHT SETTING (IMPORTANT DEPARTURE FROM DAYTIME SCENES): unlike the other cards, this is a NIGHT scene. Outside the window: a dark navy night sky (deep cobalt blue, not black), a few soft city lights/window lights in the skyline, optionally a crescent moon. Inside: warm, calm interior lighting (a desk lamp or corridor nightlight) against the cool blue night outside — keep the crisp flat-cel, thin-line style and cobalt-blue/white geometric composition, just shifted to a night palette. Calm and composed, NOT eerie or dramatic.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific night-duty action (e.g. checking a resident quietly with a small handheld light, writing an overnight care record at a softly-lit desk, a calm nighttime corridor check).
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
