@@ -384,9 +384,11 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific nigh
 Please generate one illustration.
 ```
 
-### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加)
+### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加 → **同日採用済み**)
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数2位 (38件) の施設長・管理者候補を次の対象に選定。マネジメント職として、既存の相談員/ケアマネジャー (1対1の相談シーン) や事務スタッフ (デスクワーク) と明確に区別できる「統率・マネジメント」の構図を指定する。
+
+**採用結果 (2026-08-12)**: 本田様が ChatGPT UI で3枚生成、全て10項目 Pass (ただし OUTFIT VARIATION 指定のテーラードジャケットは3枚とも反映されず黒ポロシャツ単体、黒ポロ+青ランヤード+ID badge のコア identity は維持のため許容判断)。会議室で経営指標ボードを背景にタブレット確認するシーンをメイン (`illust-job-facility-manager.png`) としてトップページ「施設長・管理者候補」カードに採用 (他カードと構図が重複せず「施設運営を統括する」ニュアンスが最も明確なため選定)。残り2枚は `illust-job-facility-manager-2.png` (ロビーでの巡回確認) / `illust-job-facility-manager-3.png` (廊下を歩きながらの巡回) としてバリエーション保存 (現時点で表示スロットなし)。
 
 ```
 JOB CATEGORY: Facility manager / administrator candidate (施設長・管理者候補) — overseeing daily facility operations, leading and supporting staff, coordinating with families and external partners at an eldercare facility.
