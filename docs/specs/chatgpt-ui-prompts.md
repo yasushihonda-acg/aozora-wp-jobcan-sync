@@ -384,14 +384,16 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific nigh
 Please generate one illustration.
 ```
 
-### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加)
+### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加、**1回目生成はACCESSORY RULE違反で不採用・再挑戦中**)
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数2位 (38件) の施設長・管理者候補を次の対象に選定。マネジメント職として、既存の相談員/ケアマネジャー (1対1の相談シーン) や事務スタッフ (デスクワーク) と明確に区別できる「統率・マネジメント」の構図を指定する。
+
+**1回目生成の不採用理由 (2026-08-12)**: 本田様がChatGPT UIで3枚生成、10項目採点では全てPassと判定し一度トップページに反映したが、`codex review`(PR #174)が3枚全てに耳元の垂れ下がるピアス(ACCESSORY RULE違反)を検出。Claudeの目視採点で見落としていた実害バグ(サムネイル表示のみで細部を確認していなかった)。PR #174はクローズ、以下のACCESSORY RULEを強化した上で再生成を依頼する。
 
 ```
 JOB CATEGORY: Facility manager / administrator candidate (施設長・管理者候補) — overseeing daily facility operations, leading and supporting staff, coordinating with families and external partners at an eldercare facility.
 
-ACCESSORY RULE: Small subtle stud earring OK (close to earlobe, no dangle). No hoop, no drop. Simple watch OK.
+ACCESSORY RULE (CRITICAL — a previous generation attempt violated this): NO earring is strongly preferred for this role. If an earring appears at all, it MUST be an extremely small flat stud sitting flush against the earlobe with ZERO visible drop, chain, or dangling element of any length (even a few millimeters of hanging chain/thread is a violation). NO hoop, NO drop, NO dangle, NO chain/threader earring under any circumstance. Simple watch OK.
 
 OUTFIT VARIATION: a tailored jacket (charcoal, navy, or beige) worn open over the black polo shirt (2026-07-02 決裁者指示: 経営/管理シーンはテーラードジャケット重ね着可). Blue lanyard + ID badge kept visible.
 
