@@ -111,14 +111,34 @@ list:
   # only intended trigger, and it happens on a deliberate config edit, not
   # as a side effect of a normal 6-hourly sync. `default_image` stays a
   # single image on purpose — see `ThumbnailCategoriesConfig` docstring.
+  #
+  # 2026-08-12: 6 -> 9 buckets. Top page (`mockup/index.html`) got three
+  # dedicated illustration cards (訪問看護 / 夜勤専従（介護・看護） /
+  # 施設長・管理者候補) but the `/jobs/` listing kept showing the generic
+  # care/nurse scene for those labels — decision-maker report, 2026-08-11.
+  # Adding the new files straight into the `care`/`nurse` pools was
+  # rejected: `_resolve_display_thumbnail` resolves per-bucket, not
+  # per-label, so any addition to a shared pool reshuffles EVERY label in
+  # that bucket (介護職, 世話人, 看護職, ...), not just the intended one.
+  # Instead each of the three labels was MOVED (not copied) out of its old
+  # bucket into a new single-label bucket named after the label. The old
+  # buckets' `images` lists are byte-for-byte unchanged, so every other
+  # label's existing assignment is provably unchanged (pin: care category_id
+  # 18773 distribution before/after this change is identical).
+  # `facility-manager` ships with a 1-image pool (same situation as
+  # `nurse`/`it` before this change) — a 2nd/3rd variant is a follow-up
+  # (see docs/handoff/GOAL.md), not a blocker for shipping the correct
+  # illustration. `night-shift`'s pool intentionally omits the generated
+  # `illust-job-night-shift-3.png`: it is a night palette-swap of the SAME
+  # composition as `illust-job-visiting-nurse.png` (in-home blood-pressure
+  # check), so showing both in one listing reads as "same picture, day vs
+  # night" rather than two distinct scenes.
   thumbnail_categories:
     enabled: true
     categories:
       care:
         synonyms:
           - "介護職"
-          - "夜勤専従（介護・看護）"
-          - "施設長・管理者候補"
           - "サポート職（清掃・洗濯・調理・送迎）"
           - "世話人"
         images:
@@ -145,7 +165,6 @@ list:
         synonyms:
           - "看護職"
           - "看護師"
-          - "訪問看護"
           - "訪問リハビリ"
         images:
           - "assets/img/illust-job-nurse.png"
@@ -163,6 +182,24 @@ list:
           - "開発エンジニア"
         images:
           - "assets/img/illust-job-it.png"
+      visiting-nurse:
+        synonyms:
+          - "訪問看護"
+        images:
+          - "assets/img/illust-job-visiting-nurse.png"
+          - "assets/img/illust-job-visiting-nurse-2.png"
+          - "assets/img/illust-job-visiting-nurse-3.png"
+      night-shift:
+        synonyms:
+          - "夜勤専従（介護・看護）"
+        images:
+          - "assets/img/illust-job-night-shift.png"
+          - "assets/img/illust-job-night-shift-2.png"
+      facility-manager:
+        synonyms:
+          - "施設長・管理者候補"
+        images:
+          - "assets/img/illust-job-facility-manager.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:

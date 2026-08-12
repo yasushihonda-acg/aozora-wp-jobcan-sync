@@ -610,6 +610,14 @@ gcloud run jobs update aozora-sync-daily \
   --cpu=1
 ```
 
+**注意 (2026-08-12)**: HTML 経路 (`crawler.crawl_all`) はカード上のラベル並び順が保証されない
+(例: 夜勤専従の求人が `["介護職", "夜勤専従（介護・看護）", ...]` の順で来ることがある)。
+`selectors.yaml` の `thumbnail_categories` は「document 順で最初に synonym マッチしたバケット」
+を採用する (`parser._resolve_display_thumbnail`) ため、CSV 経路 (`csv_ingest.py` はカテゴリ列を
+`labels[0]` に固定配置) では起きない曖昧性がロールバック後に再発しうる — 夜勤専従・施設長・
+訪問看護の求人が意図した専用イラストではなく `care`/`nurse` の汎用イラストに割り当てられる
+可能性がある。ロールバック後は該当3 category_id (`18987`/`18988`/`18989`) の表示を実機確認すること。
+
 ### 9.5 手動検証コマンド (本番切替前、Cloud Run 実行前にローカルで実施済み)
 
 ```bash

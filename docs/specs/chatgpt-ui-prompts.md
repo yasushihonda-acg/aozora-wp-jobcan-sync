@@ -354,7 +354,7 @@ SCENE #14 と同一プロンプトから生成された歩行介助シーン。�
 
 **経緯**: トップページ「募集中の職種」に入口のない職種が11件あるとの決裁者指摘 (2026-08-11)、うち訪問看護 (category_id=18987、15件) が名指しで指摘された。既存 SCENE #3 `illust-job-nurse.png` は JOB CATEGORY 記述上「訪問看護師」だが、実際は「看護職」(category_id=18983、施設内看護含む) カードで使用中のため、本 SCENE は視覚的に明確に区別できる別シーンを指定する。
 
-**採用結果 (2026-08-12)**: 本田様が ChatGPT UI で3枚生成、全て10項目 Pass。メイン (血圧測定シーン) を `illust-job-visiting-nurse.png` としてトップページ「訪問看護」カードに採用、残り2枚は `illust-job-visiting-nurse-2.png` (服薬指導) / `illust-job-visiting-nurse-3.png` (聴診器チェック) としてバリエーション保存 (`illust-job-visit-2/3.png` と同様、現時点で表示スロットなし)。
+**採用結果 (2026-08-12)**: 本田様が ChatGPT UI で3枚生成、全て10項目 Pass。メイン (血圧測定シーン) を `illust-job-visiting-nurse.png` としてトップページ「訪問看護」カードに採用、残り2枚は `illust-job-visiting-nurse-2.png` (服薬指導) / `illust-job-visiting-nurse-3.png` (聴診器チェック) として保存。**2026-08-12 (2nd)**: 3枚とも `/jobs/` 求人一覧の `selectors.yaml` `thumbnail_categories.visiting-nurse` バケット (旧 `nurse` から「訪問看護」synonym を分離・移動) の画像プールとして採用、表示スロット確保済み。
 
 ```
 JOB CATEGORY: Visiting nurse making a home visit (訪問看護) — traveling to a patient's own home to provide nursing care, distinct from facility/clinic-based nursing.
@@ -370,7 +370,7 @@ Please generate one illustration.
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数最多 (41件) の夜勤専従を次の対象に選定。既存の care/nurse 系カードは全て昼間の青空シーンのため、本 SCENE は「夜」を明確に打ち出し視覚的に区別する。PREAMBLE の「澄んだ青空」制約から意図的に逸脱する初めてのシーンであるため、下記 NIGHT SETTING 指定を通常の PREAMBLE 直後に必ず貼ること。
 
-**採用結果 (2026-08-12)**: 本田様が ChatGPT UI で3枚生成、全て10項目 Pass。ベッドサイドでタブレット服薬確認を行うシーンをメイン (`illust-job-night-shift.png`) としてトップページ「夜勤専従（介護・看護）」カードに採用 (他カードとの構図重複が最も少なく、暖色照明×夜の対比が明瞭なため選定)。残り2枚は `illust-job-night-shift-2.png` (施設内廊下の歩行介助巡回) / `illust-job-night-shift-3.png` (夜間の在宅血圧測定) としてバリエーション保存 (現時点で表示スロットなし)。
+**採用結果 (2026-08-12)**: 本田様が ChatGPT UI で3枚生成、全て10項目 Pass。ベッドサイドでタブレット服薬確認を行うシーンをメイン (`illust-job-night-shift.png`) としてトップページ「夜勤専従（介護・看護）」カードに採用 (他カードとの構図重複が最も少なく、暖色照明×夜の対比が明瞭なため選定)。残り2枚は `illust-job-night-shift-2.png` (施設内廊下の歩行介助巡回) / `illust-job-night-shift-3.png` (夜間の在宅血圧測定) として保存。**2026-08-12 (2nd)**: `/jobs/` 求人一覧の `selectors.yaml` `thumbnail_categories.night-shift` バケット (旧 `care` から「夜勤専従（介護・看護）」synonym を分離・移動) には `illust-job-night-shift.png` / `-2.png` の2枚のみ採用。`-3.png` (夜間の在宅血圧測定) は `illust-job-visiting-nurse.png` (在宅の血圧測定シーン) と構図がほぼ同一で、一覧上で並ぶと「同じ絵の昼夜違い」に見えるため意図的に除外 (現時点で表示スロットなし、他シーンへの再利用可否は未検討)。
 
 ```
 JOB CATEGORY: Night-shift care and nursing staff (夜勤専従、介護・看護) — overnight duty at an eldercare facility, covering both nursing and care work during night hours (e.g. rounds, monitoring, care recording, resident check-ins).
@@ -390,7 +390,7 @@ Please generate one illustration.
 
 **1回目生成の不採用理由 (2026-08-12)**: 本田様がChatGPT UIで3枚生成、10項目採点では全てPassと判定し一度トップページに反映したが、`codex review`(PR #174)が3枚全てに耳元の垂れ下がるピアス(ACCESSORY RULE違反)を検出。Claudeの目視採点で見落としていた実害バグ(サムネイル表示のみで細部を確認していなかった)。PR #174はクローズ、以下のACCESSORY RULEを強化した上で再生成を依頼した。
 
-**採用結果 (2026-08-12、2回目生成)**: 本田様が新規ChatGPT UI会話で1枚生成、耳がほぼ髪に隠れピアス描画なしを拡大確認のうえ10項目Pass。施設ロビーでタブレットと書類を確認するシーンを `illust-job-facility-manager.png` としてトップページ「施設長・管理者候補」カードに採用(バリエーションなし、1枚のみで進める決裁者判断)。OUTFIT VARIATION指定のテーラードジャケットは今回も反映されず黒ポロシャツ単体だが、コアidentityは維持のため許容。
+**採用結果 (2026-08-12、2回目生成)**: 本田様が新規ChatGPT UI会話で1枚生成、耳がほぼ髪に隠れピアス描画なしを拡大確認のうえ10項目Pass。施設ロビーでタブレットと書類を確認するシーンを `illust-job-facility-manager.png` としてトップページ「施設長・管理者候補」カードに採用(バリエーションなし、1枚のみで進める決裁者判断)。OUTFIT VARIATION指定のテーラードジャケットは今回も反映されず黒ポロシャツ単体だが、コアidentityは維持のため許容。**2026-08-12 (2nd)**: `/jobs/` 求人一覧の `selectors.yaml` `thumbnail_categories.facility-manager` バケット (旧 `care` から「施設長・管理者候補」synonym を分離・移動) にも同ファイルを1枚プールのまま採用、本番38件のカードは全て同一画像になる。バリエーション2枚の生成は次タスクとして `docs/handoff/GOAL.md` に記録 (決裁者判断: 1枚で先行反映、追加生成依頼は後日)。
 
 ```
 JOB CATEGORY: Facility manager / administrator candidate (施設長・管理者候補) — overseeing daily facility operations, leading and supporting staff, coordinating with families and external partners at an eldercare facility.
