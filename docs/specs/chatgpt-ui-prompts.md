@@ -420,6 +420,22 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A one-on-one or
 Please generate one illustration.
 ```
 
+### 22. `illust-job-general.png` — 求人カード 総合職（営業・管理職） (2026-08-12 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、訪問看護・夜勤専従・施設長・管理者候補・相談員に続く5番目の対象として、テキストタグのみだった残り7職種の中で本番実測 (2026-08-12) 最多 (21件) の総合職（営業・管理職）を選定。既存 `illust-job-office.png` (事務スタッフ、社内デスクワーク) や `illust-job-facility-manager.png` (施設長、自施設内のマネジメント/リーダーシップ) とは異なり、本 SCENE は「営業」側の外向き業務 (提携施設・取引先との商談、資料プレゼン) を明確に描写し視覚的に区別する。
+
+```
+JOB CATEGORY: General-track sales and management staff (総合職・営業/管理職) — business development and external partnership work for an eldercare company: visiting partner facilities and organizations, presenting proposals, negotiating contracts. Distinct from 事務スタッフ (in-house desk work) and 施設長・管理者候補 (leading staff within one's own facility).
+
+ACCESSORY RULE: Small hoop, small drop, or stud earring OK (subtle only, nothing dangling large). Watch OK. Small subtle rings OK.
+
+OUTFIT VARIATION: suit style — black or charcoal tailored jacket over a white collared shirt (external-facing business role). Blue lanyard kept. A laptop bag or slim briefcase as an optional prop signals "out visiting a partner", not desk-bound.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. An external business-development scene — e.g. presenting a proposal/laptop across a table to a partner-organization representative in a glass meeting room, a business greeting/handshake at a partner facility's reception, or reviewing a contract document together at a conference table. Should look visibly distinct from [illust-job-office.png] (solo desk work) and [illust-job-facility-manager.png] (leading one's own staff) — this is externally-facing, two-organization business dealing, not internal operations.
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
