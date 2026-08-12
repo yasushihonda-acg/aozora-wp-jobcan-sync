@@ -384,6 +384,22 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific nigh
 Please generate one illustration.
 ```
 
+### 20. `illust-job-facility-manager.png` — 求人カード 施設長・管理者候補 (2026-08-12 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数2位 (38件) の施設長・管理者候補を次の対象に選定。マネジメント職として、既存の相談員/ケアマネジャー (1対1の相談シーン) や事務スタッフ (デスクワーク) と明確に区別できる「統率・マネジメント」の構図を指定する。
+
+```
+JOB CATEGORY: Facility manager / administrator candidate (施設長・管理者候補) — overseeing daily facility operations, leading and supporting staff, coordinating with families and external partners at an eldercare facility.
+
+ACCESSORY RULE: Small subtle stud earring OK (close to earlobe, no dangle). No hoop, no drop. Simple watch OK.
+
+OUTFIT VARIATION: a tailored jacket (charcoal, navy, or beige) worn open over the black polo shirt (2026-07-02 決裁者指示: 経営/管理シーンはテーラードジャケット重ね着可). Blue lanyard + ID badge kept visible.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A scene that reads as management/leadership rather than one-on-one consultation or desk work — e.g. leading a short staff huddle/briefing, reviewing an operations report or shift schedule at a standing table, walking through the facility checking on operations. Should look visibly distinct from [illust-job-consultant.png] (one-on-one family consultation) and [illust-job-office.png] (desk work).
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
