@@ -10,6 +10,7 @@
      If you add a third template, override these or Jinja2 will raise
      UndefinedError. #}
   <title>{% block page_title %}{{ page_title or job.title }}{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg">
   {# canonical_url is site-root-relative by default (base_url=""), which is
      fine for local dev/tests; app.py passes the real PUBLIC_BASE_URL in
      production so this resolves to a fully-qualified URL. Every template
