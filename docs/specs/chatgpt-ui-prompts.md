@@ -436,6 +436,12 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. An external bus
 Please generate one illustration.
 ```
 
+**採用結果 (2026-08-13)**: 本田様が ChatGPT UI で3枚生成。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施、3枚とも小さめのスタッド/ドロップ程度でACCESSORY RULE(このSCENEはoffice系と同じ「小さめの装飾はOK」)の範囲内、手指も破綻なし。
+
+1枚(デスクでタブレット+クリップボードにチャート記入するシーン)は採点の過程で **既に採用済みの `illust-job-facility-manager.png` と構図がほぼ同一**(座り姿勢・タブレットを片手・クリップボードにペン記入・青いバインダースタック・観葉植物・ガラス張り廊下背景)と判明し不採用。COMPOSITION で明示した「施設長カードと視覚的に区別できること」という要件を満たせなかったため。
+
+残り2枚のうち、ホワイトボードの資料を指し示しながら同僚にプレゼンテーションするシーンを `illust-job-general.png` としてトップページ「総合職（営業・管理職）」カードに採用(既存カードと最も差別化でき、SCENE 意図の「外向き商談・提案」に最も合致)。施設内廊下を歩きながらクリップボードを確認するシーンは `illust-job-general-2.png` としてバリエーション保存、`/jobs/` 求人一覧の `selectors.yaml` `thumbnail_categories.general` バケット(旧 `office` から「総合職（営業・管理職）」synonym を分離・移動)の2枚プールとして採用。テキストタグから格上げ(7→6)。
+
 ## 生成後の運用
 
 各生成完了後:
