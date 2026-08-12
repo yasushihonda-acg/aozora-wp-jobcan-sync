@@ -1083,8 +1083,9 @@ class TestThumbnailVariantSelection:
             assert _resolve_care(str(2_000_000 + i), cfg) in pool
 
     def test_single_element_pool_is_degenerate(self) -> None:
-        """`nurse`/`it` in production have exactly one illustration — the
-        pool mechanism must still resolve correctly, not just for pools >1."""
+        """`nurse`/`it`/`facility-manager` in production have exactly one
+        illustration — the pool mechanism must still resolve correctly, not
+        just for pools >1."""
         cfg = _variant_cfg()
         for i in range(20):
             result = resolve_display_thumbnail(
@@ -1122,6 +1123,23 @@ class TestThumbnailVariantSelection:
         error, not a confusing bare `ZeroDivisionError`."""
         with pytest.raises(ValueError, match="non-empty"):
             _pick_variant(job_id="123", images=[])
+
+
+def test_selectors_yaml_every_job_type_label_has_a_thumbnail_synonym() -> None:
+    """Every label in `job_types.JOB_TYPE_NAMES` must resolve to a bucket in
+    `thumbnail_categories` — the symmetric guard to `list_sections.py`'s
+    `set(LABEL_TO_CATEGORY) == set(JOB_TYPE_NAMES.values())` pin
+    (`test_job_types.py`). PR #159 shipped without this: most of the 17
+    real labels had no synonym entry, `_resolve_display_thumbnail` silently
+    fell through to `default_image`, and every card looked like the same
+    generic scene regardless of job type (decision-maker report,
+    2026-08-10) — this test would have caught that at config-load time
+    instead of production."""
+    from sync.job_types import JOB_TYPE_NAMES
+
+    thumb_cfg = default_config().list.thumbnail_categories
+    missing = sorted(set(JOB_TYPE_NAMES.values()) - set(thumb_cfg.synonym_to_images))
+    assert missing == [], f"job_types labels with no thumbnail_categories synonym: {missing}"
 
 
 def test_selectors_yaml_image_paths_exist_on_disk() -> None:

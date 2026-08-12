@@ -204,7 +204,8 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 ## 🔄 中断点（in-flight）
 - Secret Manager (`ops-webhook-url` = Google Chat webhook) は未設定 — `notify_ops()`は例外を握り込む設計のため実害なし、closed率サーキットブレーカー発火時のアラートが飛ばないだけ。組織の運用チャンネルはSlackではなくGoogle Chatのため、2026-08-09に通知実装をGoogle Chat webhook前提へ移行済み(`notify_slack`→`notify_ops`、secret名`slack-webhook-url`→`ops-webhook-url`、Slack絵文字記法→Unicode絵文字)。webhook URL入手後、`infra/README.md` §1.5の手順で追加可能
 - ~~`mockup/index.html`の「訪問介護員(ヘルパー)」「ケアマネジャー」カードの`job_type`クエリ導線切れ~~ → **2026-08-09 PR #152で解消済み**。GitHub Pages(Phase A)側の`jobs.html`にjob_type-aware JSリダイレクトを追加したため、`map-search.js`が実行される前にCloud Run側の正しいフィルタ済みURL(`category_id=18986`/`18985`)へ自動遷移するようになった(実機Playwright確認済み)
-- **【要対応】求人一覧/詳細ページ(`/jobs/`、`selectors.yaml`の`thumbnail_categories`)に新規3職種の専用イラストが未反映**。トップページ(`mockup/index.html`)には訪問看護(`illust-job-visiting-nurse.png`)・夜勤専従(`illust-job-night-shift.png`)・施設長・管理者候補(`illust-job-facility-manager.png`)のカードを追加済みだが、`sync/src/sync/selectors.yaml`の6バケット(care/visit/consultant/nurse/office/it)では「夜勤専従（介護・看護）」「施設長・管理者候補」は`care`バケットのsynonym、「訪問看護」は`nurse`バケットのsynonymのままで、`images`プールに新規3イラストが追加されていないため、求人一覧の該当カードは既存の汎用イラストのまま。単純に既存バケットの`images`プールへ追加すると、同バケット内の他職種(介護職・サポート職・世話人等)にもsha256ベースで新規イラストがランダムに割り当てられてしまう(PR #165/#166で「意味の近い職種は同じ画像に」という決裁者方針に基づき統合した4→6バケット設計との整合が必要)。**新規バケット新設(nurse/careから独立)か、既存バケット内での配置かは設計判断が必要、次セッションでplan mode等により検討すること**
+- ~~**求人一覧/詳細ページ(`/jobs/`)に新規3職種の専用イラストが未反映**~~ → **2026-08-12 コード実装完了(PR番号は本コミット時点未採番)**。`sync/src/sync/selectors.yaml`の`thumbnail_categories`を6→9バケットへ拡張し、`夜勤専従（介護・看護）`/`施設長・管理者候補`を`care`から、`訪問看護`を`nurse`から新規バケット(`night-shift`/`facility-manager`/`visiting-nurse`)へ移動(既存バケットの`images`プールは無変更、他職種の既存割り当てに影響なし)。`night-shift`は`illust-job-night-shift-3.png`(訪問看護メイン絵と構図がほぼ同一)を意図的に除外し2枚プール、`facility-manager`は1枚プールのまま先行反映(バリエーション2枚生成は下記フォローアップ参照)。pytest 544件全PASS、`JOB_TYPE_NAMES`全17ラベルのthumbnail synonym網羅を保証する回帰テストを新設。**残作業: Cloud Run Job (`aozora-sync-job`) イメージの再ビルド・デプロイ・手動同期トリガーによる本番反映、および反映後の実機確認(`category_id=18987/18988/18989`)**
+- **【フォローアップ】`facility-manager`バリエーション2枚生成**: 上記の1枚プール先行反映に伴い、本番38件(施設長・管理者候補)のカードは全て同一画像になる。SCENE #20(`docs/specs/chatgpt-ui-prompts.md`)は生成済みプロンプトを流用可能、ChatGPT UI生成→10項目採点→耳元拡大確認(過去にピアス誤検知の経緯あり)→プール追加の手順で次セッション以降に対応
 - 相談員(SCENE #21、`docs/specs/chatgpt-ui-prompts.md`)はプロンプト用意済み・ChatGPT UI生成待ち。生成後は訪問看護/夜勤専従/施設長候補と同じ手順(耳元拡大確認→10項目採点→トップページカード化→PR)で進める。残り7職種(サービス提供責任者15件・サービス管理責任者6件・世話人6件・訪問リハビリ6件・サポート職7件・総合職21件・新卒既卒2件)は未着手
 
 ## セッション履歴: 2026-08-11〜12 トップページ職種入口整備(PR #167〜#177、一部進行中)
@@ -218,7 +219,7 @@ Stage 2 (PR #65) 本番反映後、決裁者から追加フィードバック4�
 - [x] **施設長・管理者候補イラストカード化、1回目失敗→再生成(PR #173→#174クローズ→#175→#176)**: SCENE #20の1回目生成(3枚)は`codex review`(effort: high)が全て耳元の垂れ下がるピアス(ACCESSORY RULE違反)を検出、Claudeの10項目採点では見落としていた実害バグ。PR #174はクローズし、ACCESSORY RULEを「NO earring優先、数mmの垂れも違反」へ強化(PR #175)。2回目生成(1枚)を耳元拡大確認のうえ採用(PR #176)。**2回目生成でもcodexが同一指摘(垂れる糸状のピアス)を再度出したが、Claude・本田様それぞれが600-700px拡大で目視確認しピアスは確認できず、decision-maker最終判断で「codexの誤検出(後れ毛の陰影線)」と結論しPRコメントに記録のうえ採用**。テキストタグから格上げ(9→8)
 - [x] **相談員SCENE #21追加(PR #177)**: 求人数3位(36件)。既存`illust-job-consultant.png`(現在ケアマネジャーカードで使用中)との視覚的重複を避ける構図(窓口相談・施設見学案内)を指定、ACCESSORY RULEは前述の教訓を踏まえ強い表現で最初から指定。**プロンプトのみ、画像生成は次セッションに持ち越し**
 - 各PR完了ごとに`docker buildx build`→`gcloud run deploy`で本番Cloud Runへデプロイ、実機(`category_id=`遷移・画像200・タグ数)を確認。デプロイ中に`gcloud`認証のreauth要求が1回発生、本田様に対話的`gcloud auth login`を依頼して解消(非対話環境では解決不能な既知の制約)
-- **【未解決、上記🔄中断点参照】** 求人一覧/詳細ページ(`/jobs/`)側の画像選択(`selectors.yaml`)に新規3イラストが未反映。決裁者から「求人一覧ページへの画像反映ができていません」との指摘を受け調査したところ、`selectors.yaml`の6バケット構造(PR #165/#166で確定済み)に新規イラストを追加する設計判断が必要と判明し、次セッションへ持ち越し
+- **【上記🔄中断点参照】** 求人一覧/詳細ページ(`/jobs/`)側の画像選択(`selectors.yaml`)への新規3イラスト反映は、次セッションでplan modeにより6→9バケット新設方式を設計・実装完了(コード側)。本番デプロイ・実機確認は残作業
 
 ## 完了の定義 (ジョブカンCSV自動取得への移行) — 2026-08-11 実装完了・本番切替完了・PR #162
 
