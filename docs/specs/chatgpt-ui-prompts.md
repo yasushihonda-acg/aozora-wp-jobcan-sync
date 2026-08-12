@@ -366,9 +366,11 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Environmental s
 Please generate one illustration.
 ```
 
-### 19. `illust-job-night-shift.png` — 求人カード 夜勤専従（介護・看護） (2026-08-12 新規追加)
+### 19. `illust-job-night-shift.png` — 求人カード 夜勤専従（介護・看護） (2026-08-12 新規追加 → **同日採用済み**)
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、求人数最多 (41件) の夜勤専従を次の対象に選定。既存の care/nurse 系カードは全て昼間の青空シーンのため、本 SCENE は「夜」を明確に打ち出し視覚的に区別する。PREAMBLE の「澄んだ青空」制約から意図的に逸脱する初めてのシーンであるため、下記 NIGHT SETTING 指定を通常の PREAMBLE 直後に必ず貼ること。
+
+**採用結果 (2026-08-12)**: 本田様が ChatGPT UI で3枚生成、全て10項目 Pass。ベッドサイドでタブレット服薬確認を行うシーンをメイン (`illust-job-night-shift.png`) としてトップページ「夜勤専従（介護・看護）」カードに採用 (他カードとの構図重複が最も少なく、暖色照明×夜の対比が明瞭なため選定)。残り2枚は `illust-job-night-shift-2.png` (施設内廊下の歩行介助巡回) / `illust-job-night-shift-3.png` (夜間の在宅血圧測定) としてバリエーション保存 (現時点で表示スロットなし)。
 
 ```
 JOB CATEGORY: Night-shift care and nursing staff (夜勤専従、介護・看護) — overnight duty at an eldercare facility, covering both nursing and care work during night hours (e.g. rounds, monitoring, care recording, resident check-ins).
