@@ -472,6 +472,20 @@ Please generate one illustration.
 
 **【フォローアップ】`support` バリエーション追加**: 現在1枚プールのため、本番7件(サポート職)のカードは全て同一画像になる。清掃・調理のいずれかのシーンをACCESSORY RULEをさらに強い表現(例: 「earring-shaped mark of any size is a violation」等)で再生成依頼し、2枚目以降を追加する。
 
+### 24. `illust-job-visiting-rehab.png` — 求人カード 訪問リハビリ (2026-08-13 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、訪問看護・夜勤専従・施設長・管理者候補・相談員・総合職(営業・管理職)・サポート職に続く7番目の対象として、残り5職種の中で件数同率1位(6件、サービス管理責任者・世話人と同率)の訪問リハビリを選定。現在 `selectors.yaml` では `nurse` バケット(看護職と共有)に折り込まれ専用イラストが無い。既存 `illust-job-nurse.png`(訪問看護師、血圧測定などの医療行為)や `illust-job-visit-3.png`(訪問介護員、手を引いての歩行介助)とは異なり、本 SCENE は「機能訓練・運動療法」という構造化されたリハビリ動作(ゴムバンドを使った筋力訓練、関節可動域訓練、歩行訓練の計測等)を明確に描写し視覚的に区別する。
+
+```
+JOB CATEGORY: Visiting physical/occupational rehabilitation therapist (訪問リハビリ) — in-home structured therapeutic exercise for elderly residents: guided resistance-band strength training, joint range-of-motion stretching, or gait/balance training measured with a stopwatch or notepad. This is structured rehabilitation therapy, NOT a medical examination and NOT casual daily-living assistance.
+
+ACCESSORY RULE: NO earring ideally; tiny dot stud maximum. NO hoop, NO drop, NO dangle. Simple medical-appropriate watch OK.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific rehab-therapy action with a visible rehab-specific prop — e.g. guiding a seated resident through a resistance-band arm/leg exercise, supporting a leg stretch on a mat, or timing a structured gait-training walk with a stopwatch/notepad in hand. Must look visibly distinct from [illust-job-nurse.png] (no blood-pressure cuff, no medical vitals device) and from [illust-job-visit-3.png] (no simple hand-holding walking assistance, no cane) — must clearly read as structured exercise therapy, not a medical check or casual walking support.
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
