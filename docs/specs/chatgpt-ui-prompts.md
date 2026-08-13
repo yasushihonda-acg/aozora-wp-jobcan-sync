@@ -493,18 +493,23 @@ Please generate one illustration.
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、訪問看護・夜勤専従・施設長・管理者候補・相談員・総合職(営業・管理職)・サポート職・訪問リハビリに続く8番目の対象として、残り4職種のうち件数同率1位(6件、世話人と同率)のサービス管理責任者を決裁者選定(タイブレーク理由: 世話人は既存 `illust-job-care.png` 系[入浴・移動介助などの身体介護動作]と構図が近く drift リスクが高い一方、サービス管理責任者は「個別支援計画の確認・スタッフ監督」という書類仕事寄りの動作を描けるため、既存 `illust-job-consultant.png`/`-2.png`(ケアマネジャー、多人数でのケアプラン相談)・`illust-job-consultation.png`/`-2.png`(相談員、ご本人・ご家族との窓口相談)との視覚的区別が付けやすい)。現在 `selectors.yaml` では `consultant` バケット(ケアマネジャー・計画作成担当者と共有)に折り込まれ専用イラストが無い。
 
 ```
-JOB CATEGORY: Service manager / individual-support-plan supervisor (サービス管理責任者、通称「サビ管」) at a disability welfare facility — responsible for drafting and reviewing individual support plans (個別支援計画) and supervising the facility's care staff to ensure plan quality and compliance. This is document-review and staff-supervision work, NOT a face-to-face consultation with a resident or family member.
+JOB CATEGORY: Service manager / individual-support-plan supervisor (サービス管理責任者、通称「サビ管」) at a disability welfare facility — responsible for drafting and reviewing individual support plans (個別支援計画) and supervising the facility's care staff to ensure plan quality and compliance. This is internal staff-supervision work, NOT a face-to-face consultation with a resident or family member.
 
 ACCESSORY RULE: Small hoop, small drop, or stud earring OK (subtle only, nothing dangling large). Watch OK. Small subtle rings OK.
 
 OUTFIT VARIATION: base black polo shirt + blue lanyard, unchanged.
 
-COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific service-manager action — e.g. reviewing and annotating an individual support plan document at a desk with a pen and a checklist, standing at a whiteboard with a staff shift schedule while briefing one colleague, or checking a staff member's care record over their shoulder with an approving nod. Must look visibly distinct from [illust-job-consultant.png]/[illust-job-consultant-2.png] (no multi-person table meeting with a resident/family member, no tablet held out to a client) and from [illust-job-consultation.png]/[illust-job-consultation-2.png] (no facility-tour walking scene, no one-on-one intake counseling at a reception desk) — this should read as internal document review / staff supervision, not client-facing consultation.
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. The scene MUST be ONE of these two specific staff-supervision actions only:
+  (a) standing at a whiteboard that shows a staff shift schedule / duty roster, gesturing toward it while briefing ONE seated colleague (a second staff member in a colored polo, NOT a resident/elderly person) — a team-huddle / staff-meeting moment, or
+  (b) standing behind a seated colleague's shoulder, pointing at something on the colleague's paper care-record or laptop screen with an approving nod (two staff members, not seated at a shared negotiation-style table).
+Do NOT use a solo-seated-at-desk-with-tablet-and-pen pose (too close to [illust-job-facility-manager.png]'s composition: seated, one hand tablet, one hand pen on a clipboard, blue binders on desk). Do NOT use a solo-walking-down-a-corridor-holding-documents pose (too close to [illust-job-general-2.png]'s composition: walking through a glass-walled corridor with a reception desk and potted plants in the background). Do NOT use a multi-person table meeting with a resident/family member or a tablet held out to a client (too close to [illust-job-consultant.png]/[illust-job-consultant-2.png]/[illust-job-consultation.png]/[illust-job-consultation-2.png]). This should clearly read as one staff member supervising/briefing another staff member, indoors, standing.
 
 Please generate one illustration.
 ```
 
-**次のアクション**: 本田様が上記 SCENE を新規 ChatGPT UI 会話 (PREAMBLE + baseline 添付) で生成 → 生成物を Claude に送信 → 10 項目採点 + 耳元拡大確認 → 採用可否判定。
+**次のアクション**: 本田様が上記 SCENE (2026-08-13 改訂版、構図をスタッフ監督シーン2択に限定) を新規 ChatGPT UI 会話 (PREAMBLE + baseline 添付) で再生成 → 生成物を Claude に送信 → 10 項目採点 + 耳元拡大確認 + 既存カード([illust-job-facility-manager.png]/[illust-job-general-2.png]/[illust-job-consultant.png]系含む)との構図比較 → 採用可否判定。
+
+**却下履歴 (2026-08-13、1回目生成)**: 初回生成2枚(座ってタブレット+ペンのデスクシーン、廊下を書類持って歩くシーン)は10項目チェック自体はPassしたが、既存カードとの構図比較で [illust-job-facility-manager.png] (座り姿勢+片手タブレット+片手ペン+デスク上書類の構図) および [illust-job-general-2.png] (廊下を書類持って歩く構図、同じ窓+観葉植物+受付背景) とそれぞれ酷似していると判明し、decision-maker判断で2枚とも不採用・SCENE再生成を選択(PR #183/#186と同種の構図drift再発パターン)。
 
 ## 生成後の運用
 
