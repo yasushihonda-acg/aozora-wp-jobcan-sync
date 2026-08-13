@@ -546,10 +546,17 @@ ACCESSORY RULE: NO earring ideally; tiny flat dot stud sitting flush against the
 
 OUTFIT VARIATION: base black polo shirt + blue lanyard, unchanged.
 
-COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, indoors at the home-visit care agency's office (NOT a client's home, NOT a facility corridor). The scene MUST feature a wall-mounted area map or large paper schedule board showing multiple helpers' names alongside pinned home-visit routes/time slots as the central visual signature — e.g. the staff member standing at the map/board updating a helper's route with a marker or pin, or seated at a desk with the map/board visible behind them while on a phone call coordinating with a helper in the field (headset or handset OK). Must look visibly distinct from [illust-job-visit.png]/[illust-job-visit-2.png]/[illust-job-visit-3.png] (no client's home interior, no direct hands-on care action) and from [illust-job-service-manager.png] (no staff duty-roster whiteboard, no briefing a seated colleague — this is a solo route/schedule-coordination moment, not a staff supervision meeting) and from [illust-job-office.png]/[illust-job-office-2.png] (generic desk paperwork without the map/route-board signature).
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, indoors at the home-visit care agency's office (NOT a client's home, NOT a facility corridor). The scene MUST be ONE of these two specific actions only, and MUST feature a wall-mounted area map or large paper schedule board showing multiple helpers' names alongside pinned home-visit routes/time slots as the central visual signature:
+  (a) standing at the map/board, updating one helper's route or time slot with a marker or pin, alone in the office, or
+  (b) seated at a desk with the map/board clearly visible on the wall behind them, on a phone call (headset or handset) coordinating with a helper in the field, a paper route sheet in the other hand.
+There must be NO second person seated across the table, and NO elderly resident or family member anywhere in the frame — this is solely the coordinator alone in the office, not a meeting. Do NOT use a multi-person table scene with a tablet held out to a client/resident/family member (too close to [illust-job-consultant.png]/[illust-job-consultant-2.png]/[illust-job-consultation.png]/[illust-job-consultation-2.png] — those are resident/family consultation scenes, this role does not face clients directly). Do NOT use a staff duty-roster whiteboard briefing a seated colleague (too close to [illust-job-service-manager.png]). Do NOT use generic desk paperwork without the map/route-board (too close to [illust-job-office.png]/[illust-job-office-2.png]).
 
 Please generate one illustration.
 ```
+
+**却下履歴 (2026-08-13、1回目生成)**: 初回生成1枚(高齢の利用者様・スタッフ・書類記入中の女性の3人がテーブルを囲みタブレットの小さなグリッドを提示するシーン)は10項目チェックのうち項目9(職務内容整合)がFail。COMPOSITIONで必須指定した「壁掛け地図/スケジュールボードを中心視覚要素とする事業所内の調整シーン」が一切描かれておらず、代わりに既採用済み `illust-job-consultant.png`/`-2.png`(ケアマネジャー)・`illust-job-consultation.png`/`-2.png`(相談員)とほぼ同一の「利用者・家族との相談ミーティング」構図(PR #183/#186/#195と同種の construction drift 再発パターン)。上記 COMPOSITION を「地図/ボード必須 + 利用者・家族を含む多人数ミーティング構図を明示的に禁止」する形に絞り込んだうえで再生成を依頼する。
+
+**次のアクション**: 本田様が上記 SCENE (2026-08-13 改訂版、構図をスタッフ単独の地図/ボード調整シーン2択に限定) を新規 ChatGPT UI 会話 (PREAMBLE + baseline 添付) で再生成 → 生成物を Claude に送信 → 10 項目採点 + 耳元拡大確認 + 既存カード([illust-job-consultant.png]系/[illust-job-consultation.png]系/[illust-job-service-manager.png]/[illust-job-office.png]系含む)との構図比較 → 採用可否判定。
 
 ## 生成後の運用
 
