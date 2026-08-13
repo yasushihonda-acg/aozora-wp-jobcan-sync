@@ -163,6 +163,12 @@ list:
   # earring rule) is a follow-up, not a blocker. `care`'s pool
   # (`illust-job-care.png`/`-2.png`/`-3.png`) is otherwise untouched, so
   # 介護職/世話人 assignments are unchanged.
+  #
+  # 2026-08-13 (4th): 12 -> 13 buckets, same MOVE pattern. `訪問リハビリ`
+  # split out of `nurse` into its own `visiting-rehab` bucket (SCENE #24: a
+  # resistance-bar exercise scene). Ships as a 1-image pool. `nurse`'s pool
+  # (`illust-job-nurse.png`) is otherwise untouched, so 看護職/看護師
+  # assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
@@ -193,7 +199,6 @@ list:
         synonyms:
           - "看護職"
           - "看護師"
-          - "訪問リハビリ"
         images:
           - "assets/img/illust-job-nurse.png"
       office:
@@ -244,6 +249,11 @@ list:
           - "サポート職（清掃・洗濯・調理・送迎）"
         images:
           - "assets/img/illust-job-support.png"
+      visiting-rehab:
+        synonyms:
+          - "訪問リハビリ"
+        images:
+          - "assets/img/illust-job-visiting-rehab.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
