@@ -486,6 +486,8 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific reha
 Please generate one illustration.
 ```
 
+**採用結果 (2026-08-13)**: 本田様が ChatGPT UI で1枚生成(リハビリバーを使った上肢運動療法シーン)。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施、全項目Pass。耳元はクリーン(ピアスなし)、手指(スタッフ・利用者様ともリハビリバーを握る手)も破綻なし。テーブル上にストレスボール・カラー積み木(指先訓練用)・タオルが配置され、構造化された機能訓練であることが明確。既存 `illust-job-nurse.png`(血圧測定などの医療行為)・`illust-job-visit-3.png`(手を引く歩行介助)とも視覚的に完全に区別できるため、`illust-job-visiting-rehab.png` として単独採用(1枚プール、`facility-manager`/`support` と同じ先行反映パターン)。`selectors.yaml` に `visiting-rehab` バケット新設(`nurse` から「訪問リハビリ」synonym を分離・移動、看護職・看護師の既存割り当ては無変更)。テキストタグから格上げ(5→4)。
+
 ## 生成後の運用
 
 各生成完了後:
