@@ -488,6 +488,24 @@ Please generate one illustration.
 
 **採用結果 (2026-08-13)**: 本田様が ChatGPT UI で1枚生成(リハビリバーを使った上肢運動療法シーン)。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施、全項目Pass。耳元はクリーン(ピアスなし)、手指(スタッフ・利用者様ともリハビリバーを握る手)も破綻なし。テーブル上にストレスボール・カラー積み木(指先訓練用)・タオルが配置され、構造化された機能訓練であることが明確。既存 `illust-job-nurse.png`(血圧測定などの医療行為)・`illust-job-visit-3.png`(手を引く歩行介助)とも視覚的に完全に区別できるため、`illust-job-visiting-rehab.png` として単独採用(1枚プール、`facility-manager`/`support` と同じ先行反映パターン)。`selectors.yaml` に `visiting-rehab` バケット新設(`nurse` から「訪問リハビリ」synonym を分離・移動、看護職・看護師の既存割り当ては無変更)。テキストタグから格上げ(5→4)。
 
+### 25. `illust-job-service-manager.png` — 求人カード サービス管理責任者 (2026-08-13 新規追加予定)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、訪問看護・夜勤専従・施設長・管理者候補・相談員・総合職(営業・管理職)・サポート職・訪問リハビリに続く8番目の対象として、残り4職種のうち件数同率1位(6件、世話人と同率)のサービス管理責任者を決裁者選定(タイブレーク理由: 世話人は既存 `illust-job-care.png` 系[入浴・移動介助などの身体介護動作]と構図が近く drift リスクが高い一方、サービス管理責任者は「個別支援計画の確認・スタッフ監督」という書類仕事寄りの動作を描けるため、既存 `illust-job-consultant.png`/`-2.png`(ケアマネジャー、多人数でのケアプラン相談)・`illust-job-consultation.png`/`-2.png`(相談員、ご本人・ご家族との窓口相談)との視覚的区別が付けやすい)。現在 `selectors.yaml` では `consultant` バケット(ケアマネジャー・計画作成担当者と共有)に折り込まれ専用イラストが無い。
+
+```
+JOB CATEGORY: Service manager / individual-support-plan supervisor (サービス管理責任者、通称「サビ管」) at a disability welfare facility — responsible for drafting and reviewing individual support plans (個別支援計画) and supervising the facility's care staff to ensure plan quality and compliance. This is document-review and staff-supervision work, NOT a face-to-face consultation with a resident or family member.
+
+ACCESSORY RULE: Small hoop, small drop, or stud earring OK (subtle only, nothing dangling large). Watch OK. Small subtle rings OK.
+
+OUTFIT VARIATION: base black polo shirt + blue lanyard, unchanged.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. A specific service-manager action — e.g. reviewing and annotating an individual support plan document at a desk with a pen and a checklist, standing at a whiteboard with a staff shift schedule while briefing one colleague, or checking a staff member's care record over their shoulder with an approving nod. Must look visibly distinct from [illust-job-consultant.png]/[illust-job-consultant-2.png] (no multi-person table meeting with a resident/family member, no tablet held out to a client) and from [illust-job-consultation.png]/[illust-job-consultation-2.png] (no facility-tour walking scene, no one-on-one intake counseling at a reception desk) — this should read as internal document review / staff supervision, not client-facing consultation.
+
+Please generate one illustration.
+```
+
+**次のアクション**: 本田様が上記 SCENE を新規 ChatGPT UI 会話 (PREAMBLE + baseline 添付) で生成 → 生成物を Claude に送信 → 10 項目採点 + 耳元拡大確認 → 採用可否判定。
+
 ## 生成後の運用
 
 各生成完了後:
