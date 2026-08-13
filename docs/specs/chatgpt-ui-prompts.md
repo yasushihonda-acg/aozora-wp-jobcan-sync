@@ -513,7 +513,7 @@ Please generate one illustration.
 
 **教訓**: 既存カードとの構図比較チェックは「SCENE本文で明示的に除外指定した対象」だけでなく全既存カードに対して行うべき(本件では consultant/consultation 系との区別は SCENE で明示していたが、facility-manager/general-2 系との重複は事後確認で発覚)。ただし共通アーキタイプ(座り+タブレット+ペン等)の再使用そのものは即不採用理由にはならず、背景・トーンといった副次要素での区別可否も含めて総合判断する。
 
-### 26. `illust-job-caretaker.png` — 求人カード 世話人 (2026-08-13 新規追加予定)
+### 26. `illust-job-caretaker.png` — 求人カード 世話人 (2026-08-13 新規追加)
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、サービス管理責任者に続く9番目の対象として、残り3職種のうち件数最多(6件)の世話人を選定。現在 `selectors.yaml` では `care` バケット(介護職と共有)に折り込まれ専用イラストが無い。世話人はグループホーム(共同生活援助)で高齢者・障害者の日常生活を支える役割で、既存 `illust-job-care.png`/`-2.png`/`-3.png`(介護職、入浴・移動介助などの身体に直接触れる介護動作)とは異なり「服薬確認・食事時の会話・生活相談」という伴走型の生活支援を描く。清掃・洗濯・調理・送迎など裏方作業を描く `illust-job-support.png`(サポート職)とも区別する。
 
@@ -529,7 +529,11 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Two people: the staff member and ONE e
 Please generate one illustration.
 ```
 
-**次のアクション**: 本田様が上記 SCENE を新規 ChatGPT UI 会話 (PREAMBLE + baseline 添付) で生成 → 生成物を Claude に送信 → 10 項目採点 + 耳元拡大確認 + 既存カード([illust-job-care.png]系/[illust-job-support.png]/[illust-job-consultant.png]系含む)との構図比較 → 採用可否判定。
+**採用結果 (2026-08-13)**: 本田様が ChatGPT UI で2枚生成(グループホームでの食事配膳シーン/脱衣所でのタオル手渡しシーン)。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施。
+
+脱衣所シーンは背景に浴槽・シャワー・介護用いすが明確に描かれ、SCENE本文で明示的に禁止した「no bathing, no direct hands-on body contact」に直接抵触(既存カードとの構図比較以前に SCENE 指示そのものへの違反)と判明し不採用。食事配膳シーンは COMPOSITION で例示した3パターン(服薬確認/買い物リスト/お茶)のいずれでもなく「二人とも着席」の指定からも外れる(スタッフは立位)が、companionship の精神には合致し既存カードとの構図重複もないため decision-maker 判断で採用、`illust-job-caretaker.png` として単独採用(1枚プール、`facility-manager`/`support`/`visiting-rehab`/`service-manager` と同じ先行反映パターン)。`selectors.yaml` に `caretaker` バケット新設(`care` から「世話人」synonym を分離・移動、介護職の既存割り当ては無変更)。テキストタグから格上げ(3→2)。
+
+**教訓**: ChatGPT UI は COMPOSITION で明示的に列挙した具体例から外れた新しい動作を提案することがある(今回は「配膳」)。明示的除外構図(入浴・身体接触)への抵触は既存カード比較を待たずその場でFail判定できる一方、明示例からの逸脱(新しい動作の提案)自体は自動的に不採用理由にはならず、JOB CATEGORY の精神との整合性で個別判断する。
 
 ## 生成後の運用
 
