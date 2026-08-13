@@ -18,6 +18,24 @@
       return;
     }
 
+    // .category-card の transition-delay は CSS の nth-child 指定 (6枚固定
+    // 前提、7枚目以降は catch-all で一律 650ms) だと、募集職種が増えるたびに
+    // 後半の行がまとめて同時出現するようになり「複数カードが同時にドンと出る」
+    // 「出現完了(650ms delay + 1100ms transition = 1750ms)まで間延びして遅い」
+    // という体感を生む(2026-08-13 決裁者フィードバックで発覚、実測時点で
+    // 17枚中12枚が同一delayになっていた)。列数はブレークポイントで1/2/3に
+    // 変わるため、行内の列位置(index % columns)基準で 130ms 刻みの delay を
+    // 動的付与し、行数に依存せず常に横方向へ滑らかに現れるようにする。
+    document.querySelectorAll('.category-grid').forEach(function (grid) {
+      var columns = window.matchMedia('(min-width: 1024px)').matches ? 3
+        : window.matchMedia('(min-width: 640px)').matches ? 2
+        : 1;
+      var cards = grid.querySelectorAll('.category-card');
+      cards.forEach(function (card, i) {
+        card.style.transitionDelay = (i % columns) * 130 + 'ms';
+      });
+    });
+
     var observer = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
         if (entry.isIntersecting) {
