@@ -535,6 +535,22 @@ Please generate one illustration.
 
 **教訓**: ChatGPT UI は COMPOSITION で明示的に列挙した具体例から外れた新しい動作を提案することがある(今回は「配膳」)。明示的除外構図(入浴・身体接触)への抵触は既存カード比較を待たずその場でFail判定できる一方、明示例からの逸脱(新しい動作の提案)自体は自動的に不採用理由にはならず、JOB CATEGORY の精神との整合性で個別判断する。
 
+### 27. `illust-job-service-provider.png` — 求人カード サービス提供責任者 (2026-08-13 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、世話人に続く10番目(最後から2番目)の対象として、残り2職種のうち件数最多(4件、新卒・既卒総合職は2件)のサービス提供責任者を選定。現在 `selectors.yaml` では `visit` バケット(ホームヘルパー/訪問介護員と共有)に折り込まれ専用イラストが無い。サービス提供責任者(通称「サ責」)は訪問介護事業所において複数のホームヘルパーの訪問スケジュール・ルートを組み、訪問介護計画書を作成し、ケアマネジャーと連携する調整役であり、既存 `illust-job-visit.png`/`-2.png`/`-3.png`(ホームヘルパー、利用者宅での洗濯物たたみ・食事介助・歩行介助といった訪問先での身体介護動作そのもの)とは明確に異なる「事業所内でのスケジュール調整」を描く。同じ「スタッフ監督」系の `illust-job-service-manager.png`(SCENE #25、障害福祉施設内の当番表ブリーフィング)とも、対象が施設内スタッフの当番表ではなく複数ヘルパーの訪問先ルート/地図である点で区別する。
+
+```
+JOB CATEGORY: Home-visit care service coordinator (サービス提供責任者、通称「サ責」) at a home-visit care agency (訪問介護事業所) — drafts home-visit care plans (訪問介護計画書), assigns and schedules a team of home-visit helpers (ホームヘルパー) to client visit routes, and liaises with each client's care manager (ケアマネジャー). This is an office-based scheduling/coordination role, distinct from ホームヘルパー themselves (hands-on in-home care at a client's residence) and from サービス管理責任者 (a disability-facility staff duty-roster supervisor).
+
+ACCESSORY RULE: NO earring ideally; tiny flat dot stud sitting flush against the earlobe maximum. NO hoop, NO drop, NO dangle, NO chain/threader earring under any circumstance. Simple watch OK.
+
+OUTFIT VARIATION: base black polo shirt + blue lanyard, unchanged.
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered, indoors at the home-visit care agency's office (NOT a client's home, NOT a facility corridor). The scene MUST feature a wall-mounted area map or large paper schedule board showing multiple helpers' names alongside pinned home-visit routes/time slots as the central visual signature — e.g. the staff member standing at the map/board updating a helper's route with a marker or pin, or seated at a desk with the map/board visible behind them while on a phone call coordinating with a helper in the field (headset or handset OK). Must look visibly distinct from [illust-job-visit.png]/[illust-job-visit-2.png]/[illust-job-visit-3.png] (no client's home interior, no direct hands-on care action) and from [illust-job-service-manager.png] (no staff duty-roster whiteboard, no briefing a seated colleague — this is a solo route/schedule-coordination moment, not a staff supervision meeting) and from [illust-job-office.png]/[illust-job-office-2.png] (generic desk paperwork without the map/route-board signature).
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
