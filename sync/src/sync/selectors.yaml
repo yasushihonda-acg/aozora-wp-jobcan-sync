@@ -213,6 +213,20 @@ list:
   # `support`/`visiting-rehab`/`service-manager`/`caretaker`). `visit`'s
   # pool (`illust-job-visit.png`/`-2.png`/`-3.png`) is otherwise untouched,
   # so ホームヘルパー assignments are unchanged.
+  #
+  # 2026-08-13 (8th, final of the 11-職種 backlog): 16 -> 17 buckets, same
+  # MOVE pattern. `新卒・既卒総合職` split out of `office` into its own
+  # `new-grad` bucket (SCENE #28: a solo figure in a black/charcoal suit +
+  # white shirt walking through a glass-walled corporate lobby, carrying a
+  # folder). Ships as a 1-image pool (same situation as `facility-manager`/
+  # `support`/`visiting-rehab`/`service-manager`/`caretaker`/`service-lead`).
+  # decision-maker accepted this despite a shared "solo figure walking a
+  # glass corridor with city-skyline windows + potted plants" archetype with
+  # `illust-job-general-2.png`, judging the suit-vs-black-polo outfit
+  # difference (the established `office`-track OUTFIT VARIATION per
+  # CLAUDE.md's 2026-07-02 decision) a sufficient visual/role signal.
+  # `office`'s pool (`illust-job-office.png`/`-2.png`) is otherwise
+  # untouched, so 事務職 assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
@@ -245,7 +259,6 @@ list:
       office:
         synonyms:
           - "事務職"
-          - "新卒・既卒総合職"
         images:
           - "assets/img/illust-job-office.png"
           - "assets/img/illust-job-office-2.png"
@@ -310,6 +323,11 @@ list:
           - "サービス提供責任者"
         images:
           - "assets/img/illust-job-service-lead.png"
+      new-grad:
+        synonyms:
+          - "新卒・既卒総合職"
+        images:
+          - "assets/img/illust-job-new-grad.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
