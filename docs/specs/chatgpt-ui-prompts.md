@@ -488,7 +488,7 @@ Please generate one illustration.
 
 **採用結果 (2026-08-13)**: 本田様が ChatGPT UI で1枚生成(リハビリバーを使った上肢運動療法シーン)。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施、全項目Pass。耳元はクリーン(ピアスなし)、手指(スタッフ・利用者様ともリハビリバーを握る手)も破綻なし。テーブル上にストレスボール・カラー積み木(指先訓練用)・タオルが配置され、構造化された機能訓練であることが明確。既存 `illust-job-nurse.png`(血圧測定などの医療行為)・`illust-job-visit-3.png`(手を引く歩行介助)とも視覚的に完全に区別できるため、`illust-job-visiting-rehab.png` として単独採用(1枚プール、`facility-manager`/`support` と同じ先行反映パターン)。`selectors.yaml` に `visiting-rehab` バケット新設(`nurse` から「訪問リハビリ」synonym を分離・移動、看護職・看護師の既存割り当ては無変更)。テキストタグから格上げ(5→4)。
 
-### 25. `illust-job-service-manager.png` — 求人カード サービス管理責任者 (2026-08-13 新規追加予定)
+### 25. `illust-job-service-manager.png` — 求人カード サービス管理責任者 (2026-08-13 新規追加)
 
 **経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、訪問看護・夜勤専従・施設長・管理者候補・相談員・総合職(営業・管理職)・サポート職・訪問リハビリに続く8番目の対象として、残り4職種のうち件数同率1位(6件、世話人と同率)のサービス管理責任者を決裁者選定(タイブレーク理由: 世話人は既存 `illust-job-care.png` 系[入浴・移動介助などの身体介護動作]と構図が近く drift リスクが高い一方、サービス管理責任者は「個別支援計画の確認・スタッフ監督」という書類仕事寄りの動作を描けるため、既存 `illust-job-consultant.png`/`-2.png`(ケアマネジャー、多人数でのケアプラン相談)・`illust-job-consultation.png`/`-2.png`(相談員、ご本人・ご家族との窓口相談)との視覚的区別が付けやすい)。現在 `selectors.yaml` では `consultant` バケット(ケアマネジャー・計画作成担当者と共有)に折り込まれ専用イラストが無い。
 
@@ -507,9 +507,11 @@ Do NOT use a solo-seated-at-desk-with-tablet-and-pen pose (too close to [illust-
 Please generate one illustration.
 ```
 
-**次のアクション**: 本田様が上記 SCENE (2026-08-13 改訂版、構図をスタッフ監督シーン2択に限定) を新規 ChatGPT UI 会話 (PREAMBLE + baseline 添付) で再生成 → 生成物を Claude に送信 → 10 項目採点 + 耳元拡大確認 + 既存カード([illust-job-facility-manager.png]/[illust-job-general-2.png]/[illust-job-consultant.png]系含む)との構図比較 → 採用可否判定。
+**採用結果 (2026-08-13)**: 本田様が ChatGPT UI で2枚生成(デスクでタブレット+ペンを持つシーン/廊下を書類持って歩くシーン、いずれも改訂前の初期COMPOSITION指定時の生成)。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施、2枚とも全項目Pass。
 
-**却下履歴 (2026-08-13、1回目生成)**: 初回生成2枚(座ってタブレット+ペンのデスクシーン、廊下を書類持って歩くシーン)は10項目チェック自体はPassしたが、既存カードとの構図比較で [illust-job-facility-manager.png] (座り姿勢+片手タブレット+片手ペン+デスク上書類の構図) および [illust-job-general-2.png] (廊下を書類持って歩く構図、同じ窓+観葉植物+受付背景) とそれぞれ酷似していると判明し、decision-maker判断で2枚とも不採用・SCENE再生成を選択(PR #183/#186と同種の構図drift再発パターン)。
+既存カードとの構図比較(PR #183/#186の教訓に基づく確認)では、廊下を歩くシーンが `illust-job-general-2.png`(総合職バリエーション、同じ窓+観葉植物+受付背景の廊下歩行構図)と酷似していると判明し不採用。デスクシーンは `illust-job-facility-manager.png`(座り姿勢+片手タブレット+片手ペンの共通アーキタイプ)と要素は近いが、背景(本SCENEはオフィスデスク+都市スカイラインの窓、facility-managerはロビー受付+階段)とトーンが明確に異なり視覚的に区別可能と decision-maker が判断、`illust-job-service-manager.png` として単独採用(1枚プール、`facility-manager`/`support`/`visiting-rehab` と同じ先行反映パターン)。`selectors.yaml` に `service-manager` バケット新設(`consultant` から「サービス管理責任者」synonym を分離・移動、ケアマネジャー・計画作成担当者の既存割り当ては無変更)。テキストタグから格上げ(4→3)。
+
+**教訓**: 既存カードとの構図比較チェックは「SCENE本文で明示的に除外指定した対象」だけでなく全既存カードに対して行うべき(本件では consultant/consultation 系との区別は SCENE で明示していたが、facility-manager/general-2 系との重複は事後確認で発覚)。ただし共通アーキタイプ(座り+タブレット+ペン等)の再使用そのものは即不採用理由にはならず、背景・トーンといった副次要素での区別可否も含めて総合判断する。
 
 ## 生成後の運用
 
