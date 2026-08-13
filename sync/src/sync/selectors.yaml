@@ -188,13 +188,22 @@ list:
   # regeneration. `consultant`'s pool (`illust-job-consultant.png`/
   # `-2.png`) is otherwise untouched, so ケアマネジャー・計画作成担当者
   # assignments are unchanged.
+  #
+  # 2026-08-13 (6th): 14 -> 15 buckets, same MOVE pattern. `世話人` split out
+  # of `care` into its own `caretaker` bucket (SCENE #26: a group-home
+  # mealtime scene, staff serving a meal tray to a seated resident).
+  # Ships as a 1-image pool. A second ChatGPT UI candidate for this SCENE
+  # (a bathroom/changing-room towel-handing scene) was rejected outright —
+  # it depicted the exact bathing/hands-on-body-contact motif the SCENE's
+  # COMPOSITION explicitly excluded, not merely a similarity to an
+  # existing card. `care`'s pool (`illust-job-care.png`/`-2.png`/`-3.png`)
+  # is otherwise untouched, so 介護職 assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
       care:
         synonyms:
           - "介護職"
-          - "世話人"
         images:
           - "assets/img/illust-job-care.png"
           - "assets/img/illust-job-care-2.png"
@@ -277,6 +286,11 @@ list:
           - "サービス管理責任者"
         images:
           - "assets/img/illust-job-service-manager.png"
+      caretaker:
+        synonyms:
+          - "世話人"
+        images:
+          - "assets/img/illust-job-caretaker.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
