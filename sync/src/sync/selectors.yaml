@@ -139,6 +139,17 @@ list:
   # dedicated illustrations (a presentation scene + a facility-walkthrough
   # scene). `office`'s pool (`illust-job-office.png`/`-2.png`) is otherwise
   # untouched, so 事務職/新卒・既卒総合職 assignments are unchanged.
+  #
+  # 2026-08-13 (2nd): 10 -> 11 buckets, same MOVE pattern. `相談員` split out
+  # of `consultant` into its own `consultation` bucket with 2 dedicated
+  # illustrations (SCENE #21: a facility-tour guiding scene + a one-on-one
+  # intake counseling scene). Until now 相談員 shared `consultant`'s pool
+  # with ケアマネジャー・計画作成担当者/サービス管理責任者, so its top-page
+  # card and `/jobs/` thumbnails showed the multi-person care-plan-meeting
+  # scene meant for ケアマネジャー — the exact ambiguity SCENE #21 was
+  # written to resolve. `consultant`'s pool (`illust-job-consultant.png`/
+  # `-2.png`) is otherwise untouched, so ケアマネジャー・計画作成担当者/
+  # サービス管理責任者 assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
@@ -161,7 +172,6 @@ list:
           - "assets/img/illust-job-visit-3.png"
       consultant:
         synonyms:
-          - "相談員"
           - "ケアマネジャー・計画作成担当者"
           - "サービス管理責任者"
         images:
@@ -211,6 +221,12 @@ list:
         images:
           - "assets/img/illust-job-general.png"
           - "assets/img/illust-job-general-2.png"
+      consultation:
+        synonyms:
+          - "相談員"
+        images:
+          - "assets/img/illust-job-consultation.png"
+          - "assets/img/illust-job-consultation-2.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
