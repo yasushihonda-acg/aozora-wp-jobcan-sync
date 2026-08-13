@@ -169,6 +169,25 @@ list:
   # resistance-bar exercise scene). Ships as a 1-image pool. `nurse`'s pool
   # (`illust-job-nurse.png`) is otherwise untouched, so 看護職/看護師
   # assignments are unchanged.
+  #
+  # 2026-08-13 (5th): 13 -> 14 buckets, same MOVE pattern. `サービス管理責任者`
+  # split out of `consultant` into its own `service-manager` bucket (SCENE
+  # #25: a desk-review scene with a tablet + pen + stacked binders,
+  # generated 2026-08-13). Ships as a 1-image pool (same situation as
+  # `facility-manager`/`support`/`visiting-rehab`) — a second ChatGPT UI
+  # candidate for this SCENE (a solo corridor-walking pose) was rejected:
+  # it duplicated `illust-job-general-2.png`'s composition (same
+  # glass-walled corridor + reception-desk + potted-plant background, same
+  # walking pose) closely enough that decision-maker judged the two
+  # indistinguishable side-by-side. The adopted image's desk-review pose
+  # is visually distinct from `illust-job-facility-manager.png` on
+  # background/tone (open-plan office with a floor-to-ceiling city-skyline
+  # window vs. facility-manager's lobby/reception with a staircase) even
+  # though both feature a seated tablet+pen pose — decision-maker accepted
+  # this as sufficiently distinct rather than requesting a third
+  # regeneration. `consultant`'s pool (`illust-job-consultant.png`/
+  # `-2.png`) is otherwise untouched, so ケアマネジャー・計画作成担当者
+  # assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
@@ -191,7 +210,6 @@ list:
       consultant:
         synonyms:
           - "ケアマネジャー・計画作成担当者"
-          - "サービス管理責任者"
         images:
           - "assets/img/illust-job-consultant.png"
           - "assets/img/illust-job-consultant-2.png"
@@ -254,6 +272,11 @@ list:
           - "訪問リハビリ"
         images:
           - "assets/img/illust-job-visiting-rehab.png"
+      service-manager:
+        synonyms:
+          - "サービス管理責任者"
+        images:
+          - "assets/img/illust-job-service-manager.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
