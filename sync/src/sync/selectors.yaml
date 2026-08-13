@@ -150,13 +150,25 @@ list:
   # written to resolve. `consultant`'s pool (`illust-job-consultant.png`/
   # `-2.png`) is otherwise untouched, so ケアマネジャー・計画作成担当者/
   # サービス管理責任者 assignments are unchanged.
+  #
+  # 2026-08-13 (3rd): 11 -> 12 buckets, same MOVE pattern. `サポート職（清掃・
+  # 洗濯・調理・送迎）` split out of `care` into its own `support` bucket
+  # (SCENE #23: a facility-van pickup/送迎 scene). Ships as a 1-image pool
+  # (same situation as `facility-manager` before its variant follow-up) —
+  # two other ChatGPT UI generations for this SCENE (清掃/洗濯 candidates)
+  # were rejected: both showed a small stud earring despite the SCENE's
+  # unconditional "NO earring" ACCESSORY RULE, and the 洗濯 candidate also
+  # duplicated `illust-job-visit.png`'s laundry-folding motif. A 2nd/3rd
+  # variant (清掃 or 調理 scene, regenerated with a more strongly-worded
+  # earring rule) is a follow-up, not a blocker. `care`'s pool
+  # (`illust-job-care.png`/`-2.png`/`-3.png`) is otherwise untouched, so
+  # 介護職/世話人 assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
       care:
         synonyms:
           - "介護職"
-          - "サポート職（清掃・洗濯・調理・送迎）"
           - "世話人"
         images:
           - "assets/img/illust-job-care.png"
@@ -227,6 +239,11 @@ list:
         images:
           - "assets/img/illust-job-consultation.png"
           - "assets/img/illust-job-consultation-2.png"
+      support:
+        synonyms:
+          - "サポート職（清掃・洗濯・調理・送迎）"
+        images:
+          - "assets/img/illust-job-support.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:

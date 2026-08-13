@@ -464,6 +464,14 @@ COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Pick ONE clear,
 Please generate one illustration.
 ```
 
+**採用結果 (2026-08-13)**: 本田様が ChatGPT UI で3枚生成(清掃・洗濯・送迎の3シーン)。10項目採点+耳元拡大確認(sips でのピンポイントクロップ)を実施した結果、3枚中2枚を不採用とした。
+
+- 清掃シーン(テーブル拭き)・洗濯シーン(タオルたたみ)の2枚は、いずれも耳元拡大確認で**小さなスタッドピアスが視認され不採用**。本 SCENE の ACCESSORY RULE は施設長候補 SCENE #20 の教訓を踏まえ「NO earring, NO rings, NO dangling jewelry of any kind」と無条件で指定していたが、それでも ChatGPT UI が小さなピアスを描画するケースがあると判明(consultant 系 SCENE の「小stud許容」ルールとの取り違えではなく、無条件禁止でも起こりうる)。
+- 洗濯シーンはさらに、COMPOSITION で明示的に回避を指定していたにもかかわらず **既存 `illust-job-visit.png`(訪問介護員、洗濯物たたみ)と主要モチーフ(タオルをたたむ動作)が重複**しており、二重の不採用理由。
+- 残り1枚(送迎車へご利用者様をご案内するシーン)は耳元クリーン(ピアスなし)、手指も破綻なく、既存カード群の中で唯一の車両シーンのため視覚的に完全に区別できる。`illust-job-support.png` として単独採用(1枚プール、`facility-manager` と同じ先行反映パターン)。**教訓: 「NO earring」等の無条件禁止ルールを明記していても、ChatGPT UI 側が小さなアクセサリーを描画することがある。耳元拡大確認は職種のACCESSORY RULEの強さによらず毎回実施すべき**(次回以降のSCENE採点でも継続)。
+
+**【フォローアップ】`support` バリエーション追加**: 現在1枚プールのため、本番7件(サポート職)のカードは全て同一画像になる。清掃・調理のいずれかのシーンをACCESSORY RULEをさらに強い表現(例: 「earring-shaped mark of any size is a violation」等)で再生成依頼し、2枚目以降を追加する。
+
 ## 生成後の運用
 
 各生成完了後:
