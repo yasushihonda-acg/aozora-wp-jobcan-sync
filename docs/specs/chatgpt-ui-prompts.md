@@ -448,6 +448,22 @@ Please generate one illustration.
 
 残り2枚のうち、ホワイトボードの資料を指し示しながら同僚にプレゼンテーションするシーンを `illust-job-general.png` としてトップページ「総合職（営業・管理職）」カードに採用(既存カードと最も差別化でき、SCENE 意図の「外向き商談・提案」に最も合致)。施設内廊下を歩きながらクリップボードを確認するシーンは `illust-job-general-2.png` としてバリエーション保存、`/jobs/` 求人一覧の `selectors.yaml` `thumbnail_categories.general` バケット(旧 `office` から「総合職（営業・管理職）」synonym を分離・移動)の2枚プールとして採用。テキストタグから格上げ(7→6)。
 
+### 23. `illust-job-support.png` — 求人カード サポート職（清掃・洗濯・調理・送迎） (2026-08-13 新規追加)
+
+**経緯**: 決裁者指摘 (2026-08-11) で入口のなかった11職種のうち、訪問看護・夜勤専従・施設長・管理者候補・相談員・総合職(営業・管理職)に続く6番目の対象として、テキストタグのみだった残り6職種の中で本番実測 (2026-08-12) 最多 (7件) のサポート職(清掃・洗濯・調理・送迎)を選定。現在 `selectors.yaml` では `care` バケット(介護職・世話人と共有)に折り込まれ専用イラストが無い。既存 `illust-job-care.png`/`-2.png`/`-3.png` (介護スタッフ、入浴・排泄・移動介助など身体に直接触れる介護動作) や `illust-job-visit.png` (訪問介護員、利用者宅での洗濯物たたみ) とは異なり、本 SCENE は「身体介護を伴わない裏方支援」(清掃・調理・送迎)を明確に描写し視覚的に区別する。洗濯物たたみの構図は `illust-job-visit.png` で既出のため避ける。
+
+```
+JOB CATEGORY: Facility hospitality/support staff (サポート職 — 清掃・調理・送迎) — behind-the-scenes support work at an eldercare facility: cleaning common areas and resident rooms, preparing and serving meals in the facility kitchen, and driving residents to and from appointments or day-service pickup. This role does NOT provide direct hands-on physical care to residents (no bathing, no toileting, no mobility assistance).
+
+ACCESSORY RULE: Kitchen/food-safety and driving-safety appropriate — NO earring, NO rings, NO dangling jewelry of any kind. Short natural nails. Simple watch OK only in a non-cooking scene.
+
+OUTFIT VARIATION: keep the black polo shirt as base; if the scene is a kitchen/cooking scene, add a simple white or pale apron over it (no apron if driving or cleaning).
+
+COMPOSITION: horizontal 3:2 or 16:9 wide. Main subject centered. Pick ONE clear, specific facility-support action — e.g. plating/preparing a meal tray in a bright facility kitchen, wiping down and tidying a resident's room or common lounge area, or loading a resident into a facility van for a day-service pickup. Must look visibly distinct from [illust-job-care.png]/[illust-job-care-2.png]/[illust-job-care-3.png] (no direct physical contact with a resident's body) and must NOT be a laundry-folding scene (that motif already exists in [illust-job-visit.png]).
+
+Please generate one illustration.
+```
+
 ## 生成後の運用
 
 各生成完了後:
