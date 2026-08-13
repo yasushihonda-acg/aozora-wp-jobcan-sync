@@ -198,6 +198,21 @@ list:
   # COMPOSITION explicitly excluded, not merely a similarity to an
   # existing card. `care`'s pool (`illust-job-care.png`/`-2.png`/`-3.png`)
   # is otherwise untouched, so 介護職 assignments are unchanged.
+  #
+  # 2026-08-13 (7th): 15 -> 16 buckets, same MOVE pattern. `サービス提供責任者`
+  # split out of `visit` into its own `service-lead` bucket (SCENE #27: a
+  # 3-person intake meeting with a resident, a family member, and the
+  # coordinator holding out a tablet). The SCENE's COMPOSITION had required
+  # a wall-mounted route/schedule board as the central visual signature,
+  # but the generated candidate omitted it entirely in favor of this
+  # meeting-style scene; decision-maker accepted it anyway, judging the
+  # board requirement unrealistic for a modern office (paper wall maps/
+  # boards are no longer common practice) and accepting the resulting
+  # visual closeness to `illust-job-consultant.png`/`illust-job-consultation.png`
+  # family. Ships as a 1-image pool (same situation as `facility-manager`/
+  # `support`/`visiting-rehab`/`service-manager`/`caretaker`). `visit`'s
+  # pool (`illust-job-visit.png`/`-2.png`/`-3.png`) is otherwise untouched,
+  # so ホームヘルパー assignments are unchanged.
   thumbnail_categories:
     enabled: true
     categories:
@@ -211,7 +226,6 @@ list:
       visit:
         synonyms:
           - "ホームヘルパー"
-          - "サービス提供責任者"
         images:
           - "assets/img/illust-job-visit.png"
           - "assets/img/illust-job-visit-2.png"
@@ -291,6 +305,11 @@ list:
           - "世話人"
         images:
           - "assets/img/illust-job-caretaker.png"
+      service-lead:
+        synonyms:
+          - "サービス提供責任者"
+        images:
+          - "assets/img/illust-job-service-lead.png"
     default_image: "assets/img/illust-job-default.png"
 
 sanitize:
