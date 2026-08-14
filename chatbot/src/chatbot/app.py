@@ -189,6 +189,7 @@ def create_app(
         if not app_config.jobs_detail_url:
             _logger.info("knowledge refresh disabled (JOBS_DETAIL_URL is empty)")
             return
+        nonlocal _last_refresh_failed
         try:
             refreshed = await knowledge.fetch_knowledge(
                 app_config.jobs_detail_url,
@@ -202,9 +203,11 @@ def create_app(
                 exc_info=True,
                 extra={"url": app_config.jobs_detail_url},
             )
+            _last_refresh_failed = True
             return
         nonlocal _last_refresh_success_at
         _last_refresh_success_at = time.monotonic()
+        _last_refresh_failed = False
         _logger.info(
             "knowledge refreshed from %s (%d jobs)",
             app_config.jobs_detail_url,
@@ -220,9 +223,16 @@ def create_app(
     # from "has been failing to refresh for days but still serving old-but-
     # once-valid data" — a gap the plain `source`/`job_count` fields alone
     # can't reveal (both stay unchanged whether the last N attempts
-    # succeeded or every one of them failed).
+    # succeeded or every one of them failed). `_last_refresh_failed` is a
+    # separate explicit flag rather than a timestamp comparison (2026-08-14
+    # incident fix): `_lifespan`'s startup path sets `_last_refresh_attempt_at`
+    # *after* awaiting `_refresh_knowledge()`, while the `/chat`-triggered
+    # path sets it *before* — a `_last_refresh_success_at >=
+    # _last_refresh_attempt_at` comparison would give the opposite answer
+    # depending on which caller ran last, so outcome is tracked directly.
     _last_refresh_attempt_at = 0.0
     _last_refresh_success_at: float | None = None
+    _last_refresh_failed = False
 
     async def _maybe_refresh_knowledge() -> None:
         """Request-triggered refresh check, called at the top of `/chat`.
@@ -255,13 +265,28 @@ def create_app(
         two concurrent `/chat` requests racing this check can't both decide
         a refresh is due — same "no other coroutine can observe the gap"
         reasoning `_install`'s docstring already relies on.
+
+        After a failed attempt, the gating interval shrinks to
+        `min(interval, knowledge_refresh_retry_interval_seconds)` instead of
+        staying at the full steady-state `interval` (2026-08-14 incident
+        fix): without this, one cold-start timeout — `chatbot` and `sync`
+        both scale to zero and can cold-start concurrently, and a real
+        occurrence timed the two startups as not fitting inside the old 3s
+        fetch timeout — locked the chatbot into FAQ-only fallback for up to
+        a full `interval` (default 1h) instead of recovering within
+        minutes on the next `/chat` request.
         """
         interval = app_config.knowledge_refresh_interval_seconds
         if interval <= 0:
             return
         nonlocal _last_refresh_attempt_at
         now = time.monotonic()
-        if now - _last_refresh_attempt_at < interval:
+        effective_interval = (
+            min(interval, app_config.knowledge_refresh_retry_interval_seconds)
+            if _last_refresh_failed
+            else interval
+        )
+        if now - _last_refresh_attempt_at < effective_interval:
             return
         _last_refresh_attempt_at = now
         await _refresh_knowledge()

@@ -163,6 +163,94 @@ def test_chat_keeps_previous_fetched_knowledge_when_later_refresh_fails(
     assert health["knowledge"]["seconds_since_last_success"] is not None
 
 
+async def _failing_handler(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("connection refused", request=request)
+
+
+def test_chat_retries_before_full_interval_after_a_failed_attempt(monkeypatch: Any) -> None:
+    """Regression (production incident, 2026-08-14): `chatbot` and `sync`
+    scale to zero independently and can cold-start concurrently — a real
+    occurrence timed `chatbot`'s fetch timing out one line before `sync`
+    finished booting. Before this fix, that single failed attempt locked
+    the chatbot into FAQ-only fallback for the full steady-state interval
+    (up to 1h in production) because `_maybe_refresh_knowledge` gated on
+    time-since-last-*attempt* regardless of outcome. The next `/chat`
+    request past the shorter `knowledge_refresh_retry_interval_seconds`
+    must now retry instead of waiting out the full interval."""
+    clock = _fake_clock(monkeypatch)
+    transport, seen = _recording_transport(_failing_handler)
+    app = create_app(
+        config=_config(
+            knowledge_refresh_interval_seconds=3600.0,
+            knowledge_refresh_retry_interval_seconds=100.0,
+        ),
+        generate_fn=_FakeGenerate(),
+        http_transport=transport,
+    )
+    client = TestClient(app)
+
+    client.post("/chat", json={"message": "1回目"})  # fails
+    clock["now"] += 101  # past the 100s retry interval, nowhere near 3600s
+    client.post("/chat", json={"message": "2回目"})
+
+    assert len(seen) == 2
+
+
+def test_chat_does_not_retry_before_retry_interval_elapses_after_failure(
+    monkeypatch: Any,
+) -> None:
+    clock = _fake_clock(monkeypatch)
+    transport, seen = _recording_transport(_failing_handler)
+    app = create_app(
+        config=_config(
+            knowledge_refresh_interval_seconds=3600.0,
+            knowledge_refresh_retry_interval_seconds=100.0,
+        ),
+        generate_fn=_FakeGenerate(),
+        http_transport=transport,
+    )
+    client = TestClient(app)
+
+    client.post("/chat", json={"message": "1回目"})  # fails
+    clock["now"] += 50  # still within the 100s retry interval
+    client.post("/chat", json={"message": "2回目"})
+
+    assert len(seen) == 1
+
+
+def test_chat_uses_full_interval_again_after_a_successful_retry(monkeypatch: Any) -> None:
+    """Once a retry succeeds, the gating interval must go back to the full
+    steady-state cadence rather than staying on the short retry interval
+    forever."""
+    clock = _fake_clock(monkeypatch)
+    call_count = {"n": 0}
+
+    async def _handler(request: httpx.Request) -> httpx.Response:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise httpx.ConnectError("connection refused", request=request)
+        return httpx.Response(200, json=[_FETCHED_JOB])
+
+    transport, seen = _recording_transport(_handler)
+    app = create_app(
+        config=_config(
+            knowledge_refresh_interval_seconds=1000.0,
+            knowledge_refresh_retry_interval_seconds=100.0,
+        ),
+        generate_fn=_FakeGenerate(),
+        http_transport=transport,
+    )
+    client = TestClient(app)
+
+    client.post("/chat", json={"message": "1回目"})  # fails
+    clock["now"] += 101  # past the retry interval → retries and succeeds
+    client.post("/chat", json={"message": "2回目"})
+    clock["now"] += 101  # past the retry interval again, but not the full 1000s
+    client.post("/chat", json={"message": "3回目"})
+
+    assert len(seen) == 2  # the 3rd call must NOT have triggered another fetch
+
+
 def test_chat_refresh_disabled_when_interval_is_zero(monkeypatch: Any) -> None:
     _fake_clock(monkeypatch)
     transport, seen = _recording_transport(_ok_handler)
