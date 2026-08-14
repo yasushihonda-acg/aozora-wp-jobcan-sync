@@ -1298,12 +1298,12 @@
   padding: 0;
   margin: 0 0 var(--space-4);
 }
-.job-detail-section__body li {
+.job-detail-section__body ul li {
   position: relative;
   padding-left: var(--space-5);
   margin-bottom: var(--space-2);
 }
-.job-detail-section__body li::before {
+.job-detail-section__body ul li::before {
   content: "";
   position: absolute;
   left: 0; top: 0.7em;
