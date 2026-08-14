@@ -1025,6 +1025,10 @@ def test_get_job_list_with_category_id_has_no_job_type_multiselect_chips() -> No
 
 
 def test_get_job_list_category_page_nav_links_to_every_job_type_and_marks_current() -> None:
+    """decision-makerフィードバック(2026-08-14)を受け、職種ナビは全求人ページの
+    「職種」パネル行と同一の `.job-search-panel__row`/`__label`/`__chip` を
+    再利用して見た目を統一している(独自の `.job-search-nav__link` は廃止)。
+    `.is-active` はJSトグルチップの `[aria-pressed="true"]` 用CSSと共用。"""
     repo = _repo_with(
         _snapshot("1", category_ids=["18773"]),
         _snapshot("2", category_ids=["18983"]),
@@ -1033,9 +1037,10 @@ def test_get_job_list_category_page_nav_links_to_every_job_type_and_marks_curren
 
     response = client.get("/jobs/?category_id=18773")
 
-    assert 'class="job-search-nav__link" href="/jobs/"' in response.text
+    assert 'class="job-search-panel__label">職種</span>' in response.text
+    assert 'class="job-search-panel__chip" href="/jobs/"' in response.text
     assert (
-        'class="job-search-nav__link is-active" href="/jobs/?category_id=18773" '
+        'class="job-search-panel__chip is-active" href="/jobs/?category_id=18773" '
         'aria-current="page"'
     ) in response.text
     assert 'href="/jobs/?category_id=18983"' in response.text
@@ -1059,10 +1064,10 @@ def test_get_job_list_all_jobs_page_has_no_search_nav() -> None:
 
     response = client.get("/jobs/")
 
-    assert 'class="job-search-nav"' not in response.text
+    assert 'aria-label="職種で絞り込む"' not in response.text
     # The multi-select chip row's own 職種 button must still be the only
-    # `data-value="18773"` element — a `.job-search-nav__link` would have
-    # introduced a second, `href`-based element carrying the same category_id.
+    # `data-value="18773"` element — a nav `<a>` would have introduced a
+    # second, `href`-based element carrying the same category_id.
     assert response.text.count('data-value="18773"') == 1
 
 
