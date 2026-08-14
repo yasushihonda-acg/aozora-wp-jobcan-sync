@@ -160,7 +160,12 @@ uv run pyright
   から到達できない）
 - `MODEL_ID` / `VERTEX_LOCATION` / `ALLOWED_ORIGINS` は env 変数で注入、コード変更不要
 - `JOBS_DETAIL_URL`（既定値あり、空文字で知識ベースの起動時リフレッシュを無効化）/
-  `KNOWLEDGE_FETCH_TIMEOUT_SECONDS`（既定 `3.0`）も同様に env 変数で注入可能
+  `KNOWLEDGE_FETCH_TIMEOUT_SECONDS`（既定 `10.0`、2026-08-14 PR #218 で `3.0`→`10.0` へ緩和。
+  `chatbot`/`sync` 双方が `minScale` 未設定で同時にコールドスタートすると旧デフォルトでは
+  タイムアウトし FAQ のみ状態に落ちていた実害を解消）/
+  `KNOWLEDGE_REFRESH_RETRY_INTERVAL_SECONDS`（既定 `300.0`、リフレッシュ失敗後の再試行間隔。
+  同 PR で新設、`knowledge_refresh_interval_seconds` の既定 1 時間を待たず数分で自動復旧）も
+  同様に env 変数で注入可能
 - Artifact Registry の自動生成リポジトリ `cloud-run-source-deploy` に cleanup policy
   （最新2件保持、`infra/cleanup-policy.json`）適用済み
 
