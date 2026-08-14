@@ -1044,14 +1044,26 @@ def test_get_job_list_category_page_nav_links_to_every_job_type_and_marks_curren
     assert response.text.count('aria-current="page"') == 1
 
 
-def test_get_job_list_all_jobs_page_nav_marks_all_jobs_as_current() -> None:
-    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+def test_get_job_list_all_jobs_page_has_no_search_nav() -> None:
+    """`.job-search-nav` (category-page filter-nav follow-up) must stay
+    exclusive to category pages — the all-jobs page's own `data-filter-group=
+    "jobType"` chip row already covers every 職種 (as a multi-select,
+    no-reload filter), so rendering the nav there too would duplicate the
+    same 17 labels+counts back to back on the page (2026-08-14 実機確認で
+    発覚・修正: `/jobs/` visibly showed every 職種 twice)."""
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18983"]),
+    )
+    client = _client_with(repo)
 
     response = client.get("/jobs/")
 
-    assert (
-        'class="job-search-nav__link is-active" href="/jobs/" aria-current="page"'
-    ) in response.text
+    assert 'class="job-search-nav"' not in response.text
+    # The multi-select chip row's own 職種 button must still be the only
+    # `data-value="18773"` element — a `.job-search-nav__link` would have
+    # introduced a second, `href`-based element carrying the same category_id.
+    assert response.text.count('data-value="18773"') == 1
 
 
 def test_get_job_list_category_page_inline_search_index_is_scoped_to_category() -> None:

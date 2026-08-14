@@ -86,15 +86,20 @@
 </header>
 
 {% if search_mode %}
+{% if page.category_id %}
 {# 職種切り替えナビ(category-page filter-nav follow-up, 2026-08-14): 検索パネルの
    外側に置く独立したページ遷移リンクの並び。JS 不要・インデックス取得の成否に
-   関わらず必ず機能する — 「戻る」しか手段が無かった職種入口からの回遊導線。 #}
+   関わらず必ず機能する — 「戻る」しか手段が無かった職種入口からの回遊導線。
+   全求人ページ(`not page.category_id`)には出さない — パネル内の「職種」チップ
+   行(複数選択・その場で絞り込み、下記)が既に同じ17職種を担っており、両方出すと
+   同じラベル+件数がページ内に二重表示される(2026-08-14 実機確認で発覚・修正)。 #}
 <nav class="job-search-nav" aria-label="職種で絞り込む">
-  <a class="job-search-nav__link{% if not page.category_id %} is-active{% endif %}" href="/jobs/"{% if not page.category_id %} aria-current="page"{% endif %}>すべての職種</a>
+  <a class="job-search-nav__link" href="/jobs/">すべての職種</a>
   {% for chip in job_type_chips %}
   <a class="job-search-nav__link{% if page.category_id == chip.category_id %} is-active{% endif %}" href="/jobs/?category_id={{ chip.category_id }}"{% if page.category_id == chip.category_id %} aria-current="page"{% endif %}>{{ chip.name }}<span class="job-search-nav__count">{{ chip.count }}</span></a>
   {% endfor %}
 </nav>
+{% endif %}
 <div class="job-search" id="job-search" data-jobs-endpoint="{{ search_index_url }}">
   {% if search_index_json %}
   {# インライン埋め込み(category-page filter-nav follow-up, 2026-08-14): この
