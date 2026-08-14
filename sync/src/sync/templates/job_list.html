@@ -87,31 +87,6 @@
 
 {% if search_mode %}
 <div class="job-search" id="job-search" data-jobs-endpoint="{{ search_index_url }}">
-  {% if page.category_id %}
-  {# 職種切り替えナビ(category-page filter-nav follow-up, 2026-08-14): 全求人
-     ページの「職種」パネル行(複数選択チップ、下記)と全く同じ見た目(ラベル+
-     ピル)に揃えるため `.job-search-panel__row`/`__label`/`__chip` を再利用し、
-     `#job-search-panel` の直前に隣接させてCSSで1枚のカードに見せる
-     (`.job-search-nav + .job-search-panel` in map-search.css)。ただし DOM 上は
-     `#job-search-panel` の**外**(`#job-search` の直下 = 兄弟要素)に置く —
-     `#job-search-panel` は検索インデックス取得が両経路とも失敗した場合に
-     `panel.hidden = true` される(Stage 3 silent-failure-hunter対応)ため、
-     内側に置くと「戻る」しか手段が無かった職種入口からの回遊導線ごと消えて
-     しまう。全求人ページ(`not page.category_id`)には出さない — 同じ17職種を
-     担うパネル内チップと二重表示になるため(2026-08-14 実機確認で発覚・修正)。
-     チップは `data-filter-group`/`data-value` を持たないただの `<a>` なので、
-     `map-search.js` のチップ絞り込みロジック(`panel.querySelectorAll(...)`、
-     `#job-search-panel` 配下のみ探索)には拾われない。 #}
-  <nav class="job-search-panel__row job-search-nav" aria-label="職種で絞り込む">
-    <span class="job-search-panel__label">職種</span>
-    <div class="job-search-panel__chips">
-      <a class="job-search-panel__chip" href="/jobs/">すべての職種</a>
-      {% for chip in job_type_chips %}
-      <a class="job-search-panel__chip{% if page.category_id == chip.category_id %} is-active{% endif %}" href="/jobs/?category_id={{ chip.category_id }}"{% if page.category_id == chip.category_id %} aria-current="page"{% endif %}>{{ chip.name }}<span class="job-search-panel__chip-count">{{ chip.count }}</span></a>
-      {% endfor %}
-    </div>
-  </nav>
-  {% endif %}
   {% if search_index_json %}
   {# インライン埋め込み(category-page filter-nav follow-up, 2026-08-14): この
      レスポンスを作った時点で既に手元にあったデータをそのまま埋め込むことで、
@@ -128,6 +103,34 @@
      `map-search.js`'s catch block now also unhides this. #}
   <p class="job-search-empty" id="job-search-load-error" hidden>検索・地図機能を読み込めませんでした。すべての求人を表示しています。</p>
   <noscript><style>#job-search-panel{display:none}</style></noscript>
+  {% if page.category_id %}
+  {# 職種切り替えナビ(category-page filter-nav follow-up, 2026-08-14): 全求人
+     ページの「職種」パネル行(複数選択チップ、下記)と全く同じ見た目(ラベル+
+     ピル)に揃えるため `.job-search-panel__row`/`__label`/`__chip` を再利用し、
+     `#job-search-panel` の直前に隣接させてCSSで1枚のカードに見せる
+     (`.job-search-nav + .job-search-panel` in map-search.css — 上記の
+     script/p/noscript より**後**、panel の直前に置くのは必須。CSSの隣接
+     兄弟結合子は「直後の兄弟」にしかマッチせず、間に他要素が挟まると効かない
+     — codex review 指摘、2026-08-14)。ただし DOM 上は `#job-search-panel`
+     の**外**(`#job-search` の直下 = 兄弟要素)に置く — `#job-search-panel`
+     は検索インデックス取得が両経路とも失敗した場合に `panel.hidden = true`
+     される(Stage 3 silent-failure-hunter対応)ため、内側に置くと「戻る」しか
+     手段が無かった職種入口からの回遊導線ごと消えてしまう。全求人ページ
+     (`not page.category_id`)には出さない — 同じ17職種を担うパネル内チップと
+     二重表示になるため(2026-08-14 実機確認で発覚・修正)。チップは
+     `data-filter-group`/`data-value` を持たないただの `<a>` なので、
+     `map-search.js` のチップ絞り込みロジック(`panel.querySelectorAll(...)`、
+     `#job-search-panel` 配下のみ探索)には拾われない。 #}
+  <nav class="job-search-panel__row job-search-nav" aria-label="職種で絞り込む">
+    <span class="job-search-panel__label">職種</span>
+    <div class="job-search-panel__chips">
+      <a class="job-search-panel__chip" href="/jobs/">すべての職種</a>
+      {% for chip in job_type_chips %}
+      <a class="job-search-panel__chip{% if page.category_id == chip.category_id %} is-active{% endif %}" href="/jobs/?category_id={{ chip.category_id }}"{% if page.category_id == chip.category_id %} aria-current="page"{% endif %}>{{ chip.name }}<span class="job-search-panel__chip-count">{{ chip.count }}</span></a>
+      {% endfor %}
+    </div>
+  </nav>
+  {% endif %}
   <div class="job-search-panel" id="job-search-panel">
     {% if not page.category_id %}
     <div class="job-search-panel__row">
