@@ -9,6 +9,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .detail_sections import RelatedJob, build_detail_view, build_job_posting_json_ld
+from .job_types import JOB_TYPE_NAMES
 from .list_sections import JobListCardView, JobTypeChip
 from .models import JobListPage, JobOffer
 
@@ -148,6 +149,7 @@ def render_job_list(
     cards: list[JobListCardView] | None = None,
     search_mode: bool = False,
     search_index_url: str | None = None,
+    search_index: dict | None = None,
     job_type_chips: list[JobTypeChip] | None = None,
     env: Environment | None = None,
 ) -> str:
@@ -164,11 +166,21 @@ def render_job_list(
       chips from) falls back to the plain pre-Stage-3 card markup instead
       of a missing/empty card, so every existing `render_job_list(page)`
       call site keeps working unchanged.
-    - `search_mode`: `True` for the all-jobs page (`category_id=None`) —
-      the template renders the chip/freeword/map search panel only then.
-    - `search_index_url`: where `map-search.js` fetches the filter/map
-      dataset from (`/jobs/search-index.json`, never the `/assets/`-mounted
-      Phase A static file — see `search_index.py`'s module docstring).
+    - `search_mode`: `True` whenever the search panel (chip/freeword/map)
+      should render — every `/jobs/` listing as of the category-page
+      filter-nav follow-up (2026-08-14), not just the all-jobs page.
+    - `search_index_url`: where `map-search.js` falls back to fetching the
+      filter/map dataset from (`/jobs/search-index.json`) when `search_index`
+      below isn't usable client-side — never the `/assets/`-mounted Phase A
+      static file (see `search_index.py`'s module docstring).
+    - `search_index`: the same `{"facilities": ..., "jobs": ...}` shape
+      `search_index.py::build_search_index` returns, pre-serialised here
+      (category-page filter-nav follow-up, 2026-08-14) and inlined into the
+      page as a `<script type="application/json">` block so the panel is
+      interactive without waiting on a second network round-trip for data
+      the server already had while rendering this same response. `None`
+      renders no inline block — `map-search.js` then falls back to
+      `search_index_url`, same as before this follow-up.
     - `job_type_chips`: the 17-category 職種 chip list
       (`list_sections.build_job_type_chips`), rendered only in
       `search_mode` (job-type-filter-granularity follow-up, 2026-08-09).
@@ -178,13 +190,20 @@ def render_job_list(
     env = env or make_environment()
     template = env.get_template("job_list.html")
     cards_by_job_id = {c.item.job_id: c for c in (cards or [])}
+    search_index_json = (
+        json.dumps(search_index, ensure_ascii=False).replace("</", "<\\/")
+        if search_index is not None
+        else None
+    )
     return template.render(
         page=page,
         base_url=base_url,
         cards_by_job_id=cards_by_job_id,
         search_mode=search_mode,
         search_index_url=search_index_url,
+        search_index_json=search_index_json,
         job_type_chips=job_type_chips or [],
+        job_type_names=JOB_TYPE_NAMES,
         site_name=SITE_NAME,
         site_description=SITE_DESCRIPTION,
         og_image_path=OG_IMAGE_PATH,

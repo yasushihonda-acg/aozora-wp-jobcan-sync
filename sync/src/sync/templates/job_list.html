@@ -6,7 +6,17 @@
    (plain category grid, no search UI). `cards` (list of `list_sections.
    JobListCardView`) carries the colour modifier + salary/holiday chips both
    modes share; `search_mode`/`search_index_url` gate the search-only
-   markup. See `app.py::_render_list`. #}
+   markup. See `app.py::_render_list`.
+
+   Category-page filter-nav follow-up (2026-08-14): `search_mode` is now
+   `True` on every `/jobs/` route this app itself renders (`_render_list`
+   always passes it) — only the CLI `list` subcommand's plain path
+   (`cli.py`, no `search_mode` kwarg → default `False`) still takes the
+   `{% else %}` branch below. Within `search_mode`, `.job-search-nav`
+   (all 職種 as plain links, always visible) is new; the pre-existing
+   `data-filter-group="jobType"` multi-select chip row is now shown only on
+   the all-jobs page (`not page.category_id`) — a category page's own 職種
+   is expressed by which page you're on, not by a togglable filter chip. #}
 
 {% block page_title %}求人一覧 | あおぞらケアグループ採用{% endblock %}
 {% block canonical_url %}{{ base_url }}/jobs/{% if page.category_id %}?category_id={{ page.category_id }}{% endif %}{% endblock %}
@@ -71,19 +81,39 @@
 </nav>
 
 <header class="job-list__header">
-  <h1 class="job-list__title">求人一覧</h1>
+  <h1 class="job-list__title">{% if page.category_id %}{{ job_type_names.get(page.category_id, "求人一覧") }}{% else %}求人一覧{% endif %}</h1>
   <p class="job-list__lede">{{ page.items | length }} 件の募集中ポジション</p>
 </header>
 
 {% if search_mode %}
+{# 職種切り替えナビ(category-page filter-nav follow-up, 2026-08-14): 検索パネルの
+   外側に置く独立したページ遷移リンクの並び。JS 不要・インデックス取得の成否に
+   関わらず必ず機能する — 「戻る」しか手段が無かった職種入口からの回遊導線。 #}
+<nav class="job-search-nav" aria-label="職種で絞り込む">
+  <a class="job-search-nav__link{% if not page.category_id %} is-active{% endif %}" href="/jobs/"{% if not page.category_id %} aria-current="page"{% endif %}>すべての職種</a>
+  {% for chip in job_type_chips %}
+  <a class="job-search-nav__link{% if page.category_id == chip.category_id %} is-active{% endif %}" href="/jobs/?category_id={{ chip.category_id }}"{% if page.category_id == chip.category_id %} aria-current="page"{% endif %}>{{ chip.name }}<span class="job-search-nav__count">{{ chip.count }}</span></a>
+  {% endfor %}
+</nav>
 <div class="job-search" id="job-search" data-jobs-endpoint="{{ search_index_url }}">
+  {% if search_index_json %}
+  {# インライン埋め込み(category-page filter-nav follow-up, 2026-08-14): この
+     レスポンスを作った時点で既に手元にあったデータをそのまま埋め込むことで、
+     `map-search.js` が別途 `/jobs/search-index.json` を fetch して往復するのを
+     待たずにパネルを操作可能にする(表示ラグ解消)。取得元は
+     `renderer.render_job_list` が事前に `json.dumps(...).replace("</", "<\/")`
+     したもの — `job_detail.html` の `json_ld` と同じ埋め込み方式。 #}
+  <script type="application/json" id="job-search-index">{{ search_index_json | safe }}</script>
+  {% endif %}
   {# Stage 3 silent-failure-hunter finding (2026-08-09): a search-index.json
      fetch failure (Firestore outage, Cloud Run cold-start timeout, etc.)
      used to fail into total silence — the panel/map simply never appeared,
      with no signal to the visitor that a feature was supposed to be here.
      `map-search.js`'s catch block now also unhides this. #}
   <p class="job-search-empty" id="job-search-load-error" hidden>検索・地図機能を読み込めませんでした。すべての求人を表示しています。</p>
-  <div class="job-search-panel" id="job-search-panel" hidden>
+  <noscript><style>#job-search-panel{display:none}</style></noscript>
+  <div class="job-search-panel" id="job-search-panel">
+    {% if not page.category_id %}
     <div class="job-search-panel__row">
       <span class="job-search-panel__label">職種</span>
       <div class="job-search-panel__chips" data-filter-group="jobType">
@@ -92,6 +122,7 @@
         {% endfor %}
       </div>
     </div>
+    {% endif %}
     <div class="job-search-panel__row">
       <span class="job-search-panel__label">雇用形態</span>
       <div class="job-search-panel__chips" data-filter-group="employment">
