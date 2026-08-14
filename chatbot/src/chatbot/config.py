@@ -42,7 +42,15 @@ class AppConfig:
     # production kill switch via `gcloud run services update
     # --update-env-vars JOBS_DETAIL_URL=`).
     jobs_detail_url: str = DEFAULT_JOBS_DETAIL_URL
-    knowledge_fetch_timeout_seconds: float = 3.0
+    # 2026-08-14 incident: `chatbot` and `sync` scale to zero independently
+    # (neither has `minScale` set) and can cold-start concurrently. Cloud Run
+    # logs from a real occurrence (2026-08-14 04:49:57-04:50:01 JST) show
+    # `chatbot`'s fetch timing out at the old 3.0s default one line before
+    # `sync` finished booting and would have answered — the two services'
+    # startup latencies simply don't fit in 3s stacked together. Raised to
+    # give that margin; still bounded so a genuinely unreachable `sync`
+    # can't hang a `/chat` request indefinitely.
+    knowledge_fetch_timeout_seconds: float = 10.0
     # A Cloud Run instance can stay warm far longer than one 6-hourly `sync`
     # cycle — without this, a long-lived instance would keep answering with
     # whatever it fetched at cold start forever (Stage: AIチャットPhase B連携,
@@ -54,6 +62,16 @@ class AppConfig:
     # (or negative) disables it, same convention as `jobs_detail_url=""`
     # disabling the fetch entirely.
     knowledge_refresh_interval_seconds: float = 3600.0
+    # 2026-08-14 incident (see `knowledge_fetch_timeout_seconds` above): a
+    # single failed attempt (e.g. a cold-start timeout) used to leave the
+    # chatbot stuck serving FAQ-only data until the next full
+    # `knowledge_refresh_interval_seconds` (up to 1h) elapsed, because
+    # `_maybe_refresh_knowledge` gated on time-since-last-*attempt*
+    # regardless of outcome. After a failed attempt, the next retry is now
+    # gated on `min(knowledge_refresh_interval_seconds,
+    # knowledge_refresh_retry_interval_seconds)` instead, so the very next
+    # `/chat` request more than 5 minutes later recovers automatically.
+    knowledge_refresh_retry_interval_seconds: float = 300.0
 
     @classmethod
     def from_env(cls) -> AppConfig:
@@ -90,7 +108,7 @@ class AppConfig:
             # `JOBS_DETAIL_URL=` empty-string pattern by analogy for this
             # sibling env var must not get a crash loop for it.
             knowledge_fetch_timeout_seconds=float(
-                os.environ.get("KNOWLEDGE_FETCH_TIMEOUT_SECONDS") or "3.0"
+                os.environ.get("KNOWLEDGE_FETCH_TIMEOUT_SECONDS") or "10.0"
             ),
             # `or "3600.0"`, not `.get(..., DEFAULT)`: unlike `jobs_detail_url`,
             # an explicit empty string has no distinct meaning here — `"0"` is
@@ -100,5 +118,11 @@ class AppConfig:
             # env-var typo.
             knowledge_refresh_interval_seconds=float(
                 os.environ.get("KNOWLEDGE_REFRESH_INTERVAL_SECONDS") or "3600.0"
+            ),
+            # Same `or DEFAULT` convention as the two fields above and for
+            # the same reason — no distinct meaning for an explicit empty
+            # string here.
+            knowledge_refresh_retry_interval_seconds=float(
+                os.environ.get("KNOWLEDGE_REFRESH_RETRY_INTERVAL_SECONDS") or "300.0"
             ),
         )

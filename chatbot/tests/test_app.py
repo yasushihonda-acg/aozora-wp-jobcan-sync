@@ -388,7 +388,7 @@ def test_app_config_from_env_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.max_input_chars == 500
     assert "https://yasushihonda-acg.github.io" in config.allowed_origins
     assert config.jobs_detail_url == knowledge.DEFAULT_JOBS_DETAIL_URL
-    assert config.knowledge_fetch_timeout_seconds == 3.0
+    assert config.knowledge_fetch_timeout_seconds == 10.0
 
 
 def test_app_config_from_env_empty_jobs_detail_url_disables_fetch(
@@ -417,7 +417,7 @@ def test_app_config_from_env_empty_timeout_falls_back_to_default(
 
     config = AppConfig.from_env()
 
-    assert config.knowledge_fetch_timeout_seconds == 3.0
+    assert config.knowledge_fetch_timeout_seconds == 10.0
 
 
 def test_app_config_from_env_parses_allowed_origins(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -459,3 +459,36 @@ def test_app_config_from_env_parses_knowledge_refresh_interval(
     config = AppConfig.from_env()
 
     assert config.knowledge_refresh_interval_seconds == 900.0
+
+
+def test_app_config_from_env_knowledge_refresh_retry_interval_defaults_to_five_minutes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("KNOWLEDGE_REFRESH_RETRY_INTERVAL_SECONDS", raising=False)
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_refresh_retry_interval_seconds == 300.0
+
+
+def test_app_config_from_env_empty_retry_interval_falls_back_to_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same rationale as `KNOWLEDGE_REFRESH_INTERVAL_SECONDS`: an empty
+    string has no distinct meaning here, so it must fall back rather than
+    crash `float("")` at import time."""
+    monkeypatch.setenv("KNOWLEDGE_REFRESH_RETRY_INTERVAL_SECONDS", "")
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_refresh_retry_interval_seconds == 300.0
+
+
+def test_app_config_from_env_parses_knowledge_refresh_retry_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KNOWLEDGE_REFRESH_RETRY_INTERVAL_SECONDS", "60")
+
+    config = AppConfig.from_env()
+
+    assert config.knowledge_refresh_retry_interval_seconds == 60.0
