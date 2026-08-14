@@ -111,6 +111,8 @@ decision-maker指摘「AIチャットのほうの機能も今回のアップデ�
 
 ## Stage 5 調査結果(2026-08-09、実行はしていない・decision-maker判断待ち)
 
+**2026-08-14 追記**: 切替当日の実行手順は `infra/README.md` §10 の統合チェックリストに一本化済み(同日のFable 5全体監査で、Maps APIキー `jobs-map-embed` のリファラー許可リストに最終ドメインが未登録かつどのリマインダーにも紐付いていない漏れを発見したことへの対応。`PUBLIC_BASE_URL`・`ALLOWED_ORIGINS`・Mapsキー・Pagesリダイレクト再適用・スモークテスト・min-instances判断項目を全て含む)。着手時は §10 を上から順に実行すること。
+
 decision-makerから「今日Cloud Runページを決裁者に見せ、カスタムドメインを当てて移行を進める想定(システム部にDNS依頼)、GA4設定も検討」との方針共有を受け、実際に`gcloud`コマンドで検証した結果:
 
 - **`gcloud beta run domain-mappings create`を実行し実測**: `aozora-cg.com`のSearch Console所有権検証が未完了のため`ERROR: The provided domain does not appear to be verified`で即座に失敗(副作用なし、マッピングは作成されず)。**検証完了が絶対的な前提条件**と確定
