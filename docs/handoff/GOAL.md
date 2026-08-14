@@ -1,5 +1,5 @@
 ---
-updated: 2026-08-11
+updated: 2026-08-14
 ---
 
 ## 現在のミッション
@@ -7,6 +7,16 @@ Phase A(GitHub Pages静的モック、Jobcan実求人382件中37件=約9.7%の�
 
 ## 背景・why
 社長から「実際のJobcan環境では今も382件の実求人が公開されている。それを勝手に減らして見せる(Phase Aモックは37件のみ)のは非常にまずいのでは」との指摘(2026-08-08)。GitHub Pagesモックは既に一般公開URLであり、求職者が実際の募集内容より少ない件数しか見えない状態を「求人一覧」として公開し続けることは募集機会の毀損につながるリスクがあると判断し、Phase B前倒しを決定。調査の結果、単なるDNS切替ではなくPhase Bテンプレートのデザインパリティ・トップページの配信元決定が必要と判明。decision-maker判断: ①トップページもCloud Runに全面集約(WordPress統合は既に撤回済み、GitHub Pagesは仮置き) ②v1はカテゴリ別一覧でリリース(地図検索+GPS+フリーワード横断検索はStage 3以降)。段階リリース(Stage1: 静的配信基盤+トップページ移植 → Stage2: 求人詳細デザインパリティ → Stage3: 求人一覧デザインパリティ → Stage4: 本番公開前の健全性対応 → Stage5: ドメイン切替)で進行中、各Stage完了後に決裁者確認を挟む。
+
+## 完了の定義 (求人一覧: 職種別ページへの検索パネル追加 + 表示ラグ解消) — 2026-08-14 実装完了・本番デプロイ完了・実機確認完了・PR #210
+決裁者から「職種入口(`/jobs/?category_id=X`)から入ると他の職種を見る手段が『戻る』しかなく、UX的に良くない」との指摘。フィルターエリア(職種ナビ・雇用形態・エリア・フリーワード・地図)を全求人ページと同じく職種別ページにも表示する案を採用(サーバー側の職種フィルタは維持し、17URL全てに全382件をSSRするSEO/転送量上の不利な案は不採用)。あわせて、検索パネルが`/jobs/search-index.json`のfetch完了まで非表示になっていた表示ラグを、レンダリング時点で既に手元にあるデータをHTMLへインライン埋め込みする方式に変えて解消。
+- [x] `sync/src/sync/app.py::_render_list` を `search_mode=True` 常時化。職種別ページの検索インデックス(`build_search_index`)はその職種のカードだけにスコープした`scoped_snapshots`から構築、`job_type_chips`(職種ナビ・件数)は全snapshotsから常時構築
+- [x] `renderer.render_job_list()` に `search_index` 引数を追加、`json.dumps(...).replace("</", "<\\/")`で事前シリアライズ(`json_ld`と同じ埋め込み方式)し `<script type="application/json" id="job-search-index">` としてインライン埋め込み
+- [x] `job_list.html` に `.job-search-nav`(全17職種+「すべての職種」への遷移リンク、`aria-current`)を新設。既存の複数選択チップ行(`data-filter-group="jobType"`)は全求人ページのみに限定。`#job-search-panel`の`hidden`属性を除去(JS無効時は`<noscript>`でCSS非表示に切替)。`<h1>`は職種別ページで職種名(`JOB_TYPE_NAMES`)を表示
+- [x] `map-search.js` はインラインJSON(`#job-search-index`)があれば同期的に`JSON.parse`して即`init()`、無い/パース失敗時のみ従来の`fetch(jobsEndpoint)`へフォールバック。両方失敗時は`panel.hidden = true`に戻し既存の`#job-search-load-error`を表示
+- [x] `app.py`に`GZipMiddleware(minimum_size=1000)`を追加(転送量対策、全求人ページ実測 861KB→gzip後47KB、約95%減)
+- [x] `uv run pytest sync/tests/ -q` 554件全PASS(新規10件)、`ruff check`/`pyright` 0件、`codex review --base main -c model_reasoning_effort=high` findings 0件
+- [x] 本番デプロイ(`infra/README.md` §3・§4b、revision `aozora-sync-00027-572`)、Playwright実機確認完了: `/jobs/?category_id=18773`で職種ナビ17件+「すべての職種」表示・`aria-current`が現在職種のみに付与・雇用形態チップ「正社員」クリックで53件→17件に絞り込み動作・Networkに`search-index.json`へのリクエストなし(インライン優先読み込み確認)・console error 0件(warning 1件はGoogle Maps `Marker`非推奨警告、本変更と無関係の既存挙動)・モバイル幅(375px)でも職種ナビが自然に折り返し表示
 
 ## 完了の定義 (Stage 1: 静的配信基盤 + トップページ移植 + リンク付け替え) — 2026-08-08 実装完了・本番デプロイ済み・PR #142
 - [x] `sync/src/sync/app.py` に `/assets` StaticFilesマウント + `/`(トップページ)ルートを追加
