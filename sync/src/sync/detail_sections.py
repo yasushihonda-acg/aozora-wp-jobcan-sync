@@ -373,11 +373,26 @@ def extract_benefits(
     return chips, paragraphs
 
 
+_LEADING_CIRCLED_NUMBER = re.compile(r"^[①-⑳]\s*")
+
+
 def extract_selection_flow(extra_lines: list[tuple[str, str]]) -> list[str]:
+    """Jobcan の「選考フロー」を `↓` で分割してステップ一覧にする。
+
+    投稿によって担当者が手入力で先頭に丸数字(①②③…)を付けているものと
+    付けていないものが混在する(`mockup/jobs/*.html` の実データで確認)。
+    `job_detail.html` 側 (`.selection-flow__step::before`) が既に連番の
+    バッジを描画するため、丸数字付きの投稿だけ番号が二重表示されていた
+    (decision-maker報告、2026-08-14)。先頭の丸数字だけを取り除き、丸数字が
+    無い投稿はそのまま(`\\s*` が 0 文字マッチするだけで実質無変化)。"""
     for k, v in extra_lines:
         if k != "選考フロー":
             continue
-        return [s.strip() for s in v.split("↓") if s.strip()]
+        return [
+            _LEADING_CIRCLED_NUMBER.sub("", s.strip())
+            for s in v.split("↓")
+            if s.strip()
+        ]
     return []
 
 

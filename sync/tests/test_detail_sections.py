@@ -244,6 +244,21 @@ class TestExtractSelectionFlow:
     def test_absent_returns_empty(self) -> None:
         assert extract_selection_flow([]) == []
 
+    def test_strips_leading_circled_number(self) -> None:
+        """decision-maker報告(2026-08-14): `.selection-flow__step::before`
+        (job_detail.html)が連番バッジを描画するため、投稿の生テキストに
+        担当者が手入力した丸数字が残っていると番号が二重表示される。"""
+        result = extract_selection_flow(
+            [("選考フロー", "①ご応募↓②面接↓③採否ご連絡")]
+        )
+        assert result == ["ご応募", "面接", "採否ご連絡"]
+
+    def test_leaves_step_without_circled_number_unchanged(self) -> None:
+        """丸数字の有無は投稿ごとに混在する(`mockup/jobs/*.html`実データで
+        確認) — 無い投稿はそのまま変化しないことを保証する。"""
+        result = extract_selection_flow([("選考フロー", "ご応募↓面接")])
+        assert result == ["ご応募", "面接"]
+
 
 class TestExtractWorkTimeCapacity:
     def test_both_present(self) -> None:

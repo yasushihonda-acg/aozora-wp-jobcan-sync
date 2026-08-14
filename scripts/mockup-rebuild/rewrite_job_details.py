@@ -291,13 +291,19 @@ def extract_holiday_paragraph(extras: list[list[str]]) -> str:
 
 # ── 選考フロー ──
 
+_LEADING_CIRCLED_NUMBER = re.compile(r"^[①-⑳]\s*")
+
+
 def extract_selection_flow(extras: list[list[str]]) -> list[str]:
     for k, v in extras:
         if k != "選考フロー":
             continue
         steps = [s.strip() for s in v.split("↓") if s.strip()]
         # ※ 注記を別行で混ぜないために、行内 ※ 以降は補足としてその step に含めたまま
-        return steps
+        # 先頭の丸数字(①②③…)は job_detail.html 側で連番バッジを描画するため
+        # 二重表示になる — sync/src/sync/detail_sections.py::extract_selection_flow
+        # と同じ除去ロジック(2026-08-14, decision-maker報告)。
+        return [_LEADING_CIRCLED_NUMBER.sub("", s) for s in steps]
     return []
 
 
