@@ -9,8 +9,8 @@ Phase A(GitHub Pages、37件のみのサンプル)を Phase B(この Cloud Run
 サービス、382件全件を Firestore 経由で自動反映)へ本番切替する方針に転換した。
 トップページ・静的アセット(`mockup/assets`)もこのサービスに同梱し、
 `recruit.aozora-cg.com` を最終的に直接このサービスへ向ける(custom domain
-mapping は Stage 5 で対応、それまでは `xxx.run.app` の service URL が唯一の
-公開先)。段階リリース(Stage 1: 静的配信基盤+トップページ移植 → Stage 2:
+mapping は Stage 5 で対応(実行チェックリスト: §10)、それまでは `xxx.run.app`
+の service URL が唯一の公開先)。段階リリース(Stage 1: 静的配信基盤+トップページ移植 → Stage 2:
 求人詳細デザインパリティ → Stage 3: 求人一覧デザインパリティ → Stage 4:
 本番公開前の健全性対応 → Stage 5: ドメイン切替)の詳細は
 `docs/handoff/GOAL.md` を参照。
@@ -239,7 +239,8 @@ project number 形式(`https://aozora-sync-1084369586348.asia-northeast1.run.app
 も疎通するが(§5 動作確認と同じ「両方とも有効」)、`gcloud describe` の報告値
 をそのまま使うのが取り違え防止として最も確実。**Stage 5 でドメインを
 `recruit.aozora-cg.com` に切り替えたら、この値も合わせて更新すること**
-(忘れると canonical が古い `*.run.app` URLを指したままになる)。
+(忘れると canonical が古い `*.run.app` URLを指したままになる。切替作業
+全体の手順は §10 のチェックリストに一本化済み)。
 `STATIC_ASSETS_DIR`/`INDEX_HTML_PATH` は `Dockerfile` の `ENV` で固定済みの
 ため `--set-env-vars` に含める必要はない。
 
@@ -281,7 +282,9 @@ CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud run services update aoz
 ```
 
 **Stage 5 でドメインを `recruit.aozora-cg.com` に切り替えたら、この値にも
-最終ドメインを追加すること**(`PUBLIC_BASE_URL` の更新と同時に対応)。
+最終ドメインを追加すること**(`PUBLIC_BASE_URL` の更新と同時に対応。切替作業
+全体の手順は §10 のチェックリストに一本化済み — Maps API キーのリファラー
+更新も §10 手順6 に含まれる)。
 
 ## 5. 動作確認
 
@@ -653,6 +656,84 @@ gcloud logging read \
 ats_errors=0 crawl_errors=0 written=True`(初回切替時は`content_hash`が
 HTML経路と異なるため全件changed扱い、想定内)。`/jobs/` が382件表示、
 詳細ページの抜き取り確認、Firestore上のドキュメントが`source="csv"`。
+
+## 10. Stage 5 — ドメイン切替 (`recruit.aozora-cg.com`) 実行チェックリスト
+
+切替作業は本節を上から順に実行すれば完結する(個別コマンドの詳細は各参照先)。
+2026-08-14 の全体監査(Fable 5)で、切替時に更新が必要な設定のリマインダーが
+本ドキュメント2箇所(§4b `PUBLIC_BASE_URL`・§4.5 `ALLOWED_ORIGINS`)と
+`docs/runbooks/wif-setup.md`(Maps APIキー)に分散しており、特に Maps API
+キーのリファラー更新はどのリマインダーにも紐付いていないことが判明したため、
+漏れ防止として本節に一本化した。
+
+### 前提条件(未充足なら着手不可)
+
+- [ ] `aozora-cg.com` の Search Console 所有権検証が完了している(本田様が
+  Search Console で TXT レコード値を取得 → システム部へ DNS 登録依頼。
+  依頼文テンプレートは 2026-08-09 セッションで作成済み)。未完了のまま
+  手順1を実行すると `ERROR: The provided domain does not appear to be
+  verified` で即失敗する(2026-08-09 実測済み、副作用なし)
+
+### 当日手順
+
+1. [ ] domain mapping を作成し、CNAME 値の払い出しを受ける:
+
+   ```bash
+   CLOUDSDK_ACTIVE_CONFIG_NAME=aozora-wp-jobcan-sync gcloud beta run domain-mappings create \
+     --service=aozora-sync \
+     --domain=recruit.aozora-cg.com \
+     --project=aozora-wp-jobcan-sync \
+     --region=asia-northeast1
+   ```
+
+2. [ ] 払い出された CNAME 値をシステム部へ DNS 登録依頼(**TTL 60秒指定** —
+   ロールバック容易化方針、プロジェクト CLAUDE.md「本番反映」参照)
+3. [ ] DNS 反映 + マネージド TLS 証明書の発行完了を待つ(数十分〜長いと
+   1日程度かかりうる。`gcloud beta run domain-mappings describe
+   --domain=recruit.aozora-cg.com --region=asia-northeast1` の status で確認)
+4. [ ] `aozora-sync` の `PUBLIC_BASE_URL` を `https://recruit.aozora-cg.com`
+   へ更新(§4b。canonical・robots.txt の `Sitemap:` 行・sitemap.xml の
+   `<loc>` が全てこの1変数から導出されるため、更新はこれ1つで足りる)
+5. [ ] `aozora-chatbot` の `ALLOWED_ORIGINS` に `https://recruit.aozora-cg.com`
+   を追加(§4.5 のコマンドを流用。忘れるとチャット送信が CORS でサイレント
+   全滅 — チャット欄は表示されるが送信が無反応になる)
+6. [ ] Maps API キー `jobs-map-embed` のリファラー許可リストに
+   `https://recruit.aozora-cg.com/*` を追加
+   (`docs/runbooks/wif-setup.md` §リファラー制限の追従 のコマンドを流用。
+   忘れると新ドメインの `/jobs/` で**地図だけ**がサイレントに壊れる。
+   2026-08-14 監査時点の許可リストに最終ドメインは未登録であることを実測確認済み)
+7. [ ] GitHub Pages 側の Phase A リダイレクト(44ファイル)を新ドメインへ再適用:
+
+   ```bash
+   ./sync/.venv/bin/python scripts/mockup-rebuild/add_pages_redirects.py \
+     --base-url https://recruit.aozora-cg.com
+   ```
+
+   冪等(sentinel コメントで既存ブロックを置換)。実行後 commit → PR → マージ
+8. [ ] スモークテスト(全て新ドメインに対して実行):
+   - `curl -s https://recruit.aozora-cg.com/ | grep canonical` → 新ドメインを指す
+   - `curl -s https://recruit.aozora-cg.com/robots.txt` → `Sitemap:` 行が新ドメイン
+   - `curl -s https://recruit.aozora-cg.com/sitemap.xml | head` → `<loc>` が新ドメイン
+   - 実機(Playwright): トップ → カテゴリ一覧 → 求人詳細の遷移、チャット送信
+     (手順5の検証)、`/jobs/` の地図表示(手順6の検証)、console error 0件
+9. [ ] Search Console に新ドメインの sitemap.xml を登録(本田様の手元作業)
+
+### 判断項目(decision-maker、切替と同時に判断を推奨)
+
+- `min-instances=0` は §4b の設定根拠に「検証用」と明記した検証時の値のまま。
+  一般公開後は初回訪問者が cold start(2026-08-14 実測 約3〜4秒)に当たるため、
+  `min-instances=1` へ引き上げるかは decision-maker のコスト判断(アイドル
+  課金が発生する。実額は公式料金計算ツールで要確認)
+- `concurrency=10 × max-instances=1`(同時10リクエスト上限)も、公開告知等の
+  瞬間トラフィック想定に対して同時に見直し可能
+
+### 切替のロールバック
+
+DNS が TTL 60秒運用のため、システム部に CNAME の削除(または旧値への変更)を
+依頼すれば数分で切り戻る。domain mapping 自体は残しても `run.app` URL の配信
+には影響しない(mapping は追加であり置換ではない)。手順4〜6 を実施済みの
+場合は、同じ手順で旧値(`https://aozora-sync-flry56mxwa-an.a.run.app` 等)へ
+戻す。
 
 ## B-8 初回ロールアウト順序 (この順を守る)
 
