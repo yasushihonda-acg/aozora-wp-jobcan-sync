@@ -13,6 +13,52 @@
   margin-bottom: var(--space-8);
 }
 
+/* --- 職種切り替えナビ (category-page filter-nav follow-up, 2026-08-14) ---
+ * `#job-search-panel` の外側にある独立したページ遷移リンクの並び。
+ * `.job-search-panel__chip` と見た目は揃えるが、これはトグルボタン(JS が
+ * aria-pressed を切り替える)ではなく通常の <a> — JS 未実行・
+ * search-index.json 取得失敗のいずれでも常に機能する。 */
+.job-search-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.job-search-nav__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  background: #fff;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-heading);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+.job-search-nav__link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.job-search-nav__link.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.job-search-nav__count {
+  margin-left: var(--space-2);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+}
+.job-search-nav__link.is-active .job-search-nav__count {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 /* 同一要素に display:grid/flex を明示指定するクラスと `hidden` 属性が衝突すると
  * (author 通常宣言が UA の `[hidden]{display:none}` を常に上書きするため)
  * hidden="" にしても見た目上表示されたままになる。JS フォールバック(未実行/失敗時に

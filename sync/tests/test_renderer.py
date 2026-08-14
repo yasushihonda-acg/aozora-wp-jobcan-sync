@@ -314,6 +314,55 @@ class TestRenderJobList:
         html = render_job_list(page)
         assert f'href="/jobs/?category_id={page.category_id}"' in html
 
+    def test_heading_uses_job_type_name_when_category_id_known(self) -> None:
+        """Category-page filter-nav follow-up (2026-08-14): `page.category_id`
+        ("18773", from `_src()`) maps to a real `JOB_TYPE_NAMES` entry."""
+        from sync.parser import parse_job_list
+        from sync.renderer import render_job_list
+
+        page = parse_job_list(self._list_html(), self._src())
+        html = render_job_list(page)
+        assert '<h1 class="job-list__title">介護職</h1>' in html
+
+    def test_heading_falls_back_when_category_id_unknown(self) -> None:
+        """A `category_id` this table has never seen (data drift, or a
+        CLI-constructed page with no matching Jobcan category) must not
+        crash the template — `job_type_names.get(..., "求人一覧")` degrades
+        to the generic heading instead."""
+        from sync.parser import parse_job_list
+        from sync.renderer import render_job_list
+
+        page = parse_job_list(self._list_html(), self._src())
+        page = page.model_copy(update={"category_id": "99999999"})
+        html = render_job_list(page)
+        assert '<h1 class="job-list__title">求人一覧</h1>' in html
+
+    def test_search_index_renders_inline_script_when_provided(self) -> None:
+        """`search_index` (category-page filter-nav follow-up, 2026-08-14) is
+        embedded as `<script type="application/json" id="job-search-index">`
+        so `map-search.js` can read it synchronously instead of waiting on a
+        `/jobs/search-index.json` round-trip — same `</` escaping convention
+        `json_ld` already uses (`renderer.py`)."""
+        from sync.parser import parse_job_list
+        from sync.renderer import render_job_list
+
+        page = parse_job_list(self._list_html(), self._src())
+        html = render_job_list(
+            page,
+            search_mode=True,
+            search_index={"facilities": {}, "jobs": [{"id": "1", "jobTypes": ["18773"]}]},
+        )
+        assert 'id="job-search-index"' in html
+        assert '"id": "1"' in html
+
+    def test_search_index_omitted_renders_no_inline_script(self) -> None:
+        from sync.parser import parse_job_list
+        from sync.renderer import render_job_list
+
+        page = parse_job_list(self._list_html(), self._src())
+        html = render_job_list(page, search_mode=True)
+        assert 'id="job-search-index"' not in html
+
 
 class TestSocialMeta:
     """Stage 4-E (2026-08-09): `base.html` had no `og:*`/`twitter:*` tags at

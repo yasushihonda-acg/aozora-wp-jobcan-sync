@@ -11,7 +11,9 @@
   // (`/jobs/search-index.json`)。`chat-widget.js` の `data-endpoint` と同じ
   // data属性パラメータ化パターンで、どちらのデータを読むかをHTML側から
   // 指定する(Stage 3、2026-08-09)。未指定時は Phase A の相対パスへ
-  // フォールバックする。
+  // フォールバックする。Phase B は 2026-08-14 以降さらに `#job-search-index`
+  // インラインJSONを優先する(下記) — この `jobsEndpoint` はその埋め込みが
+  // 無い/パース失敗のときのフォールバック fetch 先としてのみ使う。
   var jobsEndpoint = root.getAttribute('data-jobs-endpoint') || 'assets/data/jobs.json';
 
   var panel = document.getElementById('job-search-panel');
@@ -52,25 +54,50 @@
     return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  fetch(jobsEndpoint)
-    .then(function (res) {
-      if (!res.ok) throw new Error('jobs.json fetch failed: ' + res.status);
-      return res.json();
-    })
-    .then(function (data) {
-      init(data);
-    })
-    .catch(function (err) {
-      // データ取得失敗時は検索UI一式を出さず、既存カード全表示のままにする
-      // (Phase Bの`/jobs/search-index.json`はFirestore障害等で本当に失敗
-      // しうる、Phase Aの静的JSONと違い実際に落ちるエンドポイント。
-      // console.errorと画面上の通知は必須 — サイレント縮退は求人検索/地図
-      // 機能が丸ごと消えたことに来訪者が気づく手段が無くなる、Stage 3
-      // silent-failure-hunterレビュー指摘、2026-08-09)。
-      console.error('[job-search] failed to load search index:', err);
-      var loadError = document.getElementById('job-search-load-error');
-      if (loadError) loadError.hidden = false;
-    });
+  // Category-page filter-nav follow-up (2026-08-14): Phase B の一覧ページは
+  // 自分のレスポンスに同じ検索インデックスを
+  // `<script type="application/json" id="job-search-index">` として埋め込む
+  // (`sync/src/sync/renderer.py::render_job_list`)。埋め込みがあれば同期的に
+  // 読んで即 init() し、`fetch(jobsEndpoint)` の往復(表示ラグの主因だった)を
+  // 待たずにパネルを操作可能にする。埋め込みが無い/パース失敗のときだけ
+  // 従来の fetch へフォールバックする — 埋め込み自体が存在しない Phase A
+  // (`mockup/jobs.html`)は常にこの fetch 経路のまま。
+  var inlineIndexEl = document.getElementById('job-search-index');
+  var inlineData = null;
+  if (inlineIndexEl) {
+    try {
+      inlineData = JSON.parse(inlineIndexEl.textContent);
+    } catch (err) {
+      console.error('[job-search] failed to parse inline search index:', err);
+    }
+  }
+
+  if (inlineData) {
+    init(inlineData);
+  } else {
+    fetch(jobsEndpoint)
+      .then(function (res) {
+        if (!res.ok) throw new Error('jobs.json fetch failed: ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        init(data);
+      })
+      .catch(function (err) {
+        // データ取得失敗時は検索UI一式を出さず、既存カード全表示のままにする
+        // (Phase Bの`/jobs/search-index.json`はFirestore障害等で本当に失敗
+        // しうる、Phase Aの静的JSONと違い実際に落ちるエンドポイント。
+        // console.errorと画面上の通知は必須 — サイレント縮退は求人検索/地図
+        // 機能が丸ごと消えたことに来訪者が気づく手段が無くなる、Stage 3
+        // silent-failure-hunterレビュー指摘、2026-08-09)。パネルはSSR時点で
+        // 表示済み(表示ラグ解消フォローアップ、2026-08-14)なので、失敗時は
+        // ここで明示的に隠し直す。
+        console.error('[job-search] failed to load search index:', err);
+        panel.hidden = true;
+        var loadError = document.getElementById('job-search-load-error');
+        if (loadError) loadError.hidden = false;
+      });
+  }
 
   function init(data) {
     var facilities = data.facilities || {};

@@ -57,6 +57,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exception_handlers import http_exception_handler as _default_http_exception_handler
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -489,6 +490,17 @@ def create_app(
         description="Phase B B-8 — Firestore-backed in-house job page proxy",
         version="0.3.0",
     )
+
+    # 職種別ページの検索インデックス全件インライン化(下記 _render_list)で
+    # HTML本文が数百KB級になったため追加。`add_middleware` は呼び出し順が
+    # 後のものほど外側になる(Starlette の user_middleware は先頭挿入 →
+    # `build_middleware_stack` が逆順にラップするため)。つまりこの後で
+    # 登録する `add_security_headers` の方が外側 = GZip より後に実行される
+    # 順になるが、`_apply_security_headers` はヘッダ(Cache-Control /
+    # X-Robots-Tag)のみ操作しボディ・Content-Length・Content-Encoding には
+    # 一切触れないため、どちらが外側でも圧縮結果に影響しない。
+    # `minimum_size` 未満(空求人0件ページ等)は無圧縮のまま素通しされる。
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -1007,8 +1019,8 @@ def _render_detail(
 
 def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str | None) -> str | None:
     """Build and render the listing page from already-read snapshots, or
-    `None` on a render failure. `category_id=None` (Stage 3) builds the
-    all-jobs search page instead of one category's card grid.
+    `None` on a render failure. `category_id=None` builds the all-jobs
+    search page; a real id builds one category's card grid.
 
     Deliberately pure (no Firestore access) — the caller reads the
     collection separately (`get_all_valid()`, off the event loop) so a
@@ -1026,14 +1038,29 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str | None) 
     not yet been confirmed by an actual production `sync-run` (B-8 was
     implemented and reviewed before any Cloud Run Job ever executed;
     `infra/README.md` §8.1b's dry-run is where that gets measured for real).
+
+    Category-page filter-nav follow-up (2026-08-14): every listing page now
+    renders the search panel (`search_mode=True` unconditionally) so a
+    visitor who entered through one 職種 card can switch to another without
+    "戻る". The panel's own filter dataset (employment/area/freeword/map) is
+    still scoped to the current page's card set — `scoped_snapshots` mirrors
+    the same active/category_id eligibility the card-view loop below applies,
+    so a category page's map/GPS/free-word search only ever operates over
+    that職種's postings, not the full catalogue's (`build_search_index` never
+    filters by category itself — see `search_index.py`). `job_type_chips`
+    (the 職種 switcher and, on the all-jobs page only, the multi-select chip
+    row) is always built from the *unscoped* `snapshots` so its counts stay
+    catalogue-wide regardless of which category page is being rendered.
     """
     try:
         card_views: list[JobListCardView] = []
-        for snapshot in snapshots.values():
+        scoped_snapshots: dict[str, JobSnapshot] = {}
+        for job_id, snapshot in snapshots.items():
             if snapshot.sync_status != "active":
                 continue
             if category_id is not None and category_id not in snapshot.category_ids:
                 continue
+            scoped_snapshots[job_id] = snapshot
             view = build_card_view(snapshot)
             if view is None:
                 continue
@@ -1055,14 +1082,20 @@ def _render_list(snapshots: dict[str, JobSnapshot], *, category_id: str | None) 
             last_page=1,
             next_url=None,
         )
-        search_mode = category_id is None
+        search_index, warnings = build_search_index(scoped_snapshots)
+        for warning in warnings:
+            _logger.warning(
+                "list-page search-index build warning",
+                extra={"detail": warning, "category_id": category_id},
+            )
         return render_job_list(
             page,
             base_url=PUBLIC_BASE_URL,
             cards=card_views,
-            search_mode=search_mode,
-            search_index_url="/jobs/search-index.json" if search_mode else None,
-            job_type_chips=build_job_type_chips(snapshots) if search_mode else None,
+            search_mode=True,
+            search_index_url="/jobs/search-index.json",
+            search_index=search_index,
+            job_type_chips=build_job_type_chips(snapshots),
         )
     except Exception:
         _logger.exception("render error", extra={"kind": "list", "category_id": category_id})

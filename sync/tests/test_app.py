@@ -8,6 +8,8 @@ and seed it directly with `JobSnapshot`s instead of mocking any network call.
 
 from __future__ import annotations
 
+import json
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -982,12 +984,114 @@ def test_get_job_list_no_category_id_renders_search_panel_and_map() -> None:
     assert 'data-jobs-endpoint="/jobs/search-index.json"' in response.text
 
 
-def test_get_job_list_with_category_id_has_no_search_panel() -> None:
+def _inline_search_index(html: str) -> dict:
+    """Extract and parse the `#job-search-index` inline JSON block
+    (category-page filter-nav follow-up, 2026-08-14) — the same shape
+    `/jobs/search-index.json` returns, but scoped to the rendering page's
+    own card set. `json.loads` handles the `<\\/` → `/` escaping used to
+    embed it inside `<script>` transparently (a legal JSON escape)."""
+    match = re.search(
+        r'<script type="application/json" id="job-search-index">(.*?)</script>',
+        html,
+        re.S,
+    )
+    assert match is not None, "inline #job-search-index script not found"
+    return json.loads(match.group(1))
+
+
+def test_get_job_list_with_category_id_has_search_panel() -> None:
+    """Category-page filter-nav follow-up (2026-08-14): a visitor entering
+    through one 職種 card must not be limited to "戻る" to see other 職種 —
+    every listing page now renders the same search panel (see `app.py::
+    _render_list`'s `search_mode=True` unconditionally)."""
     client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
 
     response = client.get("/jobs/?category_id=18773")
 
-    assert 'id="job-search-panel"' not in response.text
+    assert 'id="job-search-panel"' in response.text
+    assert 'id="job-map-wrap"' in response.text
+
+
+def test_get_job_list_with_category_id_has_no_job_type_multiselect_chips() -> None:
+    """The pre-existing multi-select 職種 chip row (`data-filter-group=
+    "jobType"`, togglable via aria-pressed) stays exclusive to the all-jobs
+    page — a category page expresses its own 職種 by which page it is, via
+    `.job-search-nav` (plain links) instead."""
+    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert 'data-filter-group="jobType"' not in response.text
+
+
+def test_get_job_list_category_page_nav_links_to_every_job_type_and_marks_current() -> None:
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18983"]),
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert 'class="job-search-nav__link" href="/jobs/"' in response.text
+    assert (
+        'class="job-search-nav__link is-active" href="/jobs/?category_id=18773" '
+        'aria-current="page"'
+    ) in response.text
+    assert 'href="/jobs/?category_id=18983"' in response.text
+    # Only the current 職種's link carries aria-current — the "すべての職種"
+    # link and every other 職種 link must not.
+    assert response.text.count('aria-current="page"') == 1
+
+
+def test_get_job_list_all_jobs_page_nav_marks_all_jobs_as_current() -> None:
+    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+
+    response = client.get("/jobs/")
+
+    assert (
+        'class="job-search-nav__link is-active" href="/jobs/" aria-current="page"'
+    ) in response.text
+
+
+def test_get_job_list_category_page_inline_search_index_is_scoped_to_category() -> None:
+    """The panel's own filter dataset (employment/area/freeword/map) must not
+    leak jobs from other 職種 into a category page — only the multi-select
+    chip row (all-jobs page only) and the nav's counts are catalogue-wide."""
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18773"]),
+        _snapshot("3", category_ids=["18983"]),
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/?category_id=18773")
+
+    index = _inline_search_index(response.text)
+    job_ids = {job["id"] for job in index["jobs"]}
+    assert job_ids == {"1", "2"}
+
+
+def test_get_job_list_all_jobs_page_inline_search_index_is_not_scoped() -> None:
+    repo = _repo_with(
+        _snapshot("1", category_ids=["18773"]),
+        _snapshot("2", category_ids=["18983"]),
+    )
+    client = _client_with(repo)
+
+    response = client.get("/jobs/")
+
+    index = _inline_search_index(response.text)
+    job_ids = {job["id"] for job in index["jobs"]}
+    assert job_ids == {"1", "2"}
+
+
+def test_get_job_list_category_page_uses_job_type_name_as_heading() -> None:
+    client = _client_with(_repo_with(_snapshot("1", category_ids=["18773"])))
+
+    response = client.get("/jobs/?category_id=18773")
+
+    assert '<h1 class="job-list__title">介護職</h1>' in response.text
 
 
 def test_get_job_list_search_panel_renders_job_type_chips_with_counts() -> None:
