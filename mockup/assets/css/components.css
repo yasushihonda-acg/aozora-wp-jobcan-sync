@@ -301,7 +301,7 @@
   font-weight: var(--weight-black);
   text-shadow: 0 2px 8px rgba(0, 80, 90, 0.20);
 }
-.hero__title-line { display: block; }
+.hero__title-line { display: block; text-wrap: balance; word-break: keep-all; }
 .hero__title em {
   font-style: normal;
   box-shadow: 0 -0.14em 0 0 var(--color-accent) inset;
